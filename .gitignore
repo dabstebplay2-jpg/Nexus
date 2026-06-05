@@ -30,6 +30,8 @@ deploy/render-production.env
 .idea/
 .vscode/
 .cursor/
+!.cursor/rules/
+!.cursor/rules/**
 .DS_Store
 Thumbs.db
 
