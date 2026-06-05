@@ -173,6 +173,12 @@ exit /b %ERRORLEVEL%
 
 :run_frontend
 call :ensure_port_free 5173
+if errorlevel 1 (
+    echo.
+    echo Port 5173 is still busy. Run: nexus.bat stop
+    pause
+    exit /b 1
+)
 cd /d "%ROOT%frontend"
 if not exist "node_modules\" (
     echo npm install...
