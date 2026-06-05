@@ -9,7 +9,7 @@ from app.config import (
 )
 
 TIER_META = {
-    "FREE": {"price_usd": TIER_PRICES["FREE"], "ai_enabled": False, "label_ru": "Free"},
+    "FREE": {"price_usd": TIER_PRICES["FREE"], "ai_enabled": True, "label_ru": "Free"},
     "HOBBY": {"price_usd": TIER_PRICES["HOBBY"], "ai_enabled": True, "label_ru": "Hobby"},
     "STANDARD": {"price_usd": TIER_PRICES["STANDARD"], "ai_enabled": True, "label_ru": "Standard"},
     "PRO": {"price_usd": TIER_PRICES["PRO"], "ai_enabled": True, "label_ru": "Pro"},
@@ -26,6 +26,10 @@ def normalize_tier(tier: str | None) -> str:
 
 def tier_allows_ai(tier: str) -> bool:
     return TIER_META[normalize_tier(tier)]["ai_enabled"]
+
+
+def tier_uses_openrouter_free(tier: str | None) -> bool:
+    return normalize_tier(tier) == "FREE"
 
 
 def tier_requires_payment(tier: str) -> bool:

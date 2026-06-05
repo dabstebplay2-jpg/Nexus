@@ -19,7 +19,8 @@ from app.curated_models import (
     curated_ids_union,
 )
 from app.config import is_testing_mode
-from app.tiers import normalize_tier, tier_allows_ai
+from app.services import openrouter_models as or_models
+from app.tiers import normalize_tier, tier_allows_ai, tier_uses_openrouter_free
 from app.vision_capabilities import apply_vision_metadata, build_vision_guide
 
 logger = logging.getLogger(__name__)
@@ -250,6 +251,10 @@ def model_allowed(subscription_tier: str, model_id: str) -> bool:
     mid = (model_id or "").strip()
     if not mid:
         return False
+    if tier_uses_openrouter_free(subscription_tier):
+        if is_testing_mode():
+            return or_models.free_model_allowed(mid) or get_model(mid) is not None
+        return or_models.free_model_allowed(mid)
     if is_testing_mode():
         return get_model(mid) is not None
     if not tier_allows_ai(subscription_tier):
@@ -265,6 +270,23 @@ def model_allowed(subscription_tier: str, model_id: str) -> bool:
 
 def model_access_detail(subscription_tier: str, model_id: str) -> dict:
     mid = (model_id or "").strip()
+    if tier_uses_openrouter_free(subscription_tier):
+        m = or_models.get_free_model(mid)
+        if not m:
+            return {
+                "allowed": False,
+                "reason": "unknown_model",
+                "upgrade_hint": "Модель недоступна на Free. Выберите бесплатную модель или оформите Hobby.",
+            }
+        return {
+            "allowed": True,
+            "min_tier": "FREE",
+            "required_tier_label": "Free",
+            "user_tier": "FREE",
+            "ceiling_tier": "FREE",
+            "upgrade_hint": None,
+            "lock_message": None,
+        }
     m = get_model(mid) if mid else None
     if not m:
         logger.warning(
@@ -320,16 +342,22 @@ def _usable_models(catalog: list[dict]) -> list[dict]:
 
 
 async def list_models_for_user(subscription_tier: str) -> list[dict]:
+    if tier_uses_openrouter_free(subscription_tier):
+        return await or_models.list_chat_models_for_free_tier()
     await refresh_models_cache()
     return _catalog_models_for_display(subscription_tier, _cache.get("chat_models") or [])
 
 
 async def list_research_models_for_user(subscription_tier: str) -> list[dict]:
+    if tier_uses_openrouter_free(subscription_tier):
+        return await or_models.list_research_models_for_free_tier()
     await refresh_models_cache()
     return _catalog_models_for_display(subscription_tier, _cache.get("research_models") or [])
 
 
 async def list_media_models_for_user(subscription_tier: str) -> list[dict]:
+    if tier_uses_openrouter_free(subscription_tier):
+        return await or_models.list_media_models_for_free_tier()
     await refresh_models_cache()
     return _catalog_models_for_display(subscription_tier, _cache.get("media_models") or [])
 
@@ -340,6 +368,8 @@ async def list_usable_models_for_user(subscription_tier: str) -> list[dict]:
 
 
 async def get_default_model(subscription_tier: str, *, prefer: str = "balanced") -> str:
+    if tier_uses_openrouter_free(subscription_tier):
+        return await or_models.get_default_free_model(prefer=prefer)
     models = await list_usable_models_for_user(subscription_tier)
     if not models:
         await refresh_models_cache(force=True)
@@ -366,6 +396,13 @@ async def get_default_model(subscription_tier: str, *, prefer: str = "balanced")
 
 async def model_access_detail_cached(subscription_tier: str, model_id: str) -> dict:
     """Проверка доступа с подгрузкой каталога (важно для cold start / нескольких инстансов)."""
+    if tier_uses_openrouter_free(subscription_tier):
+        await or_models.refresh_free_models_cache()
+        detail = model_access_detail(subscription_tier, model_id)
+        if detail.get("reason") == "unknown_model":
+            await or_models.refresh_free_models_cache(force=True)
+            detail = model_access_detail(subscription_tier, model_id)
+        return detail
     await refresh_models_cache()
     detail = model_access_detail(subscription_tier, model_id)
     if detail.get("reason") == "unknown_model":
@@ -391,7 +428,7 @@ async def vision_guide_for_user(subscription_tier: str) -> dict:
 
 async def catalog_meta() -> dict:
     await refresh_models_cache()
-    return {
+    meta = {
         "source": "polza",
         "total_chat_models": len(_cache["all_text"]),
         "curated_count": len(_cache.get("chat_models") or []),
@@ -408,5 +445,9 @@ async def catalog_meta() -> dict:
             "STANDARD": "Дешёвые + Средние + Дорогие (Pro-модели — высокий расход).",
             "PRO": "Весь кураторский каталог, включая «Очень дорогие».",
             "ULTRA": "Полный кураторский каталог без ограничений.",
+            "FREE": "Бесплатные модели OpenRouter (нулевая цена).",
         },
     }
+    free_meta = await or_models.catalog_meta_free()
+    meta["openrouter_free"] = free_meta
+    return meta

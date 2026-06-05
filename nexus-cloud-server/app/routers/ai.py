@@ -8,7 +8,13 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app import agents_catalog, models_catalog
-from app.config import POLZA_BASE_URL
+from app.config import (
+    NEXUS_FREE_OPENROUTER_DAILY_LIMIT,
+    NEXUS_FREE_OPENROUTER_RPM,
+    OPENROUTER_BASE_URL,
+    POLZA_BASE_URL,
+    openrouter_free_tier_enabled,
+)
 from app.database import UserDB, get_db
 from app.schemas import CloudChatRequest, ResearchRequest, SimpleChatRequest
 from app.security import get_current_user
@@ -46,13 +52,36 @@ from app.services.connector_agent_loop import run_connector_agent_phase
 from app.services.image_materialize import materialize_image_list, materialize_image_url
 from app.services.models_registry import tier_rank
 from app.config import is_testing_mode
-from app.tiers import tier_allows_ai, tier_requires_payment
+from app.services.openrouter import OpenRouterError, OpenRouterService, require_openrouter_api_key
+from app.tiers import tier_allows_ai, tier_requires_payment, tier_uses_openrouter_free
 
 router = APIRouter(prefix="/v1/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
 
 _polza = PolzaService()
+_openrouter = OpenRouterService()
 POLZA_CHAT_URL = f"{POLZA_BASE_URL.rstrip('/')}/chat/completions"
+OPENROUTER_CHAT_URL = f"{OPENROUTER_BASE_URL.rstrip('/')}/chat/completions"
+
+
+def _user_on_free_openrouter(user: UserDB) -> bool:
+    return tier_uses_openrouter_free(user.subscription_tier)
+
+
+def _check_free_rate_limits(user: UserDB) -> None:
+    uid = user.id
+    if not check_rate_limit(f"free_ai:rpm:user:{uid}", NEXUS_FREE_OPENROUTER_RPM, 60.0):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Лимит Free: слишком много запросов в минуту. Оформите Hobby для большего лимита.",
+        )
+    if not check_rate_limit(
+        f"free_ai:day:user:{uid}", NEXUS_FREE_OPENROUTER_DAILY_LIMIT, 86400.0
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Дневной лимит Free исчерпан. Оформите тариф Hobby или выше.",
+        )
 
 
 def _sse_event(payload: dict) -> str:
@@ -60,6 +89,14 @@ def _sse_event(payload: dict) -> str:
 
 
 async def _check_tier_ai_access(user: UserDB, db: Session):
+    if _user_on_free_openrouter(user):
+        if not openrouter_free_tier_enabled():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Бесплатный ИИ временно недоступен. Оформите тариф Hobby или выше.",
+            )
+        _check_free_rate_limits(user)
+        return
     if not await enforce_paid_subscription(db, user, trigger="ai_chat"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -83,6 +120,8 @@ async def _check_tier_ai_access(user: UserDB, db: Session):
 
 
 def _check_quota_limit(db: Session, user: UserDB):
+    if _user_on_free_openrouter(user):
+        return
     try:
         assert_quota_budget(db, user, projected_cost=0)
     except QuotaLimitExceeded as exc:
@@ -149,7 +188,7 @@ async def _check_model_access(user: UserDB, model: str, *, allow_tools: bool = F
     if not is_testing_mode() and not tier_allows_ai(user.subscription_tier):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Облачный ИИ недоступен на Free. Выберите платный тариф в разделе «О Nexus».",
+            detail="Облачный ИИ недоступен на вашем тарифе. Выберите тариф в разделе «О Nexus».",
         )
     detail = await models_catalog.model_access_detail_cached(user.subscription_tier, model_id)
     if detail.get("reason") == "unknown_model":
@@ -162,11 +201,62 @@ async def _check_model_access(user: UserDB, model: str, *, allow_tools: bool = F
             status_code=status.HTTP_403_FORBIDDEN,
             detail=detail.get("upgrade_hint") or "Модель недоступна на вашем тарифе.",
         )
-    if allow_tools and user.subscription_tier == "FREE":
+    if allow_tools and _user_on_free_openrouter(user):
+        from app.services.openrouter_models import get_free_model
+
+        m = get_free_model(model_id)
+        if not m or not m.get("supports_tools"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Инструменты недоступны для выбранной бесплатной модели.",
+            )
+
+
+def _require_chat_api_key(user: UserDB) -> str:
+    if _user_on_free_openrouter(user):
+        try:
+            return require_openrouter_api_key()
+        except OpenRouterError as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
+            ) from e
+    try:
+        return require_inference_api_key(user)
+    except PolzaError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+
+
+async def _call_openrouter(payload: dict, user: UserDB) -> dict:
+    del user
+    try:
+        api_key = require_openrouter_api_key()
+    except OpenRouterError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+    try:
+        response = await _openrouter.chat_completions(payload, timeout=120.0, api_key=api_key)
+    except httpx.HTTPError as e:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Агенты с инструментами недоступны на Free.",
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Ошибка соединения с OpenRouter: {e}",
+        ) from e
+    if response.status_code == 200:
+        return response.json()
+    code = response.status_code
+    if code == 429:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Лимит OpenRouter для бесплатных моделей. Попробуйте позже или оформите Hobby.",
         )
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=f"ИИ-провайдер OpenRouter ({code}): {response.text[:500]}",
+    )
+
+
+async def _call_inference(payload: dict, user: UserDB, db: Session | None = None) -> dict:
+    if _user_on_free_openrouter(user):
+        return await _call_openrouter(payload, user)
+    return await _call_polza(payload, user, db)
 
 
 async def _call_polza(payload: dict, user: UserDB, db: Session | None = None) -> dict:
@@ -305,12 +395,21 @@ def _stream_text_parts(delta: dict, message: dict, choice: dict | None = None) -
     return thinking, content
 
 
-async def _stream_polza_tokens(api_key: str, payload: dict):
-    """Прокси SSE Polza.ai → клиент Nexus (type: thinking | token | image | error | done)."""
+async def _stream_chat_tokens(
+    chat_url: str,
+    api_key: str,
+    payload: dict,
+    *,
+    provider_label: str,
+    auth_error_detail: str,
+):
+    """Прокси SSE OpenAI-compatible API → клиент Nexus."""
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
+    if chat_url.startswith(OPENROUTER_BASE_URL):
+        headers.update(_openrouter._headers(api_key))
     usage: dict | None = None
     collected_images: list[dict[str, str]] = []
     seen_urls: set[str] = set()
@@ -321,7 +420,7 @@ async def _stream_polza_tokens(api_key: str, payload: dict):
     async with httpx.AsyncClient(timeout=timeout) as client:
         async with client.stream(
             "POST",
-            POLZA_CHAT_URL,
+            chat_url,
             headers=headers,
             json=payload,
         ) as response:
@@ -329,13 +428,19 @@ async def _stream_polza_tokens(api_key: str, payload: dict):
                 body = (await response.aread()).decode("utf-8", errors="replace")[:500]
                 code = response.status_code
                 if code in (401, 403):
-                    detail = (
-                        "Ошибка личного ключа Polza.ai. Перезайдите в аккаунт или обратитесь в поддержку."
+                    yield _sse_event(
+                        {"type": "error", "detail": auth_error_detail, "auth_failure": True}
                     )
-                    yield _sse_event({"type": "error", "detail": detail, "auth_failure": True})
                     return
-                else:
-                    detail = f"ИИ-провайдер ({code}): {body}"
+                if code == 429:
+                    yield _sse_event(
+                        {
+                            "type": "error",
+                            "detail": "Лимит OpenRouter для бесплатных моделей. Попробуйте позже или оформите Hobby.",
+                        }
+                    )
+                    return
+                detail = f"ИИ-провайдер {provider_label} ({code}): {body}"
                 yield _sse_event({"type": "error", "detail": detail})
                 return
 
@@ -388,6 +493,44 @@ async def _stream_polza_tokens(api_key: str, payload: dict):
     }
 
 
+async def _stream_polza_tokens(api_key: str, payload: dict):
+    async for item in _stream_chat_tokens(
+        POLZA_CHAT_URL,
+        api_key,
+        payload,
+        provider_label="Polza",
+        auth_error_detail=(
+            "Ошибка личного ключа Polza.ai. Перезайдите в аккаунт или обратитесь в поддержку."
+        ),
+    ):
+        yield item
+
+
+async def _stream_openrouter_tokens(api_key: str, payload: dict):
+    async for item in _stream_chat_tokens(
+        OPENROUTER_CHAT_URL,
+        api_key,
+        payload,
+        provider_label="OpenRouter",
+        auth_error_detail="Ошибка доступа к бесплатным моделям OpenRouter.",
+    ):
+        yield item
+
+
+def _stream_fn_for_user(user: UserDB):
+    if _user_on_free_openrouter(user):
+        return _stream_openrouter_tokens
+    return _stream_polza_tokens
+
+
+async def _apply_billing_for_user(
+    db: Session, user: UserDB, *, model: str, usage: dict | None
+):
+    if _user_on_free_openrouter(user):
+        return None
+    return await _apply_billing_safe(db, user, model=model, usage=usage)
+
+
 @router.get("/models")
 async def list_models(current_user: UserDB = Depends(get_current_user)):
     tier = current_user.subscription_tier
@@ -417,6 +560,9 @@ async def refresh_models(current_user: UserDB = Depends(get_current_user)):
     from app.services import models_registry as reg
 
     await reg.refresh_models_cache(force=True)
+    from app.services import openrouter_models as or_models
+
+    await or_models.refresh_free_models_cache(force=True)
     models = await models_catalog.list_models_for_user(current_user.subscription_tier)
     meta = await models_catalog.catalog_meta()
     return {"models": models, "catalog": meta}
@@ -447,8 +593,10 @@ async def cloud_ai_chat_proxy(
     if payload.tool_choice:
         proxy_payload["tool_choice"] = payload.tool_choice
 
-    data = await _call_polza(proxy_payload, current_user, db)
-    billing = await _apply_billing_safe(db, current_user, model=payload.model, usage=data.get("usage"))
+    data = await _call_inference(proxy_payload, current_user, db)
+    billing = await _apply_billing_for_user(
+        db, current_user, model=payload.model, usage=data.get("usage")
+    )
     if billing:
         data["billing"] = billing
     return data
@@ -466,10 +614,10 @@ async def simple_chat(
 
     memory_text = get_enabled_memory_text(db, current_user.id)
     router_body = build_router_payload(model, payload, memory_content=memory_text)
-    data = await _call_polza(router_body, current_user, db)
+    data = await _call_inference(router_body, current_user, db)
     choice = data.get("choices", [{}])[0]
     message = choice.get("message", {})
-    billing = await _apply_billing_safe(db, current_user, model=model, usage=data.get("usage"))
+    billing = await _apply_billing_for_user(db, current_user, model=model, usage=data.get("usage"))
     reply_images = await materialize_image_list(extract_message_images(message))
     reply_text = message.get("content", "") or ""
     user_text = last_user_message_text(payload.messages)
@@ -496,10 +644,8 @@ async def simple_chat_stream(
     router_body = build_router_payload(model, payload, memory_content=memory_text)
     use_web = bool(payload.use_web_search)
 
-    try:
-        api_key = require_inference_api_key(current_user)
-    except PolzaError as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+    api_key = _require_chat_api_key(current_user)
+    stream_tokens = _stream_fn_for_user(current_user)
 
     user_id = current_user.id
 
@@ -516,7 +662,7 @@ async def simple_chat_stream(
             yield _sse_event({"type": "status", "content": "planning"})
             try:
                 async for sse_line, delta in iter_pre_search_reasoning(
-                    _stream_polza_tokens, api_key, body
+                    stream_tokens, api_key, body
                 ):
                     if sse_line:
                         yield sse_line
@@ -594,7 +740,7 @@ async def simple_chat_stream(
                         user_for_conn,
                         model=model,
                         messages=body_messages,
-                        call_routerai=_call_polza,
+                        call_routerai=_call_inference,
                     ):
                         yield _sse_event(conn_evt)
                     body["messages"] = body_messages
@@ -613,7 +759,7 @@ async def simple_chat_stream(
             "stream_options": {"include_usage": True},
         }
         try:
-            async for item in _stream_polza_tokens(api_key, router_payload):
+            async for item in stream_tokens(api_key, router_payload):
                 if isinstance(item, dict):
                     usage = item.get("usage")
                     reply_images = item.get("images") or []
@@ -624,8 +770,9 @@ async def simple_chat_stream(
                     yield item
         except httpx.HTTPError as exc:
             logger.warning("stream httpx error: %s", exc)
+            provider = "OpenRouter" if _user_on_free_openrouter(current_user) else "Polza.ai"
             yield _sse_event(
-                {"type": "error", "detail": f"Ошибка соединения с Polza.ai: {exc}"}
+                {"type": "error", "detail": f"Ошибка соединения с {provider}: {exc}"}
             )
             return
 
@@ -634,7 +781,7 @@ async def simple_chat_stream(
             yield _sse_event({"type": "error", "detail": "Сессия пользователя устарела."})
             return
         try:
-            billing = await _apply_billing_safe(db, user, model=model, usage=usage)
+            billing = await _apply_billing_for_user(db, user, model=model, usage=usage)
         except HTTPException as exc:
             detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
             yield _sse_event({"type": "error", "detail": detail})
@@ -693,10 +840,7 @@ async def research_chat(
         )
     await _check_model_access(current_user, model)
 
-    try:
-        api_key = require_inference_api_key(current_user)
-    except PolzaError as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+    api_key = _require_chat_api_key(current_user)
 
     if depth == "deep":
         from app.config import WEB_SEARCH_DEEP_MAX_SOURCES
@@ -731,10 +875,10 @@ async def research_chat(
     messages.append({"role": "user", "content": payload.query})
     messages = inject_user_memory_messages(messages, memory_text)
 
-    data = await _call_polza({"model": model, "messages": messages}, current_user, db)
+    data = await _call_inference({"model": model, "messages": messages}, current_user, db)
     choice = data.get("choices", [{}])[0]
     reply = choice.get("message", {}).get("content", "")
-    billing = await _apply_billing_safe(db, current_user, model=model, usage=data.get("usage"))
+    billing = await _apply_billing_for_user(db, current_user, model=model, usage=data.get("usage"))
     return {
         "reply": reply,
         "model": model,

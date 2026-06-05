@@ -99,6 +99,21 @@ POLZA_BALANCE_ALERT_COOLDOWN_HOURS = float(
 POLZA_BALANCE_BUFFER = float(os.environ.get("POLZA_BALANCE_BUFFER", "1.0") or "1.0")
 MARGIN_MULTIPLIER = float(os.environ.get("NEXUS_MARGIN_MULTIPLIER", "1.15"))
 
+# --- OpenRouter (тариф FREE: бесплатные модели платформы) ---
+OPENROUTER_API_KEY = (os.environ.get("OPENROUTER_API_KEY") or "").strip()
+OPENROUTER_BASE_URL = (os.environ.get("OPENROUTER_BASE_URL") or "https://openrouter.ai/api/v1").rstrip("/")
+OPENROUTER_HTTP_REFERER = (
+    os.environ.get("OPENROUTER_HTTP_REFERER") or "https://frontend-henna-tau-19.vercel.app"
+).strip()
+OPENROUTER_APP_TITLE = (os.environ.get("OPENROUTER_APP_TITLE") or "Nexus").strip()
+NEXUS_FREE_OPENROUTER_DAILY_LIMIT = int(os.environ.get("NEXUS_FREE_OPENROUTER_DAILY_LIMIT", "100") or "100")
+NEXUS_FREE_OPENROUTER_RPM = int(os.environ.get("NEXUS_FREE_OPENROUTER_RPM", "15") or "15")
+
+
+def openrouter_free_tier_enabled() -> bool:
+    return bool(OPENROUTER_API_KEY)
+
+
 # Только локальная разработка: кнопка «подтвердить оплату» без ЮKassa. В проде — false.
 NEXUS_BILLING_TEST_MODE = os.environ.get("NEXUS_BILLING_TEST_MODE", "false").lower() in (
     "1",
@@ -185,7 +200,7 @@ SUBSCRIPTION_PERIOD_DAYS = int(os.environ.get("NEXUS_SUBSCRIPTION_PERIOD_DAYS", 
 DAILY_ABUSE_CAP_FRACTION = float(os.environ.get("NEXUS_DAILY_ABUSE_CAP_FRACTION", "0"))
 
 TIER_QUOTA_MARKETING = {
-    "FREE": "Без облачного ИИ",
+    "FREE": "Бесплатные модели OpenRouter · лимит запросов в сутки",
     "HOBBY": "~92% на ИИ · Flash · ориентир ChatGPT Go ($10)",
     "STANDARD": "~92% на ИИ · до Sonnet · ориентир Plus/Claude Pro ($20)",
     "PRO": "~92% на ИИ · полный Pro · ~5× пул Standard ($100)",

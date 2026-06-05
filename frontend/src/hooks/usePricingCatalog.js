@@ -7,10 +7,15 @@ const FALLBACK_TIERS = [
     name: 'Free',
     price_rub: 0,
     monthly_cap_rub: 0,
-    quota_hint: 'Без облачного ИИ',
-    ai_enabled: false,
+    quota_hint: 'Бесплатные модели OpenRouter · лимит запросов в сутки',
+    ai_enabled: true,
     popular: false,
-    features: ['Локальный IDE', 'Файлы и Git', 'Терминал', 'Без облачного ИИ'],
+    features: [
+      'Облачный ИИ на бесплатных моделях',
+      'Локальный IDE',
+      'Файлы и Git',
+      'Терминал',
+    ],
   },
   {
     id: 'HOBBY',
@@ -73,15 +78,24 @@ function tierToUi(t) {
   const marketBadge = (t.market_badge || '').trim();
   const poolPct =
     t.pool_share_percent ?? (t.price_rub > 0 ? Math.round((capRub / t.price_rub) * 100) : 0);
-  const features = t.ai_enabled
-    ? [
-        'Облачный ИИ Polza.ai',
-        `Пул ≈ ${formatRubShort(capRub)}/мес на вашем ключе (30 дней)`,
-        '~92% оплаты → пул ИИ (8% — комиссия Nexus); ключ выдаётся автоматически',
-        hint,
-        'Модели по тарифу',
-      ]
-    : ['Локальный IDE', 'Файлы и Git', 'Терминал', 'Без облачного ИИ'];
+  const features =
+    t.id === 'FREE' && t.ai_enabled
+      ? [
+          'Бесплатные модели OpenRouter',
+          hint || 'Лимит запросов в сутки',
+          'Локальный IDE',
+          'Файлы и Git',
+          'Терминал',
+        ]
+      : t.ai_enabled
+        ? [
+            'Облачный ИИ Polza.ai',
+            `Пул ≈ ${formatRubShort(capRub)}/мес на вашем ключе (30 дней)`,
+            '~92% оплаты → пул ИИ (8% — комиссия Nexus); ключ выдаётся автоматически',
+            hint,
+            'Модели по тарифу',
+          ]
+        : ['Локальный IDE', 'Файлы и Git', 'Терминал', 'Без облачного ИИ'];
   return {
     id: t.id,
     name: t.name || t.label || t.id,

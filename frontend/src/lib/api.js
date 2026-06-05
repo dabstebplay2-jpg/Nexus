@@ -89,9 +89,9 @@ export const IS_VERCEL_HOST =
 export const TIERS = [];
 
 export function tierById() {
-  return { id: 'FREE', aiAccess: false, price: 0, credits: 0 };
+  return { id: 'FREE', aiAccess: true, price: 0, credits: 0 };
 }
 
 export function tierHasAi() {
-  return false;
+  return true;
 }

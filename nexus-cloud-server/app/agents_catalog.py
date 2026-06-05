@@ -1,5 +1,5 @@
 AGENTS = [
-    {"id": "quick", "name": "Быстрый чат", "emoji": "💬", "mode": "chat", "description": "Прямой диалог без поиска.", "model_preference": "cheap", "min_tier": "HOBBY", "suggested_prompts": ["Объясни async/await простыми словами"]},
+    {"id": "quick", "name": "Быстрый чат", "emoji": "💬", "mode": "chat", "description": "Прямой диалог без поиска.", "model_preference": "cheap", "min_tier": "FREE", "suggested_prompts": ["Объясни async/await простыми словами"]},
     {"id": "research", "name": "Research", "emoji": "🔍", "mode": "research", "description": "Поиск в сети + источники.", "model_preference": "premium", "min_tier": "STANDARD", "suggested_prompts": ["Новости ИИ 2026"]},
     {"id": "coder", "name": "Code Architect", "emoji": "⚡", "mode": "chat", "description": "Код и архитектура.", "model_preference": "premium", "min_tier": "PRO", "suggested_prompts": ["Спроектируй REST API"]},
     {"id": "writer", "name": "Creative Writer", "emoji": "✍️", "mode": "chat", "description": "Тексты и редактура.", "model_preference": "balanced", "min_tier": "STANDARD", "suggested_prompts": ["Пост о запуске стартапа"]},

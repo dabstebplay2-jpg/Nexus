@@ -514,7 +514,9 @@ export function useNexusChat({
         const topupRub = authStatus.profile?.topup_balance_rub ?? authStatus.profile?.balance_rub ?? 0;
         let quotaUpsell = '';
         if (quotaHit) {
-          if (tierId === 'FREE' || !tierHasAi(tierId)) {
+          if (tierId === 'FREE') {
+            quotaUpsell = ' Дневной лимит Free исчерпан — оформите Hobby в разделе «Тарифы».';
+          } else if (!tierHasAi(tierId)) {
             quotaUpsell = ' Оформите подписку или пополните баланс в разделе «Тарифы».';
           } else if (topupRub <= 0) {
             quotaUpsell = ' Пополните баланс на странице «Тарифы» — можно без смены тарифа.';
