@@ -10,6 +10,17 @@ import { spawnSync } from 'child_process';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+function loadVercelScope() {
+  const projectPath = join(root, '.vercel', 'project.json');
+  if (!existsSync(projectPath)) return null;
+  try {
+    const cfg = JSON.parse(readFileSync(projectPath, 'utf8'));
+    return cfg.orgId || null;
+  } catch {
+    return null;
+  }
+}
+
 function loadUrl() {
   const arg = process.argv[2]?.trim();
   if (arg?.startsWith('https://discord.com/api/webhooks/')) return arg;
@@ -29,16 +40,16 @@ if (!url) {
   process.exit(1);
 }
 
-const r = spawnSync(
-  'vercel',
-  ['env', 'add', 'DISCORD_CHANGELOG_WEBHOOK_URL', 'production', '--force'],
-  { cwd: root, input: url + '\n', encoding: 'utf8' }
-);
+const scope = loadVercelScope();
+const vercelArgs = ['env', 'add', 'DISCORD_CHANGELOG_WEBHOOK_URL', 'production', '--force'];
+if (scope) vercelArgs.push('--scope', scope);
+
+const r = spawnSync('vercel', vercelArgs, { cwd: root, input: url + '\n', encoding: 'utf8' });
 if (r.stdout) process.stdout.write(r.stdout);
 if (r.stderr) process.stderr.write(r.stderr);
 if (r.status !== 0) {
-  console.error('vercel env add failed. Запустите: vercel login');
+  console.error('vercel env add failed. Запустите: vercel link --yes && vercel login');
   process.exit(r.status ?? 1);
 }
 console.log('Vercel: DISCORD_CHANGELOG_WEBHOOK_URL обновлён (production).');
-console.log('Проверка: npm run changelog:notify');
+console.log('Проверка: npm run changelog:notify -- --dry-run');

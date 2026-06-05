@@ -1,6 +1,27 @@
 {
   "entries": [
     {
+      "version": "0.1.33",
+      "date": "5 июня 2026 г.",
+      "dateISO": "2026-06-05",
+      "title": "Авто-пост changelog в Discord",
+      "summary": "Production deploy на Vercel снова отправляет Patch Notes в #signal, когда в коммите обновлён changelog.",
+      "changes": [
+        {
+          "label": "Исправлено",
+          "text": "Авто-уведомление на Vercel: детект изменений changelog через GitHub API, если в билде нет .git (CLI и shallow clone)."
+        },
+        {
+          "label": "Исправлено",
+          "text": "Понятные предупреждения, если DISCORD_CHANGELOG_WEBHOOK_URL на Vercel пустой или не задан."
+        },
+        {
+          "label": "Улучшено",
+          "text": "discord:sync-vercel подхватывает team scope из .vercel/project.json."
+        }
+      ]
+    },
+    {
       "version": "0.1.32",
       "date": "5 июня 2026 г.",
       "dateISO": "2026-06-05",

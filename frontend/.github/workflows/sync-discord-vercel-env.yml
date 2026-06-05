@@ -1,0 +1,39 @@
+# One-shot / manual: copy DISCORD_CHANGELOG_WEBHOOK_URL → Vercel Production env.
+# Needs secrets: DISCORD_CHANGELOG_WEBHOOK_URL, VERCEL_TOKEN (classic or OAuth CLI token).
+name: Sync Discord webhook to Vercel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@54
+
+      - name: Push DISCORD_CHANGELOG_WEBHOOK_URL to Vercel Production
+        env:
+          DISCORD_CHANGELOG_WEBHOOK_URL: ${{ secrets.DISCORD_CHANGELOG_WEBHOOK_URL }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$DISCORD_CHANGELOG_WEBHOOK_URL" ]; then
+            echo "Missing secret DISCORD_CHANGELOG_WEBHOOK_URL"
+            exit 1
+          fi
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "Missing secret VERCEL_TOKEN (Vercel → Account → Tokens, or OAuth token from vercel CLI auth.json)"
+            exit 1
+          fi
+          printf '%s' "$DISCORD_CHANGELOG_WEBHOOK_URL" | vercel env add DISCORD_CHANGELOG_WEBHOOK_URL production \
+            --force \
+            --token "$VERCEL_TOKEN" \
+            --scope team_qd39FmK6l7zODCRkUJ5RSqxN \
+            --project frontend
+          echo "Vercel Production: DISCORD_CHANGELOG_WEBHOOK_URL updated."

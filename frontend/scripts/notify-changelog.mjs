@@ -75,7 +75,13 @@ function loadLocalJson(name) {
 }
 
 function loadWebhookConfig() {
-  const envUrl = process.env.DISCORD_CHANGELOG_WEBHOOK_URL?.trim();
+  const rawEnv = process.env.DISCORD_CHANGELOG_WEBHOOK_URL;
+  const envUrl = rawEnv?.trim();
+  if (rawEnv !== undefined && !envUrl) {
+    console.warn(
+      'DISCORD_CHANGELOG_WEBHOOK_URL задан, но пустой. Обновите Production env на Vercel: npm run discord:sync-vercel'
+    );
+  }
   if (envUrl) {
     return {
       url: envUrl,

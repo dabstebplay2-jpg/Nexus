@@ -58,6 +58,18 @@ DISCORD_CHANGELOG_WEBHOOK_URL=https://discord.com/api/webhooks/...
 npm run discord:sync-vercel
 ```
 
+Если переменная на Vercel **есть, но пустая** (`vercel env pull` покажет `""`), пост не уйдёт.
+Скопировать тот же URL, что в GitHub secret:
+
+```bash
+# GitHub Actions → Sync Discord webhook to Vercel → Run workflow
+# (нужны secrets: DISCORD_CHANGELOG_WEBHOOK_URL, VERCEL_TOKEN)
+```
+
+Или локально: `vercel link`, затем `npm run discord:sync-vercel`.
+
+На Vercel билд без `.git` детектит changelog через **GitHub API** (`VERCEL_GIT_COMMIT_SHA`).
+
 ### GitHub fallback
 
 ```bash
