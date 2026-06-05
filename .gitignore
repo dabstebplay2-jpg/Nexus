@@ -26,10 +26,15 @@ deploy/render-production.env
 *.db
 *.sqlite3
 
-# IDE / OS (включая .cursor/rules — только локально в Cursor, не в репо)
+# IDE / OS
 .idea/
 .vscode/
+
+# Cursor — rules, settings, agents (только локально, не коммитить)
 .cursor/
+.cursor/**
+.cursor/rules/
+**/.cursor/rules/**
 .DS_Store
 Thumbs.db
 
