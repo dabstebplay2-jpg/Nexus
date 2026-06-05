@@ -266,11 +266,6 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (!stickToBottomRef.current) return;
-    messagesEndRef.current?.scrollIntoView({ behavior: loading ? 'auto' : 'smooth' });
-  }, [activeConv?.messages, loading]);
-
-  useEffect(() => {
     if (!cloudReady || !artifactsReady) return;
     setChatState((s) => {
       if (!Array.isArray(s.conversations)) return s;
@@ -341,6 +336,11 @@ export default function ChatPage() {
     },
     persistConversationNow: isCloudMode ? persistConversationNow : undefined,
   });
+
+  useEffect(() => {
+    if (!stickToBottomRef.current) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: loading ? 'auto' : 'smooth' });
+  }, [activeConv?.messages, loading]);
 
   const { codePanel, openFromMessage, closePanel, selectFile } = useChatCodePanel(
     activeConv?.messages,
