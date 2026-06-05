@@ -2,30 +2,32 @@ Nexus Pro — как запускать (Windows)
 ====================================
 
 БЫСТРЫЙ СТАРТ
-  1. Один раз: install-deps.bat
-  2. Каждый раз: start-all.bat
+  1. Один раз: nexus.bat install
+  2. Каждый раз: nexus.bat start
   3. Браузер: http://localhost:5173
 
+  Или без аргументов: nexus.bat  (меню)
+
 ОТДЕЛЬНЫЕ СЕРВИСЫ
-  start-cloud.bat     → Cloud API, порт 8080
-  start-backend.bat   → Backend, порт 8000  (нужен Cloud)
-  start-frontend.bat  → Интерфейс, порт 5173 (нужны Cloud + Backend)
+  nexus.bat cloud     → Cloud API, порт 8080
+  nexus.bat backend   → Backend, порт 8000  (нужен Cloud)
+  nexus.bat frontend  → Интерфейс, порт 5173 (нужны Cloud + Backend)
 
 ОСТАНОВКА
-  stop-all.bat
+  nexus.bat stop
 
 ОШИБКА 10048 / PID 20144 / multiprocessing.spawn
   Зависший uvicorn (родитель 20144, дочерний spawn_main).
-  1) stop-all.bat  (убивает дерево процессов)
-  2) diagnose.bat  (порты + health)
-  3) start-all.bat
+  1) nexus.bat stop  (убивает дерево процессов)
+  2) nexus.bat diagnose  (порты + health)
+  3) nexus.bat start
   Не используйте uvicorn --reload на Windows.
   Папка backend\ (не nexus-backend\).
 
 ОШИБКА 503 / тарифы не грузятся
   Cloud не запущен или порт 8080 занят (ошибка 10048).
-  1) stop-all.bat
-  2) start-all.bat
+  1) nexus.bat stop
+  2) nexus.bat start
   3) В окне "Nexus Cloud 8080" должна быть строка без ERROR:
      Uvicorn running on http://127.0.0.1:8080
   Проверка в браузере: http://127.0.0.1:8080/health
