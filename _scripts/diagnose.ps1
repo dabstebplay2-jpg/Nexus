@@ -47,7 +47,7 @@ if ($p8000) {
         Where-Object { $_.CommandLine -match "parent_pid=$owner" }
     if ($spawn) {
         Write-Host "ZOMBIE: port 8000 held by dead parent PID $owner" -ForegroundColor Yellow
-        Write-Host "  -> run stop-all.bat (kills multiprocessing children)"
+        Write-Host "  -> run nexus.bat stop (kills multiprocessing children)"
     }
 }
 

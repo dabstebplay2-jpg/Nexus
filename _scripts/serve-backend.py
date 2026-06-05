@@ -24,7 +24,7 @@ def pick_port() -> int:
         if not port_in_use(port):
             return port
     raise SystemExit(
-        f"Ports {PORTS} are busy. Run stop-all.bat or close old python/uvicorn windows."
+        f"Ports {PORTS} are busy. Run nexus.bat stop or close old python/uvicorn windows."
     )
 
 

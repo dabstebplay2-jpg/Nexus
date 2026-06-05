@@ -32,7 +32,7 @@ function Find-FreeAdminPort([int]$StartPort) {
     for ($p = $StartPort; $p -lt ($StartPort + 10); $p++) {
         if (-not (Test-LocalPortInUse $p)) { return $p }
     }
-    throw "Нет свободного порта в диапазоне ${StartPort}..$($StartPort + 9). Закройте старые uvicorn: stop-all.bat или taskkill /PID <pid> /F"
+    throw "Нет свободного порта в диапазоне ${StartPort}..$($StartPort + 9). Закройте старые uvicorn: nexus.bat stop или taskkill /PID <pid> /F"
 }
 
 $preferred = 8790
