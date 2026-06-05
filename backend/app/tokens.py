@@ -81,7 +81,7 @@ async def cloud_request(
                 status_code=503,
                 detail=(
                     "Cloud не отвечает на http://127.0.0.1:8080. "
-                    "Запустите start-cloud.bat или stop-all.bat, затем start-all.bat. "
+                    "Запустите nexus.bat cloud или nexus.bat stop, затем nexus.bat start. "
                     "В окне Cloud должно быть: Uvicorn running on 8080 (без ошибки 10048)."
                 ),
             )
