@@ -8,10 +8,17 @@ import {
 } from './connectorsApi';
 
 export function useConnectors({ enabled = true } = {}) {
-  const [data, setData] = useState({ categories: [], connectors: [] });
+  const [data, setData] = useState({
+    categories: [],
+    connectors: [],
+    tier_blocks_connectors: false,
+    oauth_status: null,
+    user_tier: 'FREE',
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState('');
+  const [discordModalOpen, setDiscordModalOpen] = useState(false);
 
   const reload = useCallback(async () => {
     if (!enabled) return;
@@ -31,7 +38,13 @@ export function useConnectors({ enabled = true } = {}) {
     if (!enabled) {
       setLoading(false);
       setError('');
-      setData({ categories: [], connectors: [] });
+      setData({
+        categories: [],
+        connectors: [],
+        tier_blocks_connectors: false,
+        oauth_status: null,
+        user_tier: 'FREE',
+      });
       return;
     }
     reload();
@@ -43,20 +56,30 @@ export function useConnectors({ enabled = true } = {}) {
       setError('');
       try {
         if (connectorId === 'discord') {
-          const url = window.prompt(
-            'URL вебхука Discord (Настройки канала → Интеграции → Вебхуки):',
-            'https://discord.com/api/webhooks/'
-          );
-          if (!url?.trim()) return;
-          const label = window.prompt('Название канала (необязательно):', '#signal') || undefined;
-          await connectDiscordWebhook(url.trim(), label);
-          await reload();
+          setDiscordModalOpen(true);
           return;
         }
         const res = await startConnectorOAuth(connectorId, window.location.origin);
         if (res.url) {
           window.location.href = res.url;
         }
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setBusyId('');
+      }
+    },
+    []
+  );
+
+  const submitDiscordWebhook = useCallback(
+    async (webhookUrl, channelLabel) => {
+      setBusyId('discord');
+      setError('');
+      try {
+        await connectDiscordWebhook(webhookUrl, channelLabel);
+        setDiscordModalOpen(false);
+        await reload();
       } catch (e) {
         setError(e.message);
       } finally {
@@ -96,6 +119,9 @@ export function useConnectors({ enabled = true } = {}) {
   return {
     categories: data.categories || [],
     connectors: data.connectors || [],
+    tierBlocksConnectors: Boolean(data.tier_blocks_connectors),
+    oauthStatus: data.oauth_status,
+    userTier: data.user_tier || 'FREE',
     loading,
     error,
     busyId,
@@ -103,5 +129,8 @@ export function useConnectors({ enabled = true } = {}) {
     connect,
     disconnect,
     toggleChat,
+    discordModalOpen,
+    setDiscordModalOpen,
+    submitDiscordWebhook,
   };
 }

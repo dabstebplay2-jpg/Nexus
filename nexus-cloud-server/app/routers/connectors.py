@@ -10,11 +10,10 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.connectors.catalog import get_catalog_entry, is_mvp_connector, list_catalog_entries, list_categories
-from app.config import NEXUS_FRONTEND_URL
+from app.connectors.catalog import MVP_CONNECTOR_IDS, get_catalog_entry, is_mvp_connector, list_catalog_entries, list_categories
 from app.database import UserDB, get_db
 from app.security import get_current_user
-from app.services.connectors.oauth_providers import create_connect_url, handle_oauth_callback
+from app.services.connectors.oauth_providers import connector_oauth_ready, create_connect_url, handle_oauth_callback
 from app.services.connectors.oauth_state import pop_connector_oauth_state
 from app.services.connectors.store import disconnect, get_connection, list_user_connections, set_enabled_for_chat, upsert_connection
 from app.services.models_registry import tier_rank
@@ -44,6 +43,50 @@ def _tier_allows_connector(user: UserDB, entry: dict) -> bool:
     return tier_rank(user.subscription_tier) >= tier_rank(required)
 
 
+def _blocked_reason(entry: dict, *, tier_ok: bool, oauth_ready: bool) -> str | None:
+    if entry.get("coming_soon"):
+        return "coming_soon"
+    cid = entry.get("id") or ""
+    if not is_mvp_connector(cid):
+        return "coming_soon"
+    if not tier_ok:
+        return "tier"
+    auth_type = entry.get("auth_type") or "oauth"
+    if auth_type == "oauth" and not oauth_ready:
+        return "oauth_not_configured"
+    return None
+
+
+def _enrich_connector_entry(entry: dict, user: UserDB, conn_map: dict[str, dict]) -> dict:
+    cid = entry["id"]
+    required_tier = normalize_tier(entry.get("required_tier") or "HOBBY")
+    tier_ok = _tier_allows_connector(user, entry)
+    oauth_ready = connector_oauth_ready(cid)
+    merged = {
+        **entry,
+        "required_tier": required_tier,
+        "oauth_ready": oauth_ready,
+        "connected": cid in conn_map,
+        "enabled_for_chat": False,
+    }
+    if cid in conn_map:
+        merged.update(conn_map[cid])
+    blocked = _blocked_reason(entry, tier_ok=tier_ok, oauth_ready=oauth_ready)
+    merged["blocked_reason"] = blocked
+    merged["available"] = blocked is None
+    return merged
+
+
+def _oauth_status_summary() -> dict:
+    """Which MVP OAuth providers are configured on the server."""
+    mvp_oauth = [c for c in MVP_CONNECTOR_IDS if c != "discord"]
+    ready = {cid: connector_oauth_ready(cid) for cid in mvp_oauth}
+    return {
+        "mvp_oauth_ready": all(ready.values()),
+        "providers": ready,
+    }
+
+
 def _connection_map(db: Session, user_id: int) -> dict[str, dict]:
     out = {}
     for row in list_user_connections(db, user_id):
@@ -62,21 +105,16 @@ def list_connectors(
     db: Session = Depends(get_db),
 ):
     conn_map = _connection_map(db, current_user.id)
-    items = []
-    for entry in list_catalog_entries():
-        cid = entry["id"]
-        merged = {**entry, "connected": cid in conn_map, "enabled_for_chat": False}
-        if cid in conn_map:
-            merged.update(conn_map[cid])
-        merged["available"] = (
-            not entry.get("coming_soon")
-            and is_mvp_connector(cid)
-            and _tier_allows_connector(current_user, entry)
-        )
-        items.append(merged)
+    items = [_enrich_connector_entry(entry, current_user, conn_map) for entry in list_catalog_entries()]
+    user_tier = normalize_tier(current_user.subscription_tier)
+    mvp_items = [c for c in items if c["id"] in MVP_CONNECTOR_IDS]
+    tier_blocks_mvp = user_tier == "FREE" and any(c.get("blocked_reason") == "tier" for c in mvp_items)
     return {
         "categories": list_categories(),
         "connectors": items,
+        "user_tier": user_tier,
+        "tier_blocks_connectors": tier_blocks_mvp,
+        "oauth_status": _oauth_status_summary(),
     }
 
 

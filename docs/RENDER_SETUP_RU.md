@@ -42,6 +42,8 @@ NEXUS_REMOTE_ADMIN=true
 NEXUS_ADMIN_PASSWORD=ваш-пароль
 ```
 
+**Коннекторы (Gmail, GitHub, Vercel):** отдельные OAuth-переменные — полный чеклист в [nexus-cloud-server/docs/CONNECTORS_SETUP_RU.md](../nexus-cloud-server/docs/CONNECTORS_SETUP_RU.md). Проверка после деплоя: `nexus-cloud-server/scripts/check-connectors-oauth.ps1` (нужен `NEXUS_JWT`).
+
 ---
 
 ## Vercel — frontend

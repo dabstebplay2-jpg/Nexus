@@ -40,6 +40,9 @@ import { hydrateConversationImages } from '../lib/chatSyncAttachments';
 import SupportPanel from '../components/support/SupportPanel';
 import { readWebSearchEnabled, writeWebSearchEnabled } from '../lib/webSearchPreference';
 import ConnectorChips from '../features/connectors/ConnectorChips';
+import { fetchConnectorsSummary } from '../features/connectors/connectorsApi';
+import ChatComposerBanners from '../components/chat/ChatComposerBanners';
+import { warmApiHealthOnce } from '../lib/warmApiHealth';
 import HomeFeatures from '../components/home/HomeFeatures';
 
 const TOPICS = ['Финансы', 'Код', 'Research', 'Учёба'];
@@ -70,6 +73,9 @@ export default function ChatPage() {
   }, []);
 
   const messagesEndRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const stickToBottomRef = useRef(true);
+  const [connectorsForChat, setConnectorsForChat] = useState([]);
   const wasAuthorizedRef = useRef(false);
   const skipGuestSaveOnceRef = useRef(false);
   const allowGuestLocalSaveRef = useRef(false);
@@ -201,6 +207,33 @@ export default function ChatPage() {
     loadCatalog();
   }, [loadCatalog]);
 
+  useEffect(() => {
+    if (!authStatus.authorized) {
+      setConnectorsForChat([]);
+      return;
+    }
+    warmApiHealthOnce();
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchConnectorsSummary();
+        if (!cancelled) {
+          setConnectorsForChat(
+            (data.connected || [])
+              .filter((c) => c.enabled_for_chat)
+              .map((c) => c.id)
+              .filter(Boolean)
+          );
+        }
+      } catch {
+        if (!cancelled) setConnectorsForChat([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authStatus.authorized]);
+
   // Синхронизация только при смене каталога/режима — не при каждом выборе модели (иначе медиа сбрасывается).
   useEffect(() => {
     if (!authStatus.authorized) return;
@@ -223,9 +256,18 @@ export default function ChatPage() {
     });
   }, [mode, researchModels, models, mediaModels, authStatus.authorized]);
 
+  const handleMessagesScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const threshold = 96;
+    stickToBottomRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  }, []);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeConv?.messages]);
+    if (!stickToBottomRef.current) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: loading ? 'auto' : 'smooth' });
+  }, [activeConv?.messages, loading]);
 
   useEffect(() => {
     if (!cloudReady || !artifactsReady) return;
@@ -287,7 +329,7 @@ export default function ChatPage() {
     persistConversation,
   ]);
 
-  const { loading, sendMessage } = useNexusChat({
+  const { loading, sendMessage, stopGeneration } = useNexusChat({
     authStatus,
     fetchProfile,
     tierHasAi: (id) => tierHasAiFromList(tiers, id),
@@ -439,8 +481,14 @@ export default function ChatPage() {
         headerRight={
           <div className="flex items-center gap-3">
             {modelsError && (
-              <button type="button" onClick={loadCatalog} className="text-amber-500" title={modelsError}>
-                <RefreshCw size={14} />
+              <button
+                type="button"
+                onClick={loadCatalog}
+                className="text-amber-500 text-xs flex items-center gap-1 max-w-[140px] truncate"
+                title={modelsError}
+              >
+                <RefreshCw size={14} className="shrink-0" />
+                <span className="hidden sm:inline truncate">Модели</span>
               </button>
             )}
             {authStatus.authorized &&
@@ -464,7 +512,7 @@ export default function ChatPage() {
                 transition={{ duration: 0.4 }}
                 className="text-center mb-12 w-full"
               >
-                <h1 className="nx-wordmark text-6xl sm:text-7xl md:text-8xl font-normal text-[var(--nx-text)] mb-4 tracking-tight">
+                <h1 className="nx-wordmark nx-wordmark-gradient text-6xl sm:text-7xl md:text-8xl font-normal mb-4 tracking-tight">
                   nexus
                 </h1>
                 <p className="text-base sm:text-lg text-[var(--nx-muted)] max-w-lg mx-auto">
@@ -472,11 +520,20 @@ export default function ChatPage() {
                 </p>
               </motion.div>
 
+              <ChatComposerBanners
+                profile={authStatus.profile}
+                modelsError={modelsError}
+                onRetryModels={loadCatalog}
+                connectorsForChat={connectorsForChat}
+                selectedModelMeta={selectedModelMeta}
+                onOpenSettingsConnectors={() => openSettingsModal('connectors')}
+              />
               <NexusComposer
                 centered
                 value={input}
                 onChange={setInput}
                 onSend={handleSend}
+                onStop={stopGeneration}
                 loading={loading}
                 disabled={!authStatus.authorized}
                 guest={!authStatus.authorized}
@@ -507,9 +564,11 @@ export default function ChatPage() {
                 {suggested.map((prompt, i) => (
                   <motion.button
                     key={prompt}
-                    initial={{ opacity: 0, y: 8 }}
+                    initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.05 * i }}
+                    transition={{ delay: 0.06 * i, duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.99 }}
                     type="button"
                     onClick={() => setInput(prompt)}
                     className="nx-suggestion-card text-left text-base px-5 py-4 rounded-2xl text-[var(--nx-muted)] leading-snug"
@@ -538,7 +597,11 @@ export default function ChatPage() {
           ) : (
             <div className="flex flex-1 min-h-0 min-w-0 flex-col lg:flex-row">
               <div className="flex flex-col flex-1 min-w-0 min-h-0">
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div
+                  ref={scrollContainerRef}
+                  onScroll={handleMessagesScroll}
+                  className="flex-1 overflow-y-auto custom-scrollbar"
+                >
                   {activeConv.messages.map((m, i) => {
                     const modelMeta =
                       m.role === 'assistant' && m.model
@@ -562,7 +625,16 @@ export default function ChatPage() {
                   })}
                   <div ref={messagesEndRef} />
                 </div>
-                <div className="shrink-0 sticky bottom-0 z-20 bg-gradient-to-t from-[var(--nx-bg)] via-[var(--nx-bg)] to-transparent pt-2 px-4 sm:px-6">
+                <div className="shrink-0 sticky bottom-0 z-20 bg-gradient-to-t from-[var(--nx-bg)] via-[var(--nx-bg)] to-transparent pt-2">
+                  <ChatComposerBanners
+                    profile={authStatus.profile}
+                    modelsError={modelsError}
+                    onRetryModels={loadCatalog}
+                    connectorsForChat={connectorsForChat}
+                    selectedModelMeta={selectedModelMeta}
+                    onOpenSettingsConnectors={() => openSettingsModal('connectors')}
+                  />
+                  <div className="px-4 sm:px-6">
                   <ConnectorChips
                     authorized={authStatus.authorized}
                     onOpenSettings={() => openSettingsModal('connectors')}
@@ -571,6 +643,7 @@ export default function ChatPage() {
                     value={input}
                     onChange={setInput}
                     onSend={handleSend}
+                    onStop={stopGeneration}
                     loading={loading}
                     mode={mode}
                     onModeChange={setMode}
@@ -591,6 +664,7 @@ export default function ChatPage() {
                     webSearch={webSearch}
                     onWebSearchChange={handleWebSearchChange}
                   />
+                  </div>
                 </div>
                 {attachToast && (
                   <p className="text-xs text-amber-400/90 px-4 pb-2 text-center">{attachToast}</p>

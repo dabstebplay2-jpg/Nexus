@@ -39,6 +39,27 @@ vercel deploy --prod
 
 ---
 
+## Ветка `Dabsteb` → прод (чат UX, коннекторы)
+
+Рабочая ветка фронта и монорепо: **`Dabsteb`**. После мержа в `main` Vercel пересобирает прод автоматически (если проект привязан к `main`).
+
+```powershell
+git checkout Dabsteb
+git pull origin Dabsteb
+# PR в main (рекомендуется)
+gh pr create --base main --head Dabsteb --title "Chat UX: stop, statuses, banners" --body "Stop generation, stream statuses, tools hint, warm-up, limit banner."
+# После merge — дождаться деплоя в Vercel Dashboard → Deployments
+```
+
+Ручной прод-деплой без merge (только если нужно срочно с ветки):
+
+```powershell
+cd frontend
+vercel deploy --prod
+```
+
+---
+
 ## Проверка
 
 1. https://frontend-henna-tau-19.vercel.app — регистрация  

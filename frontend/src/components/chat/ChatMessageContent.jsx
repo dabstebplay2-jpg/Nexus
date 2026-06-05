@@ -185,8 +185,8 @@ export default function ChatMessageContent({
         </div>
       )}
 
-      {isStreaming && !showImagePlaceholder ? (
-        <span className="inline-block w-2 h-4 mt-1 bg-cyan-400 align-middle rounded-sm animate-pulse" />
+      {isStreaming && !showImagePlaceholder && (prose || content || thinking) ? (
+        <span className="nx-stream-cursor" aria-hidden />
       ) : null}
     </div>
   );
