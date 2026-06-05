@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { Globe, Loader2, CheckCircle2, AlertCircle, Plug } from 'lucide-react';
 import { formatConnectorList } from '../../features/connectors/connectorLabels';
 
@@ -13,25 +12,13 @@ function phaseLabel(step) {
 function StepperItem({ active, done, isLast, children }) {
   const stateClass = active ? 'nx-stepper__item--active' : done ? 'nx-stepper__item--done' : '';
   return (
-    <motion.li
-      className={`nx-stepper__item ${stateClass}`}
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-    >
+    <li className={`nx-stepper__item ${stateClass} nx-stepper__item--enter`}>
       <div className="nx-stepper__rail" aria-hidden>
         <span className="nx-stepper__node" />
-        {!isLast && (
-          <motion.span
-            className="nx-stepper__line"
-            initial={{ scaleY: 0 }}
-            animate={{ scaleY: 1 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-          />
-        )}
+        {!isLast && <span className="nx-stepper__line" />}
       </div>
       <div className="nx-stepper__content">{children}</div>
-    </motion.li>
+    </li>
   );
 }
 

@@ -8,7 +8,7 @@ import ChatInlineAlert from './ChatInlineAlert';
 
 const TOOLS_HINT_KEY = 'nexus-tools-hint-dismissed';
 
-export function useLowQuotaWarning(profile, thresholdPct = 85) {
+export function getLowQuotaWarning(profile, thresholdPct = 85) {
   const rate = profile?.usd_rub_rate || 95;
   const capRub =
     profile?.monthly_cap_rub ?? profile?.monthly_quota_rub ?? profile?.daily_cap_rub;
@@ -47,7 +47,7 @@ export default function ChatComposerBanners({
   selectedModelMeta,
   onOpenSettingsConnectors,
 }) {
-  const lowQuota = useLowQuotaWarning(profile);
+  const lowQuota = getLowQuotaWarning(profile);
   const needsTools =
     connectorsForChat.length > 0 &&
     selectedModelMeta &&
@@ -78,8 +78,8 @@ export default function ChatComposerBanners({
   };
 
   return (
-    <motion.div layout className="px-4 sm:px-6 pb-2 space-y-2">
-      <AnimatePresence mode="popLayout">
+    <div className="px-4 sm:px-6 pb-2 space-y-2">
+      <AnimatePresence mode="sync">
         {modelsError && (
           <ChatInlineAlert
             key="models-error"
@@ -141,6 +141,6 @@ export default function ChatComposerBanners({
           </ChatInlineAlert>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }

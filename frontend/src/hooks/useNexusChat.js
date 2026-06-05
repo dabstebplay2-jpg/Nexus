@@ -547,5 +547,5 @@ export function useNexusChat({
     ]
   );
 
-  return { loading, sendMessage, stopGeneration, pickDefaultModel };
+  return { loading, sendMessage, stopGeneration };
 }

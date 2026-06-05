@@ -230,6 +230,12 @@ export async function sendResearch({ model, query, messages, agentId, depth = 'd
   return res.json();
 }
 
+export {
+  modelLockHint,
+  sortModelsUnlockedFirst,
+  pickDefaultMediaModel,
+} from './modelCatalogHelpers';
+
 export function pickDefaultModel(models, preferredId) {
   if (!models?.length) return '';
   const unlocked = models.filter((m) => !m.locked);

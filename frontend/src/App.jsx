@@ -4,7 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import { UserMemoryProvider } from './context/UserMemoryContext';
 import { ArtifactProvider } from './context/ArtifactContext';
 import AuthModal from './components/auth/AuthModal';
-import SettingsModal from './components/settings/SettingsModal';
+const SettingsModal = lazy(() => import('./components/settings/SettingsModal'));
 import ChatPage from './pages/ChatPage';
 import SpacesPage from './pages/SpacesPage';
 import DashboardPage from './pages/DashboardPage';
@@ -61,7 +61,9 @@ export default function App() {
         </Routes>
         </Suspense>
         <AuthModal />
-        <SettingsModal />
+        <Suspense fallback={null}>
+          <SettingsModal />
+        </Suspense>
         </ArtifactProvider>
         </UserMemoryProvider>
       </AuthProvider>

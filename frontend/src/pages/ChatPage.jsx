@@ -25,6 +25,7 @@ import {
   formatModelShortName,
 } from '../lib/chatApi';
 import { findModelByAnyId, usesReasoningApiForThinking } from '../lib/modelSelection';
+import { pickDefaultMediaModel } from '../lib/modelCatalogHelpers';
 import {
   processAttachmentFiles,
   modelAcceptsPhotos,
@@ -387,7 +388,9 @@ export default function ChatPage() {
     let finalModelMeta = selectedModelMeta;
 
     if (detectImageGenIntent(text) && !isMediaModelSelected) {
-      const defaultMediaId = localStorage.getItem('nexus_default_media_model') || (mediaModels[0]?.id || 'flux-klein');
+      const defaultMediaId =
+        pickDefaultMediaModel(mediaModels, localStorage.getItem('nexus_default_media_model')) ||
+        'flux-klein';
       finalModel = defaultMediaId;
       finalIsMediaModel = true;
       finalModelMeta = findModelByAnyId(allModels, finalModel);

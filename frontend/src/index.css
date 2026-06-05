@@ -406,6 +406,21 @@
   color: var(--nx-activity-fg);
 }
 
+.nx-stepper__item--enter {
+  animation: nx-step-enter 0.2s ease-out both;
+}
+
+@keyframes nx-step-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .nx-send-btn {
   display: flex;
   align-items: center;
@@ -1078,7 +1093,8 @@ body,
   .nx-composer.nx-composer--loading::after,
   .nx-status-shimmer::after,
   .nx-stream-cursor,
-  .nx-busy-dots span {
+  .nx-busy-dots span,
+  .nx-stepper__item--enter {
     animation: none;
   }
   .image-gen-placeholder__dots {
