@@ -34,4 +34,4 @@ if (r.status !== 0) {
   process.exit(r.status ?? 1);
 }
 console.log('GitHub: secret DISCORD_CHANGELOG_WEBHOOK_URL обновлён.');
-console.log('Workflow: .github/workflows/discord-changelog.yml (push main + changelog.json)');
+console.log('Workflow: .github/workflows/frontend-discord-changelog.yml (manual fallback only)');
