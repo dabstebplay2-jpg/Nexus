@@ -1,5 +1,5 @@
 ---
-description: Duo-разработка Nexus — ветка DABSTEB (ты), Dyni (напарник), main, PR
+description: Duo-разработка Nexus — ветка Dyni (ты), Dabsteb (напарник), main, PR
 alwaysApply: true
 ---
 
@@ -12,34 +12,34 @@ alwaysApply: true
 | Ветка | Кто | Назначение |
 |-------|-----|------------|
 | `main` | общая | Стабильная база. **Не коммитить и не пушить напрямую** без явной просьбы. |
-| `DABSTEB` | **ты (DABSTEB / dabstebplay2-jpg)** | Твоя рабочая ветка. Все твои коммиты и push — только сюда. |
-| `Dyni` | **напарник** | Его рабочая ветка. Не коммитить, не пушить, не merge без договорённости. |
+| `Dyni` | **ты** | Твоя рабочая ветка. Все твои коммиты и push — только сюда. |
+| `Dabsteb` | **напарник** | Его рабочая ветка. Не коммитить, не пушить, не merge без договорённости. |
 
-Перед работой: `git branch --show-current` → для тебя должно быть **`DABSTEB`**.
+Перед работой: `git branch --show-current` → для тебя должно быть **`Dyni`**.
 
-## Что делает агент (сессия DABSTEB)
+## Что делает агент (твоя сессия)
 
-1. **Коммиты и push** — только в `DABSTEB` (если не попросили иное).
-2. **Не трогать `Dyni`** и **`main`** без явного запроса.
+1. **Коммиты и push** — только в `Dyni` (если не попросили иное).
+2. **Не трогать `Dabsteb`** и **`main`** без явного запроса.
 3. Не `push origin main`, не force-push без явного запроса.
-4. Перед крупной фичей — подтянуть `main` в `DABSTEB`: `git fetch origin` → `git merge origin/main`.
-5. После значимых изменений — `git push origin DABSTEB`, чтобы напарник видел на GitHub.
-6. В `main` — только через **Pull Request** (`DABSTEB` → `main`) после ревью.
+4. Перед крупной фичей — подтянуть `main` в `Dyni`: `git fetch origin` → `git merge origin/main`.
+5. После значимых изменений — `git push origin Dyni`, чтобы напарник видел на GitHub.
+6. В `main` — только через **Pull Request** (`Dyni` → `main`) после ревью.
 
 ## Твой цикл
 
 ```powershell
-git checkout DABSTEB
-git pull origin DABSTEB
+git checkout Dyni
+git pull origin Dyni
 # правки в Cursor
 git add <файлы>
 git commit -m "..."
-git push origin DABSTEB
+git push origin Dyni
 ```
 
-Напарник смотрит твои изменения: `git fetch` → `git checkout DABSTEB` → `git pull`, или PR на GitHub.
+Напарник смотрит твои изменения: `git fetch` → `git checkout Dyni` → `git pull`, или PR на GitHub.
 
-Его ветка `Dyni` — он работает там же по той же схеме, только push в `Dyni`.
+Он работает в **`Dabsteb`**: `git checkout Dabsteb` → commit → `git push origin Dabsteb`.
 
 ## Локальный запуск
 
