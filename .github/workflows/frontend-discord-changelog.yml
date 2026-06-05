@@ -1,12 +1,9 @@
-# После push в main с обновлённым changelog — уведомление в Discord (#логи).
-# Vercel production build тоже шлёт notify (см. vercel.json buildCommand), если задан секрет.
+# Основной авто-пост делает Vercel production build:
+# frontend/vercel.json -> npm run changelog:notify:on-deploy.
+# Этот workflow оставлен только как ручной fallback, чтобы не плодить дубли в #signal.
 name: Discord changelog
 
 on:
-  push:
-    branches: [main, master]
-    paths:
-      - 'frontend/src/data/changelog.json'
   workflow_dispatch:
 
 jobs:

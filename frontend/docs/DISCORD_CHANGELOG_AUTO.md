@@ -1,57 +1,82 @@
-# Автоматический ченджлог в Discord (#signal)
+# Ченджлог и Discord #signal
 
-## Как это работает (автоматически)
+## Как добавить релиз
 
-1. Обновите **`src/data/changelog.json`** (новая запись первой в `entries`, версия в `package.json`).
-2. **Commit + push в `main`**.
-3. Пост в **#signal** уходит сам — `npm run changelog:notify` вручную не нужен.
+1. В `package.json` поднимите `version`.
+2. В `src/data/changelog.json` добавьте новую запись первой в `entries`.
+3. Проверьте локально:
 
-| Триггер | Когда |
-|--------|--------|
-| **Vercel (основной)** | Production deploy после push: `build` → `changelog:notify:on-deploy` (только если в коммите менялся `changelog.json`) |
-| **GitHub Actions** | Только вручную: Actions → Discord changelog → Run workflow |
+```bash
+npm run changelog:validate
+npm run changelog:notify -- --dry-run
+```
 
-Preview-деплои и коммиты без changelog **не** шлют пост в Discord.
+4. Commit + push в `main`.
 
-Preview-деплои Vercel **не** шлют в Discord.
+## Что постит в Discord
 
-## Один раз: секрет в Vercel
+Основной авто-постер только один: Vercel production build.
 
-1. [Vercel](https://vercel.com) → проект **frontend** → **Settings** → **Environment Variables**
-2. Имя: `DISCORD_CHANGELOG_WEBHOOK_URL`
-3. Значение: URL из `discord-webhook.local.json` (поле `url`)
-4. Environment: **только Production**
-5. Save → **Redeploy** production
+```txt
+vercel.json -> npm run build -> npm run changelog:notify:on-deploy
+```
 
-## Один раз: секрет в GitHub (если репозиторий на GitHub)
+`changelog:notify:on-deploy` отправляет пост только когда в коммите менялся
+`src/data/changelog.json`. Preview-деплои не шлют сообщения.
+
+GitHub Actions оставлен только как ручной fallback:
+
+```txt
+Actions -> Discord changelog -> Run workflow
+```
+
+Так не будет дублей: push не постит одновременно через GitHub Actions и Vercel.
+
+## Discord-сообщение
+
+`scripts/notify-changelog.mjs` отправляет один embed:
+
+- заголовок релиза `vX.Y.Z`;
+- короткое поле `Главное`;
+- сгруппированные блоки `Новое`, `Улучшено`, `Исправлено`;
+- ссылка на `/updates`;
+- `allowed_mentions: { parse: [] }`, чтобы changelog не мог пинговать сервер.
+
+## Секреты
+
+### Vercel
+
+Environment Variable для Production:
+
+```txt
+DISCORD_CHANGELOG_WEBHOOK_URL=https://discord.com/api/webhooks/...
+```
+
+Можно обновить из локального `discord-webhook.local.json`:
+
+```bash
+npm run discord:sync-vercel
+```
+
+### GitHub fallback
 
 ```bash
 npm run discord:sync-github
 ```
 
-Или вручную: Repo → **Settings** → **Secrets** → `DISCORD_CHANGELOG_WEBHOOK_URL` = тот же URL, что на Vercel.
-
-## Локально (по желанию)
-
-```bash
-npm run changelog:notify
-```
-
-Или полный цикл:
-
-```bash
-npm run deploy:prod
-```
-
 ## Канал
 
-Канал **#signal** — `channel_id` `1512122313670262985` (guild `1512107730427711498`). Все посты changelog идут только туда.
+Канал `#signal`:
 
-## Если вебхук удалён (404) или бот 401
+```txt
+guild_id: 1512107730427711498
+channel_id: 1512122313670262985
+```
 
-1. Discord → **#signal** → настройки канала → **Интеграции** → **Вебхуки** → создать → скопировать URL.
-2. Сохраните в `discord-webhook.local.json` (поле `url`).
-3. `npm run discord:sync-vercel` — обновит переменную на Vercel (production).
-4. `npm run changelog:notify` — проверка поста в #signal.
+Если webhook удалён или ведёт не туда:
 
-Альтернатива через бота: сброс токена в Developer Portal → `discord-bot.local.json` → `npm run discord:setup-webhook` → `npm run discord:sync-vercel`.
+1. Discord -> `#signal` -> настройки канала -> Интеграции -> Вебхуки -> создать.
+2. Сохранить URL в `discord-webhook.local.json`.
+3. `npm run discord:sync-vercel`.
+4. Проверить без отправки: `npm run changelog:notify -- --dry-run`.
+5. Проверить реальную отправку: `npm run changelog:notify`.
