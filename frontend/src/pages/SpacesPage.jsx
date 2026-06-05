@@ -14,7 +14,13 @@ import {
   uid,
   conversationsForWorkspace,
 } from '../lib/spaceStore';
-import { fetchModels, pickDefaultModel, findModelById, formatModelShortName } from '../lib/chatApi';
+import {
+  fetchModels,
+  pickDefaultModel,
+  findModelById,
+  formatModelShortName,
+} from '../lib/chatApi';
+import { pickDefaultMediaModel } from '../lib/modelCatalogHelpers';
 import { useAuth } from '../context/AuthContext';
 import { usePricingCatalog, tierHasAiFromList } from '../hooks/usePricingCatalog';
 import { useNexusChat } from '../hooks/useNexusChat';
@@ -147,7 +153,9 @@ export default function SpacesPage() {
     let finalIsMediaModel = isMediaModelSelected;
 
     if (detectImageGenIntent(text) && !isMediaModelSelected) {
-      const defaultMediaId = localStorage.getItem('nexus_default_media_model') || (mediaModels[0]?.id || 'flux-klein');
+      const defaultMediaId =
+        pickDefaultMediaModel(mediaModels, localStorage.getItem('nexus_default_media_model')) ||
+        'flux-klein';
       finalModel = defaultMediaId;
       finalIsMediaModel = true;
     }

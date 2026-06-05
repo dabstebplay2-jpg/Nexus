@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
   Search,
   MessageCircle,
   ArrowUp,
-  Loader2,
+  Square,
   FolderOpen,
   ChevronDown,
   Image as ImageIcon,
@@ -26,6 +26,7 @@ export default function NexusComposer({
   value,
   onChange,
   onSend,
+  onStop,
   loading = false,
   disabled = false,
   mode = 'chat',
@@ -89,7 +90,11 @@ export default function NexusComposer({
       layout
       className={`w-full max-w-[var(--nx-content-max)] mx-auto ${centered ? 'px-0' : 'px-4 sm:px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]'}`}
     >
-      <div className="nx-composer rounded-3xl overflow-x-clip overflow-y-visible">
+      <div
+        className={`nx-composer rounded-3xl overflow-x-clip overflow-y-visible ${
+          loading ? 'nx-composer--loading' : ''
+        }`}
+      >
         <div className="nx-composer-inner overflow-hidden rounded-3xl">
           <AttachmentBar
             attachments={attachments}
@@ -153,8 +158,15 @@ export default function NexusComposer({
                       e.target.value = '';
                     }}
                   />
+                  <AnimatePresence>
                   {attachOpen && (
-                    <div className="absolute left-0 bottom-full mb-2 w-64 nx-glass rounded-xl py-1 shadow-xl z-[100] nx-menu-pop">
+                    <motion.div
+                      initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                      className="absolute left-0 bottom-full mb-2 w-64 nx-glass rounded-xl py-1 shadow-xl z-[100] nx-menu-pop"
+                    >
                       <button
                         type="button"
                         onClick={() => {
@@ -185,8 +197,9 @@ export default function NexusComposer({
                         <FolderOpen size={18} />
                         Пространства
                       </Link>
-                    </div>
+                    </motion.div>
                   )}
+                  </AnimatePresence>
                 </div>
               )}
 
@@ -209,8 +222,15 @@ export default function NexusComposer({
                   )}
                   <ChevronDown size={18} className={searchOpen ? 'rotate-180' : ''} />
                 </button>
+                <AnimatePresence>
                 {searchOpen && (
-                  <div className="absolute left-0 bottom-full mb-2 w-48 nx-glass rounded-xl py-1 shadow-xl z-[100] nx-menu-pop">
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    className="absolute left-0 bottom-full mb-2 w-48 nx-glass rounded-xl py-1 shadow-xl z-[100] nx-menu-pop"
+                  >
                     <button
                       type="button"
                       onClick={() => {
@@ -239,8 +259,9 @@ export default function NexusComposer({
                       Много источников и развёрнутый отчёт. Быстрый поиск — кнопка «Поиск в сети» в
                       режиме чата.
                     </p>
-                  </div>
+                  </motion.div>
                 )}
+                </AnimatePresence>
               </div>
 
               {mode === 'chat' && (
@@ -281,11 +302,43 @@ export default function NexusComposer({
               <motion.button
                 type="button"
                 whileTap={{ scale: 0.92 }}
-                onClick={submit}
-                disabled={loading || (!value.trim() && !attachments.length) || disabled}
-                className="p-3 min-h-[52px] min-w-[52px] flex items-center justify-center rounded-full bg-[var(--nx-text)] text-[var(--nx-bg)] disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                onClick={loading ? onStop : submit}
+                disabled={
+                  loading
+                    ? !onStop
+                    : (!value.trim() && !attachments.length) || disabled
+                }
+                title={loading ? 'Остановить' : 'Отправить'}
+                aria-label={loading ? 'Остановить генерацию' : 'Отправить'}
+                className={`nx-send-btn ${
+                  loading ? 'nx-send-btn--stop' : 'nx-send-btn--send'
+                }`}
               >
-                {loading ? <Loader2 size={22} className="animate-spin" /> : <ArrowUp size={22} />}
+                <AnimatePresence mode="wait" initial={false}>
+                  {loading ? (
+                    <motion.span
+                      key="stop"
+                      initial={{ opacity: 0, scale: 0.6 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.6 }}
+                      transition={{ duration: 0.15 }}
+                      className="flex items-center justify-center"
+                    >
+                      <Square size={20} fill="currentColor" />
+                    </motion.span>
+                  ) : (
+                    <motion.span
+                      key="send"
+                      initial={{ opacity: 0, scale: 0.6 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.6 }}
+                      transition={{ duration: 0.15 }}
+                      className="flex items-center justify-center"
+                    >
+                      <ArrowUp size={22} />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
               </motion.button>
             </div>
           </div>

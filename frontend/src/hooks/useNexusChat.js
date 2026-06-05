@@ -1,4 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import { mapChatError, isQuotaErrorMessage } from '../lib/chatErrors';
+import { labelFromToolEvent, formatConnectorList } from '../features/connectors/connectorLabels';
 import { streamSimpleChat, sendResearch, pickDefaultModel } from '../lib/chatApi';
 import { ensureArray } from '../lib/normalizeArrays';
 import { depthMeta } from '../lib/webSearchPreference';
@@ -27,8 +29,13 @@ export function useNexusChat({
   persistConversationNow,
 }) {
   const [loading, setLoading] = useState(false);
+  const abortRef = useRef(null);
   const artifactsCtx = useArtifactsOptional();
   const userMemory = useUserMemoryOptional();
+
+  const stopGeneration = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
 
   const sendMessage = useCallback(
     async ({
@@ -112,14 +119,15 @@ export function useNexusChat({
             role: 'assistant',
             content: useWebInChat ? '' : placeholder,
             thinking: '',
-            searchActivity: useWebInChat
-              ? {
-                  steps: [],
-                  status: 'Планирую поиск…',
-                  depth: webSearchDepth,
-                  depthLabel: depthMeta(webSearchDepth).label,
-                }
-              : undefined,
+            searchActivity:
+              mode === 'chat'
+                ? {
+                    steps: [],
+                    status: useWebInChat ? 'Планирую поиск…' : null,
+                    depth: webSearchDepth,
+                    depthLabel: depthMeta(webSearchDepth).label,
+                  }
+                : undefined,
             preSearchThinking: '',
             model: selectedModel,
             at: Date.now(),
@@ -128,6 +136,11 @@ export function useNexusChat({
           },
         ],
       }));
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const { signal } = controller;
 
       setLoading(true);
       try {
@@ -281,6 +294,7 @@ export function useNexusChat({
             conversationSources:
               conversationSources.length > 0 ? conversationSources : undefined,
             enableThinking,
+            signal,
             onStatus: (status) => {
               if (!useWebInChat) return;
               if (status === 'planning') {
@@ -326,7 +340,7 @@ export function useNexusChat({
               appendSearchStep(evt);
             },
             onToolStart: (evt) => {
-              const label = evt.tool || evt.connector || 'tool';
+              const label = labelFromToolEvent(evt);
               if (!connectorTools.includes(label)) connectorTools.push(label);
               patchSearchActivity((prev) => ({
                 ...prev,
@@ -334,13 +348,21 @@ export function useNexusChat({
               }));
               applyAssistant();
             },
-            onToolEnd: () => {
-              applyAssistant();
-            },
-            onConnectorStatus: () => {
+            onToolEnd: (evt) => {
+              const label = labelFromToolEvent(evt);
               patchSearchActivity((prev) => ({
                 ...prev,
-                status: 'Подключённые сервисы…',
+                status: label ? `Готово: ${label}` : null,
+              }));
+              applyAssistant();
+            },
+            onConnectorStatus: (evt) => {
+              const list = Array.isArray(evt?.connectors) ? evt.connectors : [];
+              const names = formatConnectorList(list);
+              patchSearchActivity((prev) => ({
+                ...prev,
+                activeConnectors: list,
+                status: names ? `Сервисы: ${names}` : 'Подключённые сервисы…',
               }));
             },
             onThinking: (chunk) => {
@@ -455,7 +477,27 @@ export function useNexusChat({
         await fetchProfile?.();
         return { convId, assistantId };
       } catch (e) {
-        const errText = e.message || 'Ошибка';
+        const aborted = signal.aborted || e?.name === 'AbortError';
+        const errText = mapChatError(e, { aborted });
+        if (aborted) {
+          patchConv(convId, (c) => ({
+            ...c,
+            messages: c.messages.map((m) => {
+              if (m.id !== assistantId) return m;
+              const partial = (m.content || '').trim();
+              return {
+                ...m,
+                content: partial || '— Генерация остановлена.',
+                searchActivity: m.searchActivity
+                  ? { ...m.searchActivity, status: null }
+                  : m.searchActivity,
+                imageGenerating: false,
+              };
+            }),
+            updatedAt: Date.now(),
+          }));
+          return null;
+        }
         if (
           errText.includes('истекла') ||
           errText.includes('Войдите') ||
@@ -464,13 +506,7 @@ export function useNexusChat({
           await fetchProfile?.();
           onNeedAuth?.();
         }
-        const quotaHit =
-          errText.includes('квот') ||
-          errText.includes('Квот') ||
-          errText.includes('402') ||
-          errText.includes('429') ||
-          errText.includes('исчерпан') ||
-          errText.includes('лимит');
+        const quotaHit = isQuotaErrorMessage(errText);
         if (quotaHit) {
           onNeedPricing?.();
         }
@@ -495,6 +531,7 @@ export function useNexusChat({
         }));
         return null;
       } finally {
+        if (abortRef.current === controller) abortRef.current = null;
         setLoading(false);
       }
     },
@@ -510,5 +547,5 @@ export function useNexusChat({
     ]
   );
 
-  return { loading, sendMessage, pickDefaultModel };
+  return { loading, sendMessage, stopGeneration };
 }

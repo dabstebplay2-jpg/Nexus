@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Plug } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Plug, Github, Mail, Triangle, MessageCircle } from 'lucide-react';
 import { fetchConnectorsSummary } from './connectorsApi';
 
 const LABELS = {
@@ -7,6 +8,13 @@ const LABELS = {
   github: 'GitHub',
   vercel: 'Vercel',
   discord: 'Discord',
+};
+
+const ICONS = {
+  github: Github,
+  google_workspace: Mail,
+  vercel: Triangle,
+  discord: MessageCircle,
 };
 
 export default function ConnectorChips({ authorized, onOpenSettings }) {
@@ -37,23 +45,30 @@ export default function ConnectorChips({ authorized, onOpenSettings }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2 px-1 pb-2">
-      <span className="text-[10px] uppercase tracking-wide text-zinc-600 flex items-center gap-1">
+      <span className="text-[10px] uppercase tracking-wide text-[var(--nx-muted)] flex items-center gap-1">
         <Plug size={12} />
         Коннекторы
       </span>
-      {connected.map((c) => (
-        <span
-          key={c.id}
-          className="text-[11px] rounded-full border border-teal-500/30 bg-teal-500/10 px-2 py-0.5 text-teal-200/90"
-          title={c.label}
-        >
-          {LABELS[c.id] || c.label || c.id}
-        </span>
-      ))}
+      {connected.map((c, i) => {
+        const Icon = ICONS[c.id];
+        return (
+          <motion.span
+            key={c.id}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.04, duration: 0.2 }}
+            className="nx-connector-chip"
+            title={c.label}
+          >
+            {Icon ? <Icon size={12} className="opacity-80" /> : null}
+            {LABELS[c.id] || c.label || c.id}
+          </motion.span>
+        );
+      })}
       <button
         type="button"
         onClick={onOpenSettings}
-        className="text-[11px] text-zinc-500 hover:text-teal-300"
+        className="text-[11px] text-[var(--nx-muted)] hover:text-[var(--nx-accent)] transition-colors"
       >
         Настроить
       </button>

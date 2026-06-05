@@ -147,6 +147,32 @@
   cursor: pointer;
 }
 
+.settings-select--wide {
+  min-width: min(100%, 280px);
+  max-width: 320px;
+}
+
+.settings-media-model {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  max-width: 320px;
+}
+
+.settings-media-model__hint,
+.settings-media-model__warn {
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  text-align: right;
+  color: var(--nx-muted, #71717a);
+}
+
+.settings-media-model__warn {
+  color: var(--nx-warning-fg, #fbbf24);
+}
+
 .settings-plan-card {
   padding: 1rem 1.1rem;
   border-radius: 0.75rem;

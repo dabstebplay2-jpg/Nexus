@@ -14,8 +14,7 @@ export default function ThinkingBlock({
   const hasSearch = Boolean(searchActivity?.steps?.length || searchActivity?.status);
   const hasAnswerThink = Boolean(thinkText);
   const hasThinking = hasPre || hasAnswerThink;
-  const busy =
-    isStreaming && (hasSearch || hasPre || !hasAnswerThink);
+  const busy = isStreaming && (hasSearch || hasPre || !hasAnswerThink);
 
   const [open, setOpen] = useState(busy);
 
@@ -33,53 +32,82 @@ export default function ThinkingBlock({
     : 'Мышление модели';
 
   return (
-    <div className="mb-3 rounded-xl border border-violet-500/25 bg-violet-500/5 overflow-hidden">
+    <div className="nx-activity-panel mb-3">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-violet-300/90 hover:bg-violet-500/10"
+        className="nx-activity-panel__header hover:opacity-90 transition-opacity"
+        aria-expanded={open}
       >
         {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        <Brain size={14} className="shrink-0" />
+        <span className="nx-activity-panel__icon" aria-hidden>
+          <Brain size={14} />
+        </span>
         <span>{title}</span>
         {busy && (
-          <span className="ml-auto text-[10px] font-normal normal-case text-violet-400/80 animate-pulse">
-            …
+          <span className="nx-busy-dots" aria-hidden>
+            <span />
+            <span />
+            <span />
           </span>
         )}
       </button>
-      {open && (
-        <div className="nx-thinking-body px-3 pb-3 pt-0 max-h-80 overflow-y-auto custom-scrollbar space-y-2 select-text">
+      <div className="nx-activity-collapse" data-open={open ? 'true' : 'false'}>
+        <div className="nx-activity-panel__body custom-scrollbar space-y-2 select-text">
           {hasPre && (
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-400/70 mb-1.5">
+              <p
+                className="text-[10px] font-semibold uppercase tracking-wide mb-1.5"
+                style={{ color: 'var(--nx-activity-fg)' }}
+              >
                 Размышление перед поиском
               </p>
-              <pre className="text-[12px] leading-relaxed text-violet-100/80 whitespace-pre-wrap font-mono">
+              <pre
+                className="text-[12px] leading-relaxed whitespace-pre-wrap font-mono opacity-90"
+                style={{ color: 'var(--nx-text)' }}
+              >
                 {preText}
               </pre>
             </div>
           )}
           {hasSearch && (
-            <div className={hasPre ? 'pt-2 border-t border-violet-500/15' : ''}>
+            <div
+              className={hasPre ? 'pt-2' : ''}
+              style={hasPre ? { borderTop: '1px solid var(--nx-activity-border)' } : undefined}
+            >
               <SearchActivityTimeline searchActivity={searchActivity} isStreaming={isStreaming} />
             </div>
           )}
           {hasAnswerThink && (
-            <div className={hasPre || hasSearch ? 'pt-2 border-t border-violet-500/15' : ''}>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-400/70 mb-1.5">
+            <div
+              className={hasPre || hasSearch ? 'pt-2' : ''}
+              style={
+                hasPre || hasSearch
+                  ? { borderTop: '1px solid var(--nx-activity-border)' }
+                  : undefined
+              }
+            >
+              <p
+                className="text-[10px] font-semibold uppercase tracking-wide mb-1.5"
+                style={{ color: 'var(--nx-activity-fg)' }}
+              >
                 Рассуждение при ответе
               </p>
-              <pre className="text-[12px] leading-relaxed text-violet-100/80 whitespace-pre-wrap font-mono">
+              <pre
+                className="text-[12px] leading-relaxed whitespace-pre-wrap font-mono opacity-90"
+                style={{ color: 'var(--nx-text)' }}
+              >
                 {thinkText}
               </pre>
             </div>
           )}
           {!hasThinking && busy && !hasSearch && (
-            <p className="text-[12px] text-violet-100/60">…</p>
+            <p className="text-[12px] opacity-60" style={{ color: 'var(--nx-text)' }}>
+              …
+            </p>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

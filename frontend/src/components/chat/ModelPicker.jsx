@@ -21,6 +21,7 @@ import {
   isThinkingEnabled,
   findModelByAnyId,
 } from '../../lib/modelSelection';
+import { modelSupportsToolCalling } from '../../lib/modelToolCalling';
 
 export default function ModelPicker({
   models = [],
@@ -56,11 +57,14 @@ export default function ModelPicker({
       setFavorites(Array.isArray(ids) ? ids : []);
     };
     const syncThink = () => setThinkingPrefs(loadThinkingPrefs());
+    const openPicker = () => setOpen(true);
     window.addEventListener('nexus-favorites-changed', syncFav);
     window.addEventListener('nexus-thinking-changed', syncThink);
+    window.addEventListener('nexus-open-model-picker', openPicker);
     return () => {
       window.removeEventListener('nexus-favorites-changed', syncFav);
       window.removeEventListener('nexus-thinking-changed', syncThink);
+      window.removeEventListener('nexus-open-model-picker', openPicker);
     };
   }, []);
 
@@ -259,6 +263,14 @@ export default function ModelPicker({
               <span className="font-medium inline-flex items-center gap-1 flex-wrap">
                 {displayName}
                 {!locked && visionBadge(m)}
+                {!locked && modelSupportsToolCalling(m) && (
+                  <span
+                    className="text-[9px] uppercase tracking-wide px-1 py-0.5 rounded border border-teal-500/40 text-teal-300/90"
+                    title="Поддержка tool calling для коннекторов"
+                  >
+                    Tools
+                  </span>
+                )}
                 {locked && <Lock size={12} className="text-amber-500/80 shrink-0" />}
               </span>
               {locked && (

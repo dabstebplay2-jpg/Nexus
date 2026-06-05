@@ -20,6 +20,7 @@ import {
   Send,
   Copy,
   Check,
+  Lock,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { apiFetch } from '../../lib/apiClient';
@@ -34,6 +35,11 @@ import { DiscordGlyph } from '../DiscordInviteLink';
 import SectionMemory from './SectionMemory';
 import ConnectorsPageContent from '../../features/connectors/ConnectorsPage';
 import { fetchModels } from '../../lib/chatApi';
+import {
+  modelLockHint,
+  pickDefaultMediaModel,
+  sortModelsUnlockedFirst,
+} from '../../lib/modelCatalogHelpers';
 import './SettingsModal.css';
 
 const SECTIONS = [
@@ -72,9 +78,16 @@ function SettingsRow({ label, desc, children }) {
 function SectionGeneral() {
   const [appearance, setAppearanceState] = useState(getAppearance);
   const [mediaModels, setMediaModels] = useState([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
   const [defaultMediaModel, setDefaultMediaModel] = useState(() => {
     return localStorage.getItem('nexus_default_media_model') || '';
   });
+
+  const sortedMedia = sortModelsUnlockedFirst(mediaModels);
+  const unlockedMedia = sortedMedia.filter((m) => !m.locked);
+  const lockedMedia = sortedMedia.filter((m) => m.locked);
+  const selectedMedia = sortedMedia.find((m) => m.id === defaultMediaModel);
+  const selectedLocked = Boolean(selectedMedia?.locked);
 
   useEffect(() => {
     const onTheme = () => setAppearanceState(getAppearance());
@@ -83,19 +96,31 @@ function SectionGeneral() {
   }, []);
 
   useEffect(() => {
+    setModelsLoading(true);
     fetchModels()
       .then((data) => {
-        if (data && Array.isArray(data.mediaModels)) {
-          setMediaModels(data.mediaModels);
-          if (!localStorage.getItem('nexus_default_media_model') && data.mediaModels.length > 0) {
-            const firstModelId = data.mediaModels[0].id;
-            localStorage.setItem('nexus_default_media_model', firstModelId);
-            setDefaultMediaModel(firstModelId);
+        const list = Array.isArray(data?.mediaModels) ? data.mediaModels : [];
+        setMediaModels(list);
+        const stored = localStorage.getItem('nexus_default_media_model') || '';
+        const resolved = pickDefaultMediaModel(list, stored);
+        if (resolved) {
+          if (resolved !== stored) {
+            localStorage.setItem('nexus_default_media_model', resolved);
           }
+          setDefaultMediaModel(resolved);
         }
       })
-      .catch((err) => console.error('Failed to load media models in settings:', err));
+      .catch((err) => console.error('Failed to load media models in settings:', err))
+      .finally(() => setModelsLoading(false));
   }, []);
+
+  const applyDefaultMedia = (modelId) => {
+    const model = mediaModels.find((m) => m.id === modelId);
+    if (!model || model.locked) return;
+    localStorage.setItem('nexus_default_media_model', modelId);
+    setDefaultMediaModel(modelId);
+    window.dispatchEvent(new Event('nexus-default-media-model-changed'));
+  };
 
   return (
     <>
@@ -118,27 +143,59 @@ function SectionGeneral() {
         label="Модель генерации фото по умолчанию"
         desc="Используется при автоматическом распознавании команд генерации изображений в чате"
       >
-        <select
-          className="settings-select"
-          value={defaultMediaModel}
-          onChange={(e) => {
-            const val = e.target.value;
-            localStorage.setItem('nexus_default_media_model', val);
-            setDefaultMediaModel(val);
-            window.dispatchEvent(new Event('nexus-default-media-model-changed'));
-          }}
-          disabled={mediaModels.length === 0}
-        >
-          {mediaModels.length === 0 ? (
-            <option value="">Загрузка моделей...</option>
-          ) : (
-            mediaModels.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.display_name || m.name}
-              </option>
-            ))
+        <div className="settings-media-model">
+          <select
+            className="settings-select settings-select--wide"
+            value={defaultMediaModel}
+            onChange={(e) => applyDefaultMedia(e.target.value)}
+            disabled={modelsLoading || unlockedMedia.length === 0}
+          >
+            {modelsLoading ? (
+              <option value="">Загрузка моделей…</option>
+            ) : unlockedMedia.length === 0 ? (
+              <option value="">Нет доступных моделей на тарифе</option>
+            ) : (
+              <>
+                {unlockedMedia.length > 0 && lockedMedia.length > 0 ? (
+                  <optgroup label="Доступные на вашем тарифе">
+                    {unlockedMedia.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.display_name || m.name || m.id}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : (
+                  unlockedMedia.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.display_name || m.name || m.id}
+                    </option>
+                  ))
+                )}
+                {lockedMedia.length > 0 && (
+                  <optgroup label="Требуют другую подписку">
+                    {lockedMedia.map((m) => (
+                      <option key={m.id} value={m.id} disabled>
+                        {m.display_name || m.name || m.id} — {modelLockHint(m)}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </>
+            )}
+          </select>
+          {!modelsLoading && lockedMedia.length > 0 && (
+            <p className="settings-media-model__hint">
+              <Lock size={12} className="inline shrink-0 opacity-80" aria-hidden />
+              {' '}
+              Модели с замком недоступны на текущем тарифе — смените подписку в разделе «Подписка».
+            </p>
           )}
-        </select>
+          {selectedLocked && (
+            <p className="settings-media-model__warn">
+              Сохранённая модель недоступна — выберите модель из списка «Доступные».
+            </p>
+          )}
+        </div>
       </SettingsRow>
     </>
   );

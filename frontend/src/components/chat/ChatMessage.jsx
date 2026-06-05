@@ -20,7 +20,9 @@ export default function ChatMessage({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className={`nx-message flex gap-5 px-5 sm:px-8 py-7 select-text ${isUser ? 'bg-transparent' : 'bg-white/[0.02]'}`}
+      className={`nx-message flex gap-5 px-5 sm:px-8 py-7 select-text ${
+        isUser ? 'bg-transparent' : 'nx-message--assistant'
+      }`}
     >
       {isUser ? (
         <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-violet-500/20 text-violet-300">

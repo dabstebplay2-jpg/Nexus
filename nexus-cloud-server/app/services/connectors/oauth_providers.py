@@ -52,6 +52,13 @@ def _pkce_pair() -> tuple[str, str]:
     return verifier, challenge
 
 
+def connector_oauth_ready(connector_id: str) -> bool:
+    """True if server OAuth env is set for this connector (discord uses webhook)."""
+    if connector_id == "discord":
+        return True
+    return _oauth_configured(connector_id)
+
+
 def _oauth_configured(connector_id: str) -> bool:
     if connector_id == "google_workspace":
         return google_connector_oauth_configured()
