@@ -1,0 +1,15 @@
+.env
+deploy/render-production.env
+.vercel
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite
+*.sqlite3
+.Python
+.venv/
+venv/
+.test-venv/
+dist/
+build/
+*.egg-info/

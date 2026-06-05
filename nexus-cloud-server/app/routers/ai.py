@@ -1,0 +1,744 @@
+import asyncio
+import json
+import logging
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+
+from app import agents_catalog, models_catalog
+from app.config import POLZA_BASE_URL
+from app.database import UserDB, get_db
+from app.schemas import CloudChatRequest, ResearchRequest, SimpleChatRequest
+from app.security import get_current_user
+from app.services.ai_billing import apply_usage_billing
+from app.services.quota_limits import QuotaLimitExceeded, assert_quota_budget
+from app.services.polza import ensure_polza_key_for_user
+from app.services.subscription_guard import enforce_paid_subscription
+from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
+from app.services.auth_rate_limit import check_rate_limit
+from app.services.polza import (
+    PolzaError,
+    PolzaService,
+    require_inference_api_key,
+    user_has_polza_key,
+)
+from app.services.pre_search_reasoning import iter_pre_search_reasoning
+from app.services.web_search_context import (
+    DEEP_RESEARCH_DEFAULT_MODEL,
+    build_web_search_system_content,
+    run_web_search_for_chat,
+    web_search_quick,
+)
+from app.services.web_search_agent import run_web_search_session
+from app.services.message_builder import (
+    build_router_payload,
+    extract_message_images,
+)
+from app.services.user_memory import get_enabled_memory_text, inject_user_memory_messages
+from app.services.memory_auto_learn import (
+    last_user_message_text,
+    schedule_learn_from_turn,
+    should_update_memory_from_user_text,
+)
+from app.services.connector_agent_loop import run_connector_agent_phase
+from app.services.image_materialize import materialize_image_list, materialize_image_url
+from app.services.models_registry import tier_rank
+from app.config import is_testing_mode
+from app.tiers import tier_allows_ai, tier_requires_payment
+
+router = APIRouter(prefix="/v1/ai", tags=["ai"])
+logger = logging.getLogger(__name__)
+
+_polza = PolzaService()
+POLZA_CHAT_URL = f"{POLZA_BASE_URL.rstrip('/')}/chat/completions"
+
+
+def _sse_event(payload: dict) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+async def _check_tier_ai_access(user: UserDB, db: Session):
+    if not await enforce_paid_subscription(db, user, trigger="ai_chat"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Подписка не оплачена. Оформите и оплатите тариф Hobby или выше.",
+        )
+    db.refresh(user)
+    tier = user.subscription_tier
+    if not tier_requires_payment(tier):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="ИИ доступен только после оплаты подписки (Hobby и выше). Free — без облачного ИИ.",
+        )
+    if not user_has_polza_key(user):
+        ok = await ensure_polza_key_for_user(db, user)
+        db.refresh(user)
+        if not ok and not user_has_polza_key(user):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Ключ облачного ИИ создаётся автоматически. Повторите через минуту или напишите в поддержку.",
+            )
+
+
+def _check_quota_limit(db: Session, user: UserDB):
+    try:
+        assert_quota_budget(db, user, projected_cost=0)
+    except QuotaLimitExceeded as exc:
+        info = exc.info
+        rate = get_usd_rub_rate_sync()
+        if info.get("abuse_daily_cap_usd"):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    f"Слишком высокий расход за сутки. Подождите до завтра (UTC) "
+                    f"или пополните баланс в разделе «Тарифы»."
+                ),
+            ) from exc
+        end = info.get("resets_at") or info.get("period_end") or ""
+        balance_usd = float(info.get("user_balance_usd") or 0)
+        if balance_usd <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    f"Пул ИИ исчерпан: {usd_to_rub(info['spent_usd'], rate):.0f} ₽ из "
+                    f"{usd_to_rub(info.get('subscription_cap_usd') or info['cap_usd'], rate):.0f} ₽. "
+                    f"Пополните баланс в разделе «Тарифы»"
+                    f"{f' или дождитесь продления {end}.' if end else '.'}"
+                ),
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"Пул ИИ исчерпан. Остаток на балансе пополнения: "
+                f"{usd_to_rub(balance_usd, rate):.0f} ₽."
+            ),
+        ) from exc
+
+
+async def _apply_billing_safe(db: Session, user: UserDB, *, model: str, usage: dict | None):
+    try:
+        return await apply_usage_billing(db, user, model=model, usage=usage)
+    except QuotaLimitExceeded as exc:
+        info = exc.info
+        rate = get_usd_rub_rate_sync()
+        balance_usd = float(info.get("user_balance_usd") or 0)
+        if info["remaining_usd"] <= 0 and balance_usd <= 0:
+            detail = (
+                f"Пул ИИ исчерпан. Пополните баланс в разделе «Тарифы»."
+            )
+        else:
+            detail = (
+                f"Недостаточно лимита: осталось {usd_to_rub(info['remaining_usd'], rate):.0f} ₽ "
+                f"(подписка + баланс)."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=detail,
+        ) from exc
+
+
+async def _check_model_access(user: UserDB, model: str, *, allow_tools: bool = False):
+    model_id = (model or "").strip()
+    if not model_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Не указана модель.",
+        )
+    if not is_testing_mode() and not tier_allows_ai(user.subscription_tier):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Облачный ИИ недоступен на Free. Выберите платный тариф в разделе «О Nexus».",
+        )
+    detail = await models_catalog.model_access_detail_cached(user.subscription_tier, model_id)
+    if detail.get("reason") == "unknown_model":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=detail.get("upgrade_hint") or "Модель не входит в каталог Nexus.",
+        )
+    if not detail.get("allowed"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=detail.get("upgrade_hint") or "Модель недоступна на вашем тарифе.",
+        )
+    if allow_tools and user.subscription_tier == "FREE":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Агенты с инструментами недоступны на Free.",
+        )
+
+
+async def _call_polza(payload: dict, user: UserDB, db: Session | None = None) -> dict:
+    del db  # Polza OAuth keys — без auto-repair
+    try:
+        api_key = require_inference_api_key(user)
+    except PolzaError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+
+    try:
+        response = await _polza.chat_completions(api_key, payload, timeout=120.0)
+    except httpx.HTTPError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Ошибка соединения с Polza.ai: {e}",
+        ) from e
+    if response.status_code == 200:
+        return response.json()
+
+    code = response.status_code
+    if code == 402:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Недостаточно средств на Polza.ai. Пополните баланс на polza.ai/dashboard.",
+        )
+    if code in (401, 403):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "Ошибка личного ключа Polza.ai. Переподключите в настройках → «Подключить Polza.ai». "
+                f"({response.text[:300]})"
+            ),
+        )
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=f"ИИ-провайдер Polza ({code}): {response.text[:500]}",
+    )
+
+
+async def _resolve_simple_chat_model(payload: SimpleChatRequest, user: UserDB) -> str:
+    model = payload.model
+    if payload.agent_id:
+        agent = agents_catalog.get_agent(payload.agent_id)
+        if not agent:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неизвестный агент.")
+        if tier_rank(user.subscription_tier) < tier_rank(agent.get("min_tier", "ULTRA")):
+            label = agent.get("min_tier", "ULTRA").title()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Агент «{agent.get('name', payload.agent_id)}» доступен с тарифа {label}.",
+            )
+        if not model:
+            model = await models_catalog.get_default_model(
+                user.subscription_tier, prefer=agent.get("model_preference", "balanced")
+            )
+    if not model:
+        model = await models_catalog.get_default_model(user.subscription_tier)
+    await _check_model_access(user, model)
+    return model
+
+
+def _collect_images_from_part(part: dict, seen_urls: set[str], out: list[dict[str, str]]):
+    for img in extract_message_images(part):
+        url = img.get("url")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            out.append({"url": url})
+
+
+def _coerce_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                parts.append(
+                    str(item.get("text") or item.get("content") or item.get("thinking") or "")
+                )
+        return "".join(parts)
+    if isinstance(value, dict):
+        return str(value.get("text") or value.get("content") or "")
+    return str(value)
+
+
+def _reasoning_from_details(details) -> str:
+    """GPT-5.x / OpenRouter: reasoning в delta.reasoning_details[]."""
+    if not details:
+        return ""
+    if isinstance(details, str):
+        return details
+    if isinstance(details, dict):
+        return str(
+            details.get("text")
+            or details.get("content")
+            or details.get("summary")
+            or ""
+        )
+    if not isinstance(details, list):
+        return ""
+    parts: list[str] = []
+    for item in details:
+        if isinstance(item, str):
+            parts.append(item)
+        elif isinstance(item, dict):
+            t = item.get("text") or item.get("content") or item.get("summary")
+            if t:
+                parts.append(str(t))
+    return "".join(parts)
+
+
+def _stream_text_parts(delta: dict, message: dict, choice: dict | None = None) -> tuple[str, str]:
+    """(thinking_fragment, answer_fragment) из OpenAI-совместимого chunk."""
+    ch = choice or {}
+    thinking = _coerce_text(
+        delta.get("reasoning_content")
+        or delta.get("reasoning")
+        or message.get("reasoning_content")
+        or message.get("reasoning")
+    )
+    if not thinking:
+        thinking = _reasoning_from_details(delta.get("reasoning_details")) or _reasoning_from_details(
+            message.get("reasoning_details")
+        )
+    content = _coerce_text(
+        delta.get("content")
+        or delta.get("text")
+        or message.get("content")
+        or message.get("text")
+        or ch.get("text")
+    )
+    return thinking, content
+
+
+async def _stream_polza_tokens(api_key: str, payload: dict):
+    """Прокси SSE Polza.ai → клиент Nexus (type: thinking | token | image | error | done)."""
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    usage: dict | None = None
+    collected_images: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    reply_parts: list[str] = []
+    had_thinking = False
+    had_tokens = False
+    timeout = httpx.Timeout(180.0, read=180.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        async with client.stream(
+            "POST",
+            POLZA_CHAT_URL,
+            headers=headers,
+            json=payload,
+        ) as response:
+            if response.status_code != 200:
+                body = (await response.aread()).decode("utf-8", errors="replace")[:500]
+                code = response.status_code
+                if code in (401, 403):
+                    detail = (
+                        "Ошибка личного ключа Polza.ai. Перезайдите в аккаунт или обратитесь в поддержку."
+                    )
+                    yield _sse_event({"type": "error", "detail": detail, "auth_failure": True})
+                    return
+                else:
+                    detail = f"ИИ-провайдер ({code}): {body}"
+                yield _sse_event({"type": "error", "detail": detail})
+                return
+
+            async for line in response.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                raw = line[5:].strip()
+                if raw == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                if chunk.get("usage"):
+                    usage = chunk["usage"]
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                choice = choices[0]
+                delta = choice.get("delta") or {}
+                message = choice.get("message") or {}
+                thinking_text, answer_text = _stream_text_parts(delta, message, choice)
+                if thinking_text:
+                    had_thinking = True
+                    yield _sse_event({"type": "thinking", "content": thinking_text})
+                if answer_text:
+                    had_tokens = True
+                    reply_parts.append(answer_text)
+                    yield _sse_event({"type": "token", "content": answer_text})
+                before = len(collected_images)
+                _collect_images_from_part(delta, seen_urls, collected_images)
+                _collect_images_from_part(message, seen_urls, collected_images)
+                for i in range(before, len(collected_images)):
+                    mat = await materialize_image_url(collected_images[i]["url"])
+                    collected_images[i] = mat
+                    evt = {"type": "image", "url": mat["url"]}
+                    if mat.get("dataUrl"):
+                        evt["dataUrl"] = mat["dataUrl"]
+                    yield _sse_event(evt)
+
+    if collected_images:
+        collected_images = await materialize_image_list(collected_images)
+
+    yield {
+        "usage": usage,
+        "images": collected_images,
+        "had_thinking": had_thinking,
+        "had_tokens": had_tokens,
+        "reply_text": "".join(reply_parts),
+    }
+
+
+@router.get("/models")
+async def list_models(current_user: UserDB = Depends(get_current_user)):
+    tier = current_user.subscription_tier
+    models = await models_catalog.list_models_for_user(tier)
+    research_models = await models_catalog.list_research_models_for_user(tier)
+    media_models = await models_catalog.list_media_models_for_user(tier)
+    meta = await models_catalog.catalog_meta()
+    vision_guide = await models_catalog.vision_guide_for_user(tier)
+    return {
+        "models": models,
+        "research_models": research_models,
+        "media_models": media_models,
+        "vision_guide": vision_guide,
+        "tier": tier,
+        "ai_enabled": tier_allows_ai(tier),
+        "catalog": meta,
+    }
+
+
+@router.post("/models/refresh")
+async def refresh_models(current_user: UserDB = Depends(get_current_user)):
+    if not check_rate_limit(f"models_refresh:user:{current_user.id}", 3, 3600.0):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Обновление каталога моделей доступно не чаще 3 раз в час.",
+        )
+    from app.services import models_registry as reg
+
+    await reg.refresh_models_cache(force=True)
+    models = await models_catalog.list_models_for_user(current_user.subscription_tier)
+    meta = await models_catalog.catalog_meta()
+    return {"models": models, "catalog": meta}
+
+
+@router.get("/agents")
+async def list_agents(current_user: UserDB = Depends(get_current_user)):
+    agents = await agents_catalog.list_agents_for_user(current_user.subscription_tier)
+    return {"agents": agents, "tier": current_user.subscription_tier}
+
+
+@router.post("/chat")
+async def cloud_ai_chat_proxy(
+    payload: CloudChatRequest,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    await _check_tier_ai_access(current_user, db)
+    _check_quota_limit(db, current_user)
+    await _check_model_access(current_user, payload.model, allow_tools=bool(payload.tools))
+
+    proxy_payload = {
+        "model": payload.model,
+        "messages": [m.model_dump() for m in payload.messages],
+    }
+    if payload.tools:
+        proxy_payload["tools"] = payload.tools
+    if payload.tool_choice:
+        proxy_payload["tool_choice"] = payload.tool_choice
+
+    data = await _call_polza(proxy_payload, current_user, db)
+    billing = await _apply_billing_safe(db, current_user, model=payload.model, usage=data.get("usage"))
+    if billing:
+        data["billing"] = billing
+    return data
+
+
+@router.post("/chat/simple")
+async def simple_chat(
+    payload: SimpleChatRequest,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    await _check_tier_ai_access(current_user, db)
+    _check_quota_limit(db, current_user)
+    model = await _resolve_simple_chat_model(payload, current_user)
+
+    memory_text = get_enabled_memory_text(db, current_user.id)
+    router_body = build_router_payload(model, payload, memory_content=memory_text)
+    data = await _call_polza(router_body, current_user, db)
+    choice = data.get("choices", [{}])[0]
+    message = choice.get("message", {})
+    billing = await _apply_billing_safe(db, current_user, model=model, usage=data.get("usage"))
+    reply_images = await materialize_image_list(extract_message_images(message))
+    reply_text = message.get("content", "") or ""
+    user_text = last_user_message_text(payload.messages)
+    if should_update_memory_from_user_text(user_text):
+        schedule_learn_from_turn(current_user.id, user_text, reply_text)
+    return {
+        "reply": reply_text,
+        "images": reply_images,
+        "model": model,
+        "billing": billing,
+    }
+
+
+@router.post("/chat/simple/stream")
+async def simple_chat_stream(
+    payload: SimpleChatRequest,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    await _check_tier_ai_access(current_user, db)
+    _check_quota_limit(db, current_user)
+    model = await _resolve_simple_chat_model(payload, current_user)
+    memory_text = get_enabled_memory_text(db, current_user.id)
+    router_body = build_router_payload(model, payload, memory_content=memory_text)
+    use_web = bool(payload.use_web_search)
+
+    try:
+        api_key = require_inference_api_key(current_user)
+    except PolzaError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+
+    user_id = current_user.id
+
+    async def event_generator():
+        import time as _time
+
+        nonlocal api_key
+
+        stream_sources: list[dict] = []
+        stream_engine = ""
+        body = dict(router_body)
+        if use_web:
+            pre_search_reasoning = ""
+            yield _sse_event({"type": "status", "content": "planning"})
+            try:
+                async for sse_line, delta in iter_pre_search_reasoning(
+                    _stream_polza_tokens, api_key, body
+                ):
+                    if sse_line:
+                        yield sse_line
+                        if delta:
+                            pre_search_reasoning += delta
+                pre_search_reasoning = pre_search_reasoning.strip()[:1200]
+                if pre_search_reasoning:
+                    yield _sse_event(
+                        {
+                            "type": "pre_search_done",
+                            "chars": len(pre_search_reasoning),
+                        }
+                    )
+            except Exception as exc:
+                logger.warning("pre-search reasoning failed: %s", exc)
+
+            yield _sse_event({"type": "status", "content": "searching"})
+            progress_q: asyncio.Queue = asyncio.Queue()
+
+            async def _on_progress(evt: dict) -> None:
+                await progress_q.put(evt)
+
+            tier = current_user.subscription_tier
+            search_task = asyncio.create_task(
+                run_web_search_for_chat(
+                    payload,
+                    body["messages"],
+                    api_key=api_key,
+                    subscription_tier=tier,
+                    deep=False,
+                    search_depth=payload.web_search_depth,
+                    pre_search_reasoning=pre_search_reasoning,
+                    on_progress=_on_progress,
+                )
+            )
+            try:
+                _last_sse = _time.monotonic()
+                while True:
+                    if search_task.done() and progress_q.empty():
+                        break
+                    try:
+                        evt = await asyncio.wait_for(progress_q.get(), timeout=0.15)
+                        yield _sse_event(evt)
+                        _last_sse = _time.monotonic()
+                    except asyncio.TimeoutError:
+                        if _time.monotonic() - _last_sse >= 8.0:
+                            yield ": keepalive\n\n"
+                            _last_sse = _time.monotonic()
+                        if search_task.done():
+                            continue
+                body["messages"], stream_sources, stream_engine, _meta = await search_task
+                while not progress_q.empty():
+                    yield _sse_event(progress_q.get_nowait())
+            except Exception as exc:
+                logger.warning("web search agent failed: %s", exc)
+                if not search_task.done():
+                    search_task.cancel()
+                yield _sse_event({"type": "status", "content": "search_failed"})
+            else:
+                yield _sse_event(
+                    {
+                        "type": "status",
+                        "content": "search_ready",
+                        "sources_count": len(stream_sources),
+                    }
+                )
+
+        if payload.use_connectors:
+            user_for_conn = db.query(UserDB).filter(UserDB.id == user_id).first()
+            if user_for_conn:
+                body_messages = body.get("messages") or []
+                try:
+                    async for conn_evt in run_connector_agent_phase(
+                        db,
+                        user_for_conn,
+                        model=model,
+                        messages=body_messages,
+                        call_routerai=_call_polza,
+                    ):
+                        yield _sse_event(conn_evt)
+                    body["messages"] = body_messages
+                except Exception as exc:
+                    logger.warning("connector agent phase failed: %s", exc)
+                    yield _sse_event({"type": "status", "content": "connectors_failed"})
+
+        usage = None
+        reply_images: list[dict] = []
+        stream_reply_text = ""
+        had_thinking = False
+        had_tokens = False
+        router_payload = {
+            **body,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
+        try:
+            async for item in _stream_polza_tokens(api_key, router_payload):
+                if isinstance(item, dict):
+                    usage = item.get("usage")
+                    reply_images = item.get("images") or []
+                    had_thinking = bool(item.get("had_thinking"))
+                    had_tokens = bool(item.get("had_tokens"))
+                    stream_reply_text = str(item.get("reply_text") or stream_reply_text)
+                else:
+                    yield item
+        except httpx.HTTPError as exc:
+            logger.warning("stream httpx error: %s", exc)
+            yield _sse_event(
+                {"type": "error", "detail": f"Ошибка соединения с Polza.ai: {exc}"}
+            )
+            return
+
+        user = db.query(UserDB).filter(UserDB.id == user_id).first()
+        if not user:
+            yield _sse_event({"type": "error", "detail": "Сессия пользователя устарела."})
+            return
+        try:
+            billing = await _apply_billing_safe(db, user, model=model, usage=usage)
+        except HTTPException as exc:
+            detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+            yield _sse_event({"type": "error", "detail": detail})
+            return
+        done_payload: dict = {
+            "type": "done",
+            "model": model,
+            "billing": billing,
+            "images": reply_images,
+            "had_thinking": had_thinking,
+            "had_tokens": had_tokens or bool(reply_images),
+        }
+        if stream_sources:
+            done_payload["sources"] = stream_sources
+            done_payload["search_engine"] = stream_engine
+        if use_web:
+            done_payload["search_depth"] = payload.web_search_depth
+        user_text = last_user_message_text(payload.messages)
+        if should_update_memory_from_user_text(user_text):
+            schedule_learn_from_turn(user_id, user_text, stream_reply_text)
+        yield _sse_event(done_payload)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/research")
+async def research_chat(
+    payload: ResearchRequest,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    await _check_tier_ai_access(current_user, db)
+    _check_quota_limit(db, current_user)
+    depth = (payload.depth or "deep").strip().lower()
+    if payload.model:
+        model = payload.model
+    elif depth == "deep":
+        try:
+            await _check_model_access(current_user, DEEP_RESEARCH_DEFAULT_MODEL)
+            model = DEEP_RESEARCH_DEFAULT_MODEL
+        except HTTPException:
+            model = await models_catalog.get_default_model(
+                current_user.subscription_tier, prefer="premium"
+            )
+    else:
+        model = await models_catalog.get_default_model(
+            current_user.subscription_tier, prefer="premium"
+        )
+    await _check_model_access(current_user, model)
+
+    try:
+        api_key = require_inference_api_key(current_user)
+    except PolzaError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+
+    if depth == "deep":
+        from app.config import WEB_SEARCH_DEEP_MAX_SOURCES
+
+        all_sources, prompt_sources, engine, meta = await run_web_search_session(
+            payload.query,
+            api_key=api_key,
+            subscription_tier=current_user.subscription_tier,
+            max_sources=WEB_SEARCH_DEEP_MAX_SOURCES,
+        )
+        results = all_sources
+        system = build_web_search_system_content(
+            prompt_sources,
+            engine or "none",
+            deep=True,
+            search_failed=not results,
+            meta=meta,
+            for_thinking=True,
+        )
+    else:
+        results, engine = await web_search_quick(payload.query, limit=5)
+        system = build_web_search_system_content(
+            results,
+            engine or "none",
+            deep=False,
+            search_failed=not results,
+        )
+    memory_text = get_enabled_memory_text(db, current_user.id)
+    messages = [{"role": "system", "content": system}]
+    if payload.messages:
+        messages.extend([m.model_dump() for m in payload.messages])
+    messages.append({"role": "user", "content": payload.query})
+    messages = inject_user_memory_messages(messages, memory_text)
+
+    data = await _call_polza({"model": model, "messages": messages}, current_user, db)
+    choice = data.get("choices", [{}])[0]
+    reply = choice.get("message", {}).get("content", "")
+    billing = await _apply_billing_safe(db, current_user, model=model, usage=data.get("usage"))
+    return {
+        "reply": reply,
+        "model": model,
+        "sources": results,
+        "search_engine": engine,
+        "billing": billing,
+    }

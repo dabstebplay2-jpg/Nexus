@@ -1,0 +1,27 @@
+name: Discord changelog
+
+# Пост при push делает Vercel (buildCommand → changelog:notify:on-deploy).
+# Здесь только ручной перезапуск, если Vercel недоступен.
+on:
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci --ignore-scripts 2>/dev/null || npm install --ignore-scripts
+
+      - name: Post to Discord
+        env:
+          CI: 'true'
+          FORCE_CHANGELOG_NOTIFY: '1'
+          DISCORD_CHANGELOG_WEBHOOK_URL: ${{ secrets.DISCORD_CHANGELOG_WEBHOOK_URL }}
+        run: npm run changelog:notify

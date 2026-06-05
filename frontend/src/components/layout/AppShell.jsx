@@ -1,0 +1,359 @@
+import { useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  MessageSquare,
+  Boxes,
+  Puzzle,
+  LayoutGrid,
+  Plus,
+  PanelLeftClose,
+  ArrowUpCircle,
+  Clock,
+  Menu,
+  X,
+  LifeBuoy,
+} from 'lucide-react';
+import ProfileMenu from './ProfileMenu';
+import BrandLogo from '../brand/BrandLogo';
+import DiscordInviteLink from '../DiscordInviteLink';
+import AmbientBackground from '../AmbientBackground';
+
+const NAV = [
+  { path: '/', label: 'Чат', icon: MessageSquare, match: (p) => p === '/' },
+  { path: '/spaces', label: 'Пространства', icon: Boxes, match: (p) => p === '/spaces' },
+  { path: '/artifacts', label: 'Артефакты', icon: LayoutGrid, match: (p) => p === '/artifacts' },
+  {
+    path: '/ide',
+    label: 'Для IDE',
+    title: 'Расширение для IDE',
+    icon: Puzzle,
+    match: (p) => p === '/ide' || p.startsWith('/ide/'),
+  },
+  { action: 'support', label: 'Поддержка', icon: LifeBuoy },
+];
+
+function SidebarContent({
+  expanded,
+  isMobile,
+  pathname,
+  collapsed,
+  hideHistory,
+  historyItems,
+  activeHistoryId,
+  onSelectHistory,
+  onDeleteHistory,
+  onNewChat,
+  onOpenPricing,
+  onOpenSupport,
+  setCollapsed,
+  setMobileOpen,
+}) {
+  const handleLogoClick = (e) => {
+    setMobileOpen(false);
+    if (!isMobile && collapsed) {
+      e.preventDefault();
+      setCollapsed(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="flex items-center justify-between min-h-[3.5rem] h-14 px-3 border-b border-[var(--nx-border)]">
+        <Link
+          to="/"
+          className={`flex items-center shrink-0 py-1 rounded-lg ${
+            !isMobile && collapsed ? 'hover:bg-[var(--nx-surface-hover)]' : ''
+          }`}
+          title={!isMobile && collapsed ? 'Развернуть панель' : 'Nexus'}
+          onClick={handleLogoClick}
+        >
+          <BrandLogo variant="icon" className="h-9 w-9" imgClassName="h-9 w-9 object-contain" alt="Nexus" />
+        </Link>
+        {expanded && (
+          <div className="flex items-center gap-1">
+            {!isMobile && (
+              <button
+                type="button"
+                onClick={() => setCollapsed(true)}
+                className="p-1.5 rounded-lg hover:bg-[var(--nx-surface-hover)] text-[var(--nx-muted)]"
+                title="Свернуть"
+              >
+                <PanelLeftClose size={18} />
+              </button>
+            )}
+            {isMobile && (
+              <button
+                type="button"
+                onClick={() => setMobileOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-[var(--nx-surface-hover)] text-[var(--nx-muted)]"
+                aria-label="Закрыть меню"
+              >
+                <X size={18} />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="p-2">
+        <button
+          type="button"
+          onClick={onNewChat}
+          className={`w-full flex items-center justify-center gap-2.5 py-3 min-h-[52px] rounded-2xl border border-[var(--nx-border)] bg-[var(--nx-surface)] hover:bg-[var(--nx-surface-hover)] text-base font-medium transition-colors ${
+            expanded ? 'px-4' : 'px-0'
+          }`}
+        >
+          <Plus size={22} />
+          {expanded && <span>Новый</span>}
+        </button>
+      </div>
+
+      <nav className="px-2 space-y-0.5">
+        {NAV.map((item) => {
+          const { label, icon: Icon, title: navTitle } = item;
+          if (item.action === 'support') {
+            return (
+              <button
+                key="support"
+                type="button"
+                title={label}
+                onClick={() => {
+                  setMobileOpen(false);
+                  onOpenSupport?.();
+                }}
+                className="relative w-full flex items-center gap-3 px-3 py-3 min-h-[52px] rounded-2xl text-base transition-colors text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] hover:text-[var(--nx-text)]"
+              >
+                <Icon size={22} className="shrink-0 text-teal-500/90" />
+                {expanded && <span>{label}</span>}
+              </button>
+            );
+          }
+          const active = item.match(pathname);
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              title={navTitle || label}
+              onClick={() => setMobileOpen(false)}
+              className={`relative flex items-center gap-3 px-3 py-3 min-h-[52px] rounded-2xl text-base transition-colors ${
+                active
+                  ? 'bg-[var(--nx-surface-hover)] text-[var(--nx-text)] font-medium'
+                  : 'text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] hover:text-[var(--nx-text)]'
+              }`}
+            >
+              <Icon size={22} className="shrink-0" />
+              {expanded && <span>{label}</span>}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {!hideHistory && expanded && historyItems.length > 0 && (
+        <div className="flex-1 min-h-0 flex flex-col mt-3 px-2">
+          <p className="flex items-center gap-2 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--nx-muted)]">
+            <Clock size={14} />
+            История
+          </p>
+          <div className="flex-1 overflow-y-auto custom-scrollbar -mx-1 px-1">
+            {historyItems.map((item) => (
+              <div
+                key={item.id}
+                className={`group flex items-center rounded-lg mb-0.5 ${
+                  item.id === activeHistoryId
+                    ? 'bg-[var(--nx-surface-hover)]'
+                    : 'hover:bg-[var(--nx-surface-hover)]'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectHistory?.(item.id);
+                    setMobileOpen(false);
+                  }}
+                  className="flex-1 text-left px-3 py-2.5 min-h-[48px] text-[15px] text-[var(--nx-muted)] group-hover:text-[var(--nx-text)] truncate"
+                >
+                  {item.title}
+                </button>
+                {onDeleteHistory && (
+                  <button
+                    type="button"
+                    onClick={() => onDeleteHistory(item.id)}
+                    className="opacity-0 group-hover:opacity-100 px-2 text-[10px] text-red-400/80 min-w-[44px] min-h-[44px]"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!hideHistory && !expanded && !isMobile && <div className="flex-1" />}
+
+      <div
+        className={`mt-auto border-t border-[var(--nx-border)] space-y-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] ${
+          expanded ? 'p-2' : 'px-1 py-2'
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            onOpenPricing?.();
+            setMobileOpen(false);
+          }}
+          className={`w-full flex items-center gap-2.5 px-3 py-3 min-h-[52px] rounded-2xl text-base text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] hover:text-[var(--nx-text)] ${
+            expanded ? '' : 'justify-center'
+          }`}
+        >
+          <ArrowUpCircle size={22} />
+          {expanded && <span>Обновить тариф</span>}
+        </button>
+        <DiscordInviteLink
+          showIcon
+          onClick={() => setMobileOpen(false)}
+          className={`w-full flex items-center gap-2.5 px-3 py-3 min-h-[52px] rounded-2xl text-base text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] hover:text-indigo-300 ${
+            expanded ? '' : 'justify-center'
+          }`}
+        >
+          {expanded ? 'Discord' : null}
+        </DiscordInviteLink>
+        <ProfileMenu expanded={expanded} onOpenPricing={onOpenPricing} />
+      </div>
+    </>
+  );
+}
+
+export default function AppShell({
+  children,
+  onNewChat,
+  historyItems = [],
+  onSelectHistory,
+  onDeleteHistory,
+  activeHistoryId,
+  headerLeft = null,
+  headerRight = null,
+  onOpenPricing,
+  hideHistory = false,
+  ambientFocus = 'center',
+}) {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const shellRef = useRef(null);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  const handleNew = () => {
+    if (onNewChat) onNewChat();
+    else if (pathname !== '/') navigate('/');
+    setMobileOpen(false);
+  };
+
+  const handleOpenSupport = () => {
+    if (pathname === '/') {
+      window.dispatchEvent(new CustomEvent('nexus-open-support'));
+    } else {
+      navigate('/?support=1');
+    }
+    setMobileOpen(false);
+  };
+
+  const sidebarProps = {
+    pathname,
+    collapsed,
+    hideHistory,
+    historyItems,
+    activeHistoryId,
+    onSelectHistory,
+    onDeleteHistory,
+    onNewChat: handleNew,
+    onOpenPricing,
+    onOpenSupport: handleOpenSupport,
+    setCollapsed,
+    setMobileOpen,
+  };
+
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setMobileOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [mobileOpen]);
+
+  return (
+    <div
+      ref={shellRef}
+      className="nx-shell relative h-[100dvh] overflow-x-hidden max-md:flex max-md:flex-col md:grid md:grid-cols-[auto_1fr]"
+    >
+      <AmbientBackground focus={ambientFocus} />
+
+      {/* Desktop: в потоке flex, без transform / framer width */}
+      <aside
+        data-nx-sidebar="desktop"
+        className={`hidden md:flex nx-sidebar shrink-0 flex-col border-r h-full z-30 overflow-hidden transition-[width] duration-300 ease-out ${
+          collapsed ? 'w-[var(--nx-sidebar-collapsed-w)]' : 'w-[var(--nx-sidebar-w)]'
+        }`}
+      >
+        <SidebarContent expanded={!collapsed} isMobile={false} {...sidebarProps} />
+      </aside>
+
+      {/* Mobile: overlay drawer */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <>
+            <motion.button
+              type="button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/55 md:hidden"
+              aria-label="Закрыть меню"
+              onClick={() => setMobileOpen(false)}
+            />
+            <motion.aside
+              data-nx-sidebar="mobile"
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+              className="md:hidden fixed inset-y-0 left-0 z-50 w-[var(--nx-sidebar-w)] nx-sidebar flex flex-col border-r h-full"
+            >
+              <SidebarContent expanded isMobile {...sidebarProps} />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      <div
+        data-nx-main
+        className="flex flex-col min-w-0 min-h-0 max-md:flex-1 relative z-10 w-full md:h-full md:overflow-hidden"
+      >
+        <header
+          className="h-14 shrink-0 flex items-center justify-between gap-3 px-4 sm:px-5 border-b border-[var(--nx-border)] bg-[color-mix(in_srgb,var(--nx-sidebar)_90%,transparent)] backdrop-blur-xl z-20"
+          style={{ paddingTop: 'max(0px, env(safe-area-inset-top))' }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="md:hidden p-2 -ml-1 rounded-lg hover:bg-[var(--nx-surface-hover)] text-[var(--nx-muted)] min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label="Открыть меню"
+            >
+              <Menu size={20} />
+            </button>
+            {headerLeft}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">{headerRight}</div>
+        </header>
+        <div className="flex-1 flex min-h-0 overflow-hidden">{children}</div>
+      </div>
+    </div>
+  );
+}

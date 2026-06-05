@@ -1,0 +1,96 @@
+"""Shared post-auth: subscription guard, Polza OAuth, JWT + refresh."""
+
+from __future__ import annotations
+
+import logging
+import uuid
+from datetime import datetime
+
+from sqlalchemy.orm import Session
+
+from app.config import is_testing_mode
+from app.database import UserDB
+from app.security import create_access_token
+from app.services.polza import ensure_polza_key_for_user, suspend_polza_for_user, user_has_polza_key
+from app.services.subscription_guard import enforce_paid_subscription, user_has_active_paid_subscription
+from app.services.testing_mode import ensure_testing_subscription
+from app.tiers import normalize_tier, tier_requires_payment
+
+logger = logging.getLogger(__name__)
+
+
+async def ensure_paid_subscription_polza(db: Session, user: UserDB) -> None:
+    """После оплаты: автовыдача ключа Polza (MCP), без действий пользователя."""
+    tier = normalize_tier(user.subscription_tier)
+    if not tier_requires_payment(tier):
+        return
+    if not user_has_active_paid_subscription(db, user):
+        return
+    if not user_has_polza_key(user):
+        await ensure_polza_key_for_user(db, user)
+
+
+async def ensure_paid_subscription_routerai(db: Session, user: UserDB) -> None:
+    """Legacy alias."""
+    await ensure_paid_subscription_polza(db, user)
+
+
+def _add_auth_method(user: UserDB, method: str) -> None:
+    raw = (getattr(user, "auth_methods", None) or "").strip()
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    if method not in parts:
+        parts.append(method)
+    user.auth_methods = ",".join(parts)
+
+
+async def issue_tokens_and_setup(db: Session, user: UserDB, *, mark_email_verified: bool = False) -> dict:
+    """Enforce tier/Polza, rotate refresh token, return TokenResponse dict."""
+    if mark_email_verified and not getattr(user, "email_verified_at", None):
+        user.email_verified_at = datetime.utcnow()
+
+    if is_testing_mode():
+        await ensure_testing_subscription(db, user, tier="ULTRA")
+    else:
+        tier = normalize_tier(user.subscription_tier)
+        if not await enforce_paid_subscription(db, user, trigger="auth_session"):
+            tier = "FREE"
+        db.refresh(user)
+        if tier_requires_payment(tier) and user_has_active_paid_subscription(db, user):
+            await ensure_paid_subscription_polza(db, user)
+        elif not tier_requires_payment(tier):
+            await suspend_polza_for_user(user, db)
+
+    refresh_token = "ref_" + str(uuid.uuid4())
+    user.refresh_token = refresh_token
+    db.commit()
+    db.refresh(user)
+
+    access_token = create_access_token({"sub": user.email})
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }
+
+
+async def ensure_user_after_otp(db: Session, email: str) -> UserDB:
+    """Find or create FREE user for email OTP / Google link by email."""
+    user = db.query(UserDB).filter(UserDB.email == email).first()
+    if user:
+        _add_auth_method(user, "email_otp")
+        return user
+
+    refresh_token = "ref_" + str(uuid.uuid4())
+    user = UserDB(
+        email=email,
+        hashed_password="",
+        subscription_tier="FREE",
+        balance=0.0,
+        refresh_token=refresh_token,
+        email_verified_at=datetime.utcnow(),
+        auth_methods="email_otp",
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
