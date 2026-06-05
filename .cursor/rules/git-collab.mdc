@@ -1,0 +1,52 @@
+---
+description: Duo-разработка Nexus — ветка DABSTEB (ты), Dyni (напарник), main, PR
+alwaysApply: true
+---
+
+# Git: duo-разработка Nexus
+
+Репозиторий: `dabstebplay2-jpg/Nexus`. **Два разработчика** в Cursor — у каждого **своя ветка**, общая база `main`.
+
+## Ветки
+
+| Ветка | Кто | Назначение |
+|-------|-----|------------|
+| `main` | общая | Стабильная база. **Не коммитить и не пушить напрямую** без явной просьбы. |
+| `DABSTEB` | **ты (DABSTEB / dabstebplay2-jpg)** | Твоя рабочая ветка. Все твои коммиты и push — только сюда. |
+| `Dyni` | **напарник** | Его рабочая ветка. Не коммитить, не пушить, не merge без договорённости. |
+
+Перед работой: `git branch --show-current` → для тебя должно быть **`DABSTEB`**.
+
+## Что делает агент (сессия DABSTEB)
+
+1. **Коммиты и push** — только в `DABSTEB` (если не попросили иное).
+2. **Не трогать `Dyni`** и **`main`** без явного запроса.
+3. Не `push origin main`, не force-push без явного запроса.
+4. Перед крупной фичей — подтянуть `main` в `DABSTEB`: `git fetch origin` → `git merge origin/main`.
+5. После значимых изменений — `git push origin DABSTEB`, чтобы напарник видел на GitHub.
+6. В `main` — только через **Pull Request** (`DABSTEB` → `main`) после ревью.
+
+## Твой цикл
+
+```powershell
+git checkout DABSTEB
+git pull origin DABSTEB
+# правки в Cursor
+git add <файлы>
+git commit -m "..."
+git push origin DABSTEB
+```
+
+Напарник смотрит твои изменения: `git fetch` → `git checkout DABSTEB` → `git pull`, или PR на GitHub.
+
+Его ветка `Dyni` — он работает там же по той же схеме, только push в `Dyni`.
+
+## Локальный запуск
+
+`nexus.bat` — единый лаунчер (`install`, `start`, `stop`, `cloud`, `backend`, `frontend`, `diagnose`). См. `ЗАПУСК.txt`.
+
+Без `.env` можно проверять лаунчер, подъём сервисов и UI. ИИ, OAuth и биллинг — нужен `nexus-cloud-server/.env` (из `.env.example`).
+
+## Секреты
+
+Не коммитить: `.env`, ключи API, `discord-*.local.json`. В репо только `*.env.example`.
