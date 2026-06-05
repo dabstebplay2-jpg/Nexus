@@ -278,6 +278,11 @@ async function run() {
           source: webhookCfg.source,
           guild_id: result.guild_id,
         });
+        if (process.env.VERCEL === '1' && process.env.VERCEL_ENV === 'production') {
+          console.log(
+            `После успешной отправки задайте CHANGELOG_NOTIFIED_VERSION=${entry.version} в Vercel Production (чтобы не дублировать при redeploy).`
+          );
+        }
         finish(0);
         return;
       }

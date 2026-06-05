@@ -4,9 +4,10 @@
  * Manual: npm run changelog:notify (always posts).
  */
 import { execSync, spawnSync } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { getLatestEntry, loadChangelog } from './changelog-utils.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CHANGELOG = 'src/data/changelog.json';
@@ -99,6 +100,38 @@ async function changelogChangedViaGithubApi() {
   }
 }
 
+function readPackageVersion() {
+  try {
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    return String(pkg.version || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function shouldNotifyByVersionMarker() {
+  if (process.env.VERCEL !== '1' || process.env.VERCEL_ENV !== 'production') return false;
+
+  const { entries } = loadChangelog(root);
+  const latest = getLatestEntry(entries);
+  const pkgVersion = readPackageVersion();
+
+  if (pkgVersion && latest.version && pkgVersion !== latest.version) {
+    console.warn(
+      `Пропуск Discord: package.json (${pkgVersion}) ≠ changelog (${latest.version}). Поднимите версии вместе.`
+    );
+    return false;
+  }
+
+  const notified = process.env.CHANGELOG_NOTIFIED_VERSION?.trim();
+  if (!latest.version || latest.version === notified) return false;
+
+  console.log(
+    `Changelog v${latest.version} ещё не отправлялся (CHANGELOG_NOTIFIED_VERSION=${notified || 'не задан'}).`
+  );
+  return true;
+}
+
 async function changelogChangedInCommit() {
   if (process.env.FORCE_CHANGELOG_NOTIFY === '1') return true;
 
@@ -111,6 +144,8 @@ async function changelogChangedInCommit() {
     console.log('Changelog изменён (GitHub API, commit ' + process.env.VERCEL_GIT_COMMIT_SHA + ').');
     return true;
   }
+
+  if (shouldNotifyByVersionMarker()) return true;
 
   return false;
 }

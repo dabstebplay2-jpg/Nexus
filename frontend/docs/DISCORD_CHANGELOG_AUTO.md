@@ -70,6 +70,8 @@ npm run discord:sync-vercel
 
 На Vercel билд без `.git` детектит changelog через **GitHub API** (`VERCEL_GIT_COMMIT_SHA`).
 
+Если git/API недоступны (CLI deploy), срабатывает fallback: `package.json` version ≠ `CHANGELOG_NOTIFIED_VERSION` в Vercel Production. После успешного поста обновите `CHANGELOG_NOTIFIED_VERSION` на текущую версию (workflow **Sync Discord webhook to Vercel** выставляет webhook и базовый marker).
+
 ### GitHub fallback
 
 ```bash

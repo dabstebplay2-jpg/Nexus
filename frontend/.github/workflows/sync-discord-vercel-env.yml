@@ -47,4 +47,8 @@ jobs:
             --force \
             --token "$VERCEL_TOKEN" \
             --scope team_qd39FmK6l7zODCRkUJ5RSqxN
-          echo "Vercel Production: DISCORD_CHANGELOG_WEBHOOK_URL updated."
+          printf '%s' "0.1.32" | vercel env add CHANGELOG_NOTIFIED_VERSION production \
+            --force \
+            --token "$VERCEL_TOKEN" \
+            --scope team_qd39FmK6l7zODCRkUJ5RSqxN
+          echo "Vercel Production: DISCORD_CHANGELOG_WEBHOOK_URL + CHANGELOG_NOTIFIED_VERSION updated."
