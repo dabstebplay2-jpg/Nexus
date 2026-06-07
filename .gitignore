@@ -42,6 +42,10 @@ Thumbs.db
 *.log
 debug-*.log
 
+# Local deploy clones / test artifacts
+_deploy/
+frontend/test-results/
+
 # Separate / legacy (not part of web monorepo)
 ai_nexus/
 nexus-backend/
