@@ -54,7 +54,7 @@ from app.services.image_materialize import materialize_image_list, materialize_i
 from app.services.models_registry import tier_rank
 from app.config import is_testing_mode
 from app.services.openrouter import OpenRouterError, OpenRouterService
-from app.services.openrouter_provision import ensure_openrouter_key_for_user
+from app.services.openrouter_provision import ensure_openrouter_key_for_user, user_has_openrouter_key
 from app.tiers import tier_allows_ai, tier_requires_payment, tier_uses_openrouter_free
 
 router = APIRouter(prefix="/v1/ai", tags=["ai"])
@@ -255,6 +255,18 @@ async def _call_openrouter(payload: dict, user: UserDB, db: Session) -> dict:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Ошибка соединения с OpenRouter: {e}",
         ) from e
+
+    if response.status_code in (401, 403) and user_has_openrouter_key(user):
+        logger.warning("OpenRouter key for user %s returned %s. Reprovisioning key...", user.id, response.status_code)
+        try:
+            from app.services.openrouter_provision import delete_openrouter_key_for_user
+            await delete_openrouter_key_for_user(user, db)
+            db.refresh(user)
+            api_key = await ensure_openrouter_key_for_user(user, db)
+            response = await _openrouter.chat_completions(body, timeout=120.0, api_key=api_key)
+        except Exception as exc:
+            logger.error("Failed to reprovision OpenRouter key for user %s on 401/403: %s", user.id, exc)
+
     if response.status_code == 200:
         return response.json()
     code = response.status_code
@@ -514,7 +526,12 @@ async def _stream_chat_tokens(
     }
 
 
-async def _stream_polza_tokens(api_key: str, payload: dict):
+async def _stream_polza_tokens(
+    api_key: str,
+    payload: dict,
+    user: UserDB | None = None,
+    db: Session | None = None,
+):
     async for item in _stream_chat_tokens(
         POLZA_CHAT_URL,
         api_key,
@@ -527,15 +544,53 @@ async def _stream_polza_tokens(api_key: str, payload: dict):
         yield item
 
 
-async def _stream_openrouter_tokens(api_key: str, payload: dict):
-    async for item in _stream_chat_tokens(
-        OPENROUTER_CHAT_URL,
-        api_key,
-        payload,
-        provider_label="OpenRouter",
-        auth_error_detail="Ошибка доступа к бесплатным моделям OpenRouter.",
-    ):
-        yield item
+async def _stream_openrouter_tokens(
+    api_key: str,
+    payload: dict,
+    user: UserDB | None = None,
+    db: Session | None = None,
+):
+    current_key = api_key
+    first_try = True
+
+    while True:
+        auth_failure_detected = False
+        async for item in _stream_chat_tokens(
+            OPENROUTER_CHAT_URL,
+            current_key,
+            payload,
+            provider_label="OpenRouter",
+            auth_error_detail="Ошибка доступа к бесплатным моделям OpenRouter.",
+        ):
+            if isinstance(item, str) and '"auth_failure": true' in item:
+                auth_failure_detected = True
+                continue
+            yield item
+
+        if auth_failure_detected and first_try and user and db:
+            if user_has_openrouter_key(user):
+                logger.warning(
+                    "OpenRouter stream returned 401/403 for user %s. Reprovisioning key...",
+                    user.id,
+                )
+                try:
+                    from app.services.openrouter_provision import (
+                        delete_openrouter_key_for_user,
+                    )
+
+                    await delete_openrouter_key_for_user(user, db)
+                    db.refresh(user)
+                    current_key = await ensure_openrouter_key_for_user(user, db)
+                    first_try = False
+                    continue
+                except Exception as exc:
+                    logger.error(
+                        "Failed to reprovision key on stream auth failure for user %s: %s",
+                        user.id,
+                        exc,
+                    )
+
+        break
 
 
 def _stream_fn_for_user(user: UserDB):
@@ -809,7 +864,7 @@ async def simple_chat_stream(
             current_user,
         )
         try:
-            async for item in stream_tokens(api_key, router_payload):
+            async for item in stream_tokens(api_key, router_payload, user=current_user, db=db):
                 if isinstance(item, dict):
                     usage = item.get("usage")
                     reply_images = item.get("images") or []
