@@ -101,7 +101,9 @@ export default function SupportPanel({ open, onClose, onNeedAuth }) {
   useEffect(() => {
     if (!open) return;
     setError('');
-    loadTickets().catch(() => {});
+    loadTickets().catch((e) => {
+      setError(e?.message || 'Не удалось загрузить обращения');
+    });
   }, [open, loadTickets, setError]);
 
   useEffect(() => {

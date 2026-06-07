@@ -393,6 +393,16 @@ async def email_bind_verify(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+@router.post("/logout", response_model=MessageResponse)
+def logout_session(
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    current_user.refresh_token = None
+    db.commit()
+    return {"message": "ok"}
+
+
 @router.post("/refresh", response_model=TokenResponse)
 def refresh_session(payload: RefreshRequest, db: Session = Depends(get_db)):
     user = db.query(UserDB).filter(UserDB.refresh_token == payload.refresh_token).first()

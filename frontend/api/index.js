@@ -143,7 +143,9 @@ export default async function handler(req, res) {
     }
 
     if (sub === 'auth/logout' && req.method === 'POST') {
-      res.status(200).json({ status: 'success' });
+      const text = await upstream.text();
+      res.status(upstream.status).setHeader('Content-Type', 'application/json');
+      res.send(text);
       return;
     }
 

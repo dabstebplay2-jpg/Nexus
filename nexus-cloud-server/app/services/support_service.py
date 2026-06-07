@@ -168,14 +168,14 @@ def create_ticket(
     )
     msg = SupportMessageDB(
         id=msg_id,
-        ticket_id=ticket_id,
         author="user",
         body=body.strip(),
         attachments_json=json.dumps(att_data, ensure_ascii=False),
         created_at=now,
     )
+    ticket.messages.append(msg)
     db.add(ticket)
-    db.add(msg)
+    db.flush()
     db.commit()
     db.refresh(ticket)
     return ticket

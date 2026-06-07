@@ -12,6 +12,7 @@ from app.database import (
     ConnectorAuditLogDB,
     ConnectorOAuthStateDB,
     InvoiceDB,
+    OAuthPkceSessionDB,
     PlatformFundingObligationDB,
     SupportMessageDB,
     SupportTicketDB,
@@ -118,6 +119,9 @@ def purge_user_data(db: Session, user_id: int) -> None:
         synchronize_session=False
     )
     db.query(AuthExchangeCodeDB).filter(AuthExchangeCodeDB.user_id == user_id).delete(
+        synchronize_session=False
+    )
+    db.query(OAuthPkceSessionDB).filter(OAuthPkceSessionDB.user_id == user_id).delete(
         synchronize_session=False
     )
     db.query(PlatformFundingObligationDB).filter(

@@ -5,7 +5,7 @@ from pathlib import Path
 from passlib.context import CryptContext
 from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, text
 from sqlalchemy.engine.url import make_url
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import DATABASE_URL, database_backend
@@ -156,6 +156,11 @@ class SupportTicketDB(Base):
     status = Column(String, default="open", nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, index=True)
+    messages = relationship(
+        "SupportMessageDB",
+        back_populates="ticket",
+        cascade="all, delete-orphan",
+    )
 
 
 class SupportMessageDB(Base):
@@ -166,6 +171,7 @@ class SupportMessageDB(Base):
     body = Column(Text, nullable=False, default="")
     attachments_json = Column(Text, default="[]", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    ticket = relationship("SupportTicketDB", back_populates="messages")
 
 
 class UserMemoryDB(Base):
