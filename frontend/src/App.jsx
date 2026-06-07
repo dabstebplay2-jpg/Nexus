@@ -19,7 +19,7 @@ import IdeAuthBridgePage from './pages/IdeAuthBridgePage';
 import UpdatesPage from './pages/UpdatesPage';
 
 const ArtifactsPage = lazy(() => import('./pages/ArtifactsPage'));
-const IdeApp = lazy(() => import('./IdeApp'));
+const IdeLitePage = lazy(() => import('./pages/IdeLitePage'));
 const ConnectorsPage = lazy(() => import('./pages/ConnectorsPage'));
 const ConnectorsCallbackPage = lazy(() => import('./pages/ConnectorsCallbackPage'));
 
@@ -54,7 +54,7 @@ export default function App() {
           <Route path="/dashboard" element={<Navigate to="/profile" replace />} />
           <Route path="/ide" element={<IdeDownloadPage />} />
           <Route path="/ide/extension/nexus-ai" element={<IdeExtensionDownloadPage />} />
-          <Route path="/ide/lite" element={<IdeApp />} />
+          <Route path="/ide/lite" element={<IdeLitePage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/auth/ide-login" element={<IdeAuthBridgePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

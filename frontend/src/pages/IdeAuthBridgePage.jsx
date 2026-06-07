@@ -27,7 +27,7 @@ export default function IdeAuthBridgePage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg">
+      <div className="nx-dvh-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg">
         <p className="text-red-400 text-sm leading-relaxed">{error}</p>
         <Link to="/ide" className="text-cyan-400 hover:underline">
           Расширение для IDE
@@ -37,7 +37,7 @@ export default function IdeAuthBridgePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#07070a] flex flex-col items-center justify-center gap-3 text-cyan-400 px-6 text-center">
+    <div className="nx-dvh-screen bg-[#07070a] flex flex-col items-center justify-center gap-3 text-cyan-400 px-6 text-center">
       <RefreshCw className="animate-spin" size={28} />
       <p className="text-sm">Перенаправляем в Google…</p>
       <p className="text-zinc-500 text-xs">После входа вернитесь в Nexus IDE — окно откроется автоматически.</p>

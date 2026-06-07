@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { RefreshCw } from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
@@ -40,11 +40,14 @@ import { useArtifacts } from '../context/ArtifactContext';
 import { hydrateConversationImages } from '../lib/chatSyncAttachments';
 import SupportPanel from '../components/support/SupportPanel';
 import { readWebSearchEnabled, writeWebSearchEnabled } from '../lib/webSearchPreference';
+import { detectExplicitWebSearchIntent } from '../lib/webSearchIntent';
 import ConnectorChips from '../features/connectors/ConnectorChips';
 import { fetchConnectorsSummary } from '../features/connectors/connectorsApi';
 import ChatComposerBanners from '../components/chat/ChatComposerBanners';
 import { warmApiHealthOnce } from '../lib/warmApiHealth';
 import HomeFeatures from '../components/home/HomeFeatures';
+import { Code2 } from 'lucide-react';
+import ChatHeaderOverflow from '../components/chat/ChatHeaderOverflow';
 
 const TOPICS = ['Финансы', 'Код', 'Research', 'Учёба'];
 
@@ -68,6 +71,7 @@ export default function ChatPage() {
   const [attachToast, setAttachToast] = useState('');
   const [supportOpen, setSupportOpen] = useState(false);
   const [webSearch, setWebSearch] = useState(readWebSearchEnabled);
+  const [webSearchHighlight, setWebSearchHighlight] = useState(false);
   const handleWebSearchChange = useCallback((next) => {
     setWebSearch(next);
     writeWebSearchEnabled(next);
@@ -396,6 +400,11 @@ export default function ChatPage() {
       finalModelMeta = findModelByAnyId(allModels, finalModel);
     }
 
+    if (!webSearch && mode === 'chat' && detectExplicitWebSearchIntent(text)) {
+      setWebSearchHighlight(true);
+      window.setTimeout(() => setWebSearchHighlight(false), 2200);
+    }
+
     await sendMessage({
       text,
       attachments: sentAttachments,
@@ -456,30 +465,45 @@ export default function ChatPage() {
           else openSettingsModal(tab);
         }}
         headerLeft={
-          <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar flex-wrap">
-            <span className="text-sm text-[var(--nx-muted)] whitespace-nowrap">
-              {tier.name} тариф
-            </span>
-            {tier.id === 'FREE' || !tier.aiAccess ? (
-              <button
-                type="button"
-                onClick={openPricing}
-                className="text-sm font-semibold px-4 py-1.5 rounded-full bg-[var(--nx-surface)] border border-[var(--nx-border)] hover:bg-[var(--nx-surface-hover)] whitespace-nowrap"
+          <>
+            <div className="hidden sm:flex items-center gap-2 overflow-x-auto custom-scrollbar flex-wrap min-w-0">
+              <Link
+                to="/ide/lite"
+                className="text-sm font-medium px-3 py-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 text-teal-300 hover:bg-teal-500/15 whitespace-nowrap inline-flex items-center gap-1.5"
               >
-                Улучшить
-              </button>
-            ) : null}
-            {TOPICS.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setInput((v) => (v ? v : `Тема: ${t}. `))}
-                className="text-sm px-4 py-1.5 rounded-full text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] whitespace-nowrap hidden sm:inline"
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+                <Code2 size={14} />
+                IDE Web
+              </Link>
+              <span className="text-sm text-[var(--nx-muted)] whitespace-nowrap">
+                {tier.name} тариф
+              </span>
+              {tier.id === 'FREE' || !tier.aiAccess ? (
+                <button
+                  type="button"
+                  onClick={openPricing}
+                  className="text-sm font-semibold px-4 py-1.5 rounded-full bg-[var(--nx-surface)] border border-[var(--nx-border)] hover:bg-[var(--nx-surface-hover)] whitespace-nowrap"
+                >
+                  Улучшить
+                </button>
+              ) : null}
+              {TOPICS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setInput((v) => (v ? v : `Тема: ${t}. `))}
+                  className="text-sm px-4 py-1.5 rounded-full text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] whitespace-nowrap"
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            <ChatHeaderOverflow
+              tier={tier}
+              topics={TOPICS}
+              onPickTopic={(t) => setInput((v) => (v ? v : `Тема: ${t}. `))}
+              onUpgrade={tier.id === 'FREE' || !tier.aiAccess ? openPricing : null}
+            />
+          </>
         }
         headerRight={
           <div className="flex items-center gap-3">
@@ -501,24 +525,24 @@ export default function ChatPage() {
           </div>
         }
       >
-        <main className="flex-1 flex flex-col min-w-0 relative">
+        <main className="flex-1 flex flex-col min-w-0 min-h-0 relative">
           {chatsLoading ? (
             <div className="flex-1 flex items-center justify-center text-sm text-[var(--nx-muted)]">
               Загрузка истории чатов…
             </div>
           ) : !hasMessages ? (
-            <div className="flex-1 min-h-0 w-full grid place-items-center px-4 pb-8">
-              <div className="w-full max-w-[var(--nx-content-max)]">
+            <div className="nx-scroll-region w-full custom-scrollbar">
+              <div className="w-full max-w-[var(--nx-content-max)] mx-auto flex flex-col items-center px-4 pt-4 pb-[calc(var(--nx-dock-h)+var(--nx-safe-bottom)+1rem)]">
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
-                className="text-center mb-12 w-full"
+                className="text-center mb-6 md:mb-12 w-full"
               >
-                <h1 className="nx-wordmark nx-wordmark-gradient text-6xl sm:text-7xl md:text-8xl font-normal mb-4 tracking-tight">
+                <h1 className="nx-wordmark nx-wordmark-gradient nx-wordmark-hero md:text-7xl lg:text-8xl font-normal mb-3 md:mb-4 tracking-tight">
                   nexus
                 </h1>
-                <p className="text-base sm:text-lg text-[var(--nx-muted)] max-w-lg mx-auto">
+                <p className="text-sm sm:text-base text-[var(--nx-muted)] max-w-lg mx-auto px-2">
                   ИИ-чат, Research с источниками и расширение для IDE в одном аккаунте
                 </p>
               </motion.div>
@@ -556,6 +580,7 @@ export default function ChatPage() {
                 onOpenSupport={() => setSupportOpen(true)}
                 webSearch={webSearch}
                 onWebSearchChange={handleWebSearchChange}
+                webSearchHighlight={webSearchHighlight}
               />
               {attachToast && (
                 <p className="mt-2 text-xs text-amber-400/90 max-w-3xl mx-auto px-4 text-center">
@@ -563,7 +588,7 @@ export default function ChatPage() {
                 </p>
               )}
 
-              <div className="grid gap-3 w-full mt-10 sm:grid-cols-2">
+              <div className="flex flex-col sm:grid gap-2.5 w-full max-w-full mt-6 sm:mt-10 sm:grid-cols-2">
                 {suggested.map((prompt, i) => (
                   <motion.button
                     key={prompt}
@@ -574,7 +599,7 @@ export default function ChatPage() {
                     whileTap={{ scale: 0.99 }}
                     type="button"
                     onClick={() => setInput(prompt)}
-                    className="nx-suggestion-card text-left text-base px-5 py-4 rounded-2xl text-[var(--nx-muted)] leading-snug"
+                    className="nx-suggestion-card text-left text-sm px-4 py-3 rounded-xl text-[var(--nx-muted)] leading-snug w-full sm:text-base sm:px-5 sm:py-4 sm:rounded-2xl"
                   >
                     {prompt}
                   </motion.button>
@@ -594,7 +619,7 @@ export default function ChatPage() {
                 </p>
               )}
 
-              <HomeFeatures className="mt-16 w-full" />
+              <HomeFeatures className="hidden md:block mt-16 w-full" />
               </div>
             </div>
           ) : (
@@ -603,7 +628,7 @@ export default function ChatPage() {
                 <div
                   ref={scrollContainerRef}
                   onScroll={handleMessagesScroll}
-                  className="flex-1 overflow-y-auto custom-scrollbar"
+                  className="nx-scroll-region custom-scrollbar"
                 >
                   {activeConv.messages.map((m, i) => {
                     const modelMeta =
@@ -666,6 +691,7 @@ export default function ChatPage() {
                     onOpenSupport={() => setSupportOpen(true)}
                     webSearch={webSearch}
                     onWebSearchChange={handleWebSearchChange}
+                    webSearchHighlight={webSearchHighlight}
                   />
                   </div>
                 </div>
@@ -674,7 +700,18 @@ export default function ChatPage() {
                 )}
               </div>
               {codePanel.open && codePanel.files.length > 0 && (
-                <div className="fixed inset-0 z-40 flex flex-col bg-[var(--nx-bg)] lg:static lg:z-auto lg:flex lg:flex-1 lg:min-w-0 lg:max-w-[min(480px,45%)] border-l border-[var(--nx-border)]">
+                <motion.div
+                  drag="y"
+                  dragConstraints={{ top: 0, bottom: 0 }}
+                  dragElastic={0.1}
+                  onDragEnd={(_, info) => {
+                    if (info.offset.y > 100 || info.velocity.y > 500) closePanel();
+                  }}
+                  className="fixed inset-0 z-[60] flex flex-col bg-[var(--nx-bg)] lg:static lg:z-auto lg:flex lg:flex-1 lg:min-w-0 lg:max-w-[min(480px,45%)] border-l border-[var(--nx-border)]"
+                >
+                  <div className="lg:hidden flex justify-center py-2 shrink-0">
+                    <div className="w-10 h-1 rounded-full bg-white/20" aria-hidden />
+                  </div>
                   <CodeArtifactPanel
                     files={codePanel.files}
                     activeFileId={codePanel.activeFileId}
@@ -682,7 +719,7 @@ export default function ChatPage() {
                     onClose={closePanel}
                     streaming={loading && codePanel.messageId === streamingId}
                   />
-                </div>
+                </motion.div>
               )}
             </div>
           )}

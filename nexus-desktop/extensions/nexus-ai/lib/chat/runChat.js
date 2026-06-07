@@ -159,9 +159,10 @@ async function executeChat(provider, webview, auth, msg) {
     let streamed = '';
     let thinkingStream = '';
     let preSearchThinking = '';
-    let streamPhase = useWebSearch ? 'pre' : 'answer';
+    let streamPhase = 'answer';
+    let searchEngaged = false;
     const searchActivity = useWebSearch
-      ? { steps: [], status: 'Планирую поиск…', depth: webSearchDepth }
+      ? { steps: [], status: null, depth: webSearchDepth }
       : null;
 
     const postSearch = (patch) => {
@@ -182,12 +183,23 @@ async function executeChat(provider, webview, auth, msg) {
 
     await consumeSseResponse(res, {
       onStatus: (status) => {
-        if (!useWebSearch) return;
+        if (status === 'search_skipped') {
+          searchEngaged = false;
+          if (searchActivity) {
+            searchActivity.status = null;
+            searchActivity.steps = [];
+            postSearch({ status: null, steps: [] });
+          }
+          return;
+        }
+        if (!useWebSearch && !searchEngaged) return;
         if (status === 'planning') {
+          searchEngaged = true;
           streamPhase = 'pre';
           postStreamStatus('Планирую поиск…');
           postSearch({ status: 'Планирую поиск…', steps: searchActivity.steps });
         } else if (status === 'searching') {
+          searchEngaged = true;
           streamPhase = 'search';
           postStreamStatus('Ищу в интернете…');
           postSearch({ status: 'Ищу в интернете…', steps: searchActivity.steps });
@@ -202,6 +214,7 @@ async function executeChat(provider, webview, auth, msg) {
         }
       },
       onPreSearchDone: () => {
+        if (!searchEngaged) return;
         if (preSearchThinking.trim()) {
           searchActivity.steps.unshift({
             id: 'reason-0',
@@ -212,6 +225,7 @@ async function executeChat(provider, webview, auth, msg) {
         }
       },
       onSearchPlan: (evt) => {
+        if (!searchEngaged || !searchActivity) return;
         searchActivity.steps.push({
           id: `analyze-${searchActivity.steps.length}`,
           phase: 'analyze',
@@ -221,6 +235,7 @@ async function executeChat(provider, webview, auth, msg) {
         postSearch({ steps: searchActivity.steps, status: 'Анализирую запрос…' });
       },
       onSearchRound: (evt) => {
+        if (!searchEngaged || !searchActivity) return;
         const phase = evt.phase || 'search';
         if (phase === 'merge') {
           const prevTotal = searchActivity.steps.length

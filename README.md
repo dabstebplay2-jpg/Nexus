@@ -8,9 +8,9 @@
 | [`nexus-cloud-server/`](nexus-cloud-server/) | FastAPI — auth, billing, Polza, админка | [Render](https://nexus-cloud-ee17.onrender.com) |
 | [`backend/`](backend/) | Локальный прокси для IDE (не в проде) | — |
 
-**Прод:** https://frontend-henna-tau-19.vercel.app · API: https://nexus-cloud-ee17.onrender.com
+**Прод:** настраивается после деплоя (см. [`docs/SOLO_HOSTING_RU.md`](docs/SOLO_HOSTING_RU.md))
 
-## Быстрый старт (два разработчика)
+## Быстрый старт
 
 ```powershell
 git clone https://github.com/dabstebplay2-jpg/Nexus.git

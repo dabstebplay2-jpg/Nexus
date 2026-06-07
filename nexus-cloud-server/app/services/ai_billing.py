@@ -38,7 +38,11 @@ async def apply_usage_billing(db: Session, user: UserDB, *, model: str, usage: d
     }
 
     from app.services.invoice_pool import get_user_period_pool_usd
-    from app.services.quota_limits import get_period_ai_spend, get_billing_period_start
+    from app.services.quota_limits import (
+        get_billing_period_start,
+        get_period_ai_spend,
+        is_subscription_period_expired,
+    )
 
     tier = normalize_tier(user.subscription_tier)
     sub_cap = get_user_period_pool_usd(db, user) or tier_monthly_cap(tier)
@@ -46,7 +50,9 @@ async def apply_usage_billing(db: Session, user: UserDB, *, model: str, usage: d
         sub_cap = 0.0
 
     period_start = get_billing_period_start(user)
-    if sub_cap > 0 and period_start:
+    if is_subscription_period_expired(user):
+        remaining_sub = 0.0
+    elif sub_cap > 0 and period_start:
         spent_sub = get_period_ai_spend(db, user)
         remaining_sub = max(0.0, sub_cap - spent_sub)
     else:

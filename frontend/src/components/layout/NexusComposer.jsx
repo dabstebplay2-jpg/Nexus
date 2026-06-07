@@ -14,13 +14,14 @@ import {
   Microscope,
   Info,
 } from 'lucide-react';
-import { depthMeta, DEFAULT_WEB_SEARCH_DEPTH } from '../../lib/webSearchPreference';
 import { Link } from 'react-router-dom';
 import ModelPicker from '../chat/ModelPicker';
 import AttachmentBar from '../chat/AttachmentBar';
 import WebSearchDepthPicker from '../chat/WebSearchDepthPicker';
+import { useVisualViewportPadding } from '../../hooks/useVisualViewportPadding';
 
-const WEB_SEARCH_HINT = depthMeta(DEFAULT_WEB_SEARCH_DEPTH).hint;
+const WEB_SEARCH_HINT =
+  'Автопоиск: ищет в интернете только когда нужны свежие факты. «Привет», творческие задачи и общие вопросы — без поиска.';
 
 export default function NexusComposer({
   value,
@@ -50,9 +51,11 @@ export default function NexusComposer({
   onOpenSupport,
   webSearch = false,
   onWebSearchChange,
+  webSearchHighlight = false,
 }) {
   const [attachOpen, setAttachOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const keyboardPad = useVisualViewportPadding();
   const attachRef = useRef(null);
   const inputRef = useRef(null);
   const imageInputRef = useRef(null);
@@ -88,7 +91,12 @@ export default function NexusComposer({
   return (
     <motion.div
       layout
-      className={`w-full max-w-[var(--nx-content-max)] mx-auto ${centered ? 'px-0' : 'px-4 sm:px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]'}`}
+      className={`w-full max-w-[var(--nx-content-max)] mx-auto ${centered ? 'px-0' : 'px-4 sm:px-6'}`}
+      style={{
+        paddingBottom: centered
+          ? `max(0.5rem, calc(env(safe-area-inset-bottom) + ${keyboardPad}px))`
+          : `max(1.25rem, calc(env(safe-area-inset-bottom) + ${keyboardPad}px))`,
+      }}
     >
       <div
         className={`nx-composer rounded-3xl overflow-x-clip overflow-y-visible ${
@@ -115,7 +123,7 @@ export default function NexusComposer({
             rows={centered ? 3 : 2}
             disabled={disabled}
             placeholder={placeholder || defaultPlaceholder}
-            className="w-full resize-none bg-transparent px-6 pt-5 pb-3 text-[var(--nx-text)] placeholder:text-[var(--nx-muted)] outline-none min-h-[64px] md:min-h-[72px]"
+            className="w-full resize-none bg-transparent px-4 pt-4 pb-3 md:px-6 md:pt-5 text-[var(--nx-text)] placeholder:text-[var(--nx-muted)] outline-none min-h-[64px] md:min-h-[72px]"
           />
         </div>
 
@@ -124,14 +132,14 @@ export default function NexusComposer({
             webSearchActive ? 'pb-3.5 pt-1' : 'pb-4 pt-1'
           }`}
         >
-          <div className="flex items-center justify-between gap-2 w-full min-w-0">
-            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between w-full min-w-0">
+            <div className="flex items-center gap-2 min-w-0 flex-wrap w-full sm:w-auto">
               {showAttachMenu && (
                 <div ref={attachRef} className="relative shrink-0">
                   <button
                     type="button"
                     onClick={() => setAttachOpen((o) => !o)}
-                    className="p-3 min-h-[52px] min-w-[52px] flex items-center justify-center rounded-2xl hover:bg-[var(--nx-surface-hover)] text-[var(--nx-muted)]"
+                    className="p-2 md:p-3 min-h-[44px] min-w-[44px] md:min-h-[52px] md:min-w-[52px] flex items-center justify-center rounded-2xl hover:bg-[var(--nx-surface-hover)] text-[var(--nx-muted)]"
                     title="Вложения"
                   >
                     <Plus size={22} />
@@ -207,17 +215,18 @@ export default function NexusComposer({
                 <button
                   type="button"
                   onClick={() => setSearchOpen((o) => !o)}
-                  className="flex items-center gap-2 px-4 py-3 min-h-[52px] rounded-full bg-[var(--nx-surface-hover)] text-base font-medium"
+                  className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-3 min-h-[44px] md:min-h-[52px] rounded-full bg-[var(--nx-surface-hover)] text-sm md:text-base font-medium"
                 >
                   {mode === 'research' ? (
                     <>
                       <Microscope size={20} />
-                      Глубокое исследование
+                      <span className="hidden sm:inline">Глубокое исследование</span>
+                      <span className="sm:hidden">Research</span>
                     </>
                   ) : (
                     <>
                       <MessageCircle size={20} />
-                      Чат
+                      <span className="hidden sm:inline">Чат</span>
                     </>
                   )}
                   <ChevronDown size={18} className={searchOpen ? 'rotate-180' : ''} />
@@ -269,11 +278,12 @@ export default function NexusComposer({
                   enabled={webSearch}
                   disabled={disabled || loading}
                   onEnabledChange={onWebSearchChange}
+                  highlight={webSearchHighlight}
                 />
               )}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center flex-wrap gap-1.5 md:gap-2 shrink-0 w-full sm:w-auto justify-between sm:justify-end">
               {onOpenSupport && (
                 <button
                   type="button"
@@ -297,7 +307,7 @@ export default function NexusComposer({
                 dropUp
                 unlockAll={unlockAll}
                 visionGuide={visionGuide}
-                className="shrink min-w-0 max-w-[10rem] sm:max-w-[14rem]"
+                className="shrink min-w-0 max-w-[min(10rem,38vw)] sm:max-w-[14rem]"
               />
               <motion.button
                 type="button"

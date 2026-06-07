@@ -24,6 +24,7 @@ export function AuthProvider({ children }) {
   const [telegramLoginDomain, setTelegramLoginDomain] = useState('');
   const [authConfigLoaded, setAuthConfigLoaded] = useState(false);
   const [authConfig, setAuthConfig] = useState(null);
+  const [emailAuthEnabled, setEmailAuthEnabled] = useState(true);
 
   const fetchAuthConfigFrom = async (base) => {
     const url = `${base.replace(/\/$/, '')}/auth/config`;
@@ -56,6 +57,7 @@ export function AuthProvider({ children }) {
       if (data) {
         setAuthConfig(data);
         setGoogleOAuthAvailable(Boolean(data.google_oauth_enabled));
+        setEmailAuthEnabled(data.email_auth_enabled !== false);
         setTelegramAuthEnabled(Boolean(data.telegram_auth_enabled));
         setTelegramBotUsername((data.telegram_bot_username || '').replace(/^@/, ''));
         setTelegramLoginDomain((data.telegram_login_domain || '').trim().toLowerCase());
@@ -179,7 +181,7 @@ export function AuthProvider({ children }) {
   const startGoogleLogin = useCallback(
     async (loginHint) => {
       if (!googleOAuthAvailable) {
-        throw new Error('Вход через Google ещё не настроен на сервере. Используйте код на email.');
+        throw new Error('Вход через Google временно недоступен. Попробуйте позже.');
       }
       const returnTo = typeof window !== 'undefined' ? window.location.origin : '';
       const params = new URLSearchParams({ return_to: returnTo });
@@ -441,6 +443,7 @@ export function AuthProvider({ children }) {
         requestBindEmail,
         verifyBindEmail,
         googleOAuthAvailable,
+        emailAuthEnabled,
         telegramAuthEnabled,
         telegramBotUsername,
         telegramLoginDomain,

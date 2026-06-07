@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { IS_VERCEL_HOST } from '../lib/api';
+import { runDemoTerminalCommand } from '../lib/demoWorkspace';
 
-const TerminalArea = ({ workspacePath = 'C:\\nexus-ide' }) => {
+const TerminalArea = ({ workspacePath = 'C:\\nexus-ide', demoMode = false }) => {
   const [history, setHistory] = useState('');
   const [input, setInput] = useState('');
   const [connected, setConnected] = useState(false);
@@ -9,9 +9,10 @@ const TerminalArea = ({ workspacePath = 'C:\\nexus-ide' }) => {
   const containerRef = useRef(null);
 
   useEffect(() => {
-    if (IS_VERCEL_HOST) {
+    if (demoMode) {
+      setConnected(true);
       setHistory(
-        'Терминал недоступен в Web Lite на Vercel.\r\nСкачайте Nexus IDE Desktop или запустите backend локально (:8000).\r\n'
+        'Nexus Demo Terminal\r\nКоманды: ls, cat README.md, npm test, help, clear\r\n\r\ndemo@nexus $ '
       );
       return undefined;
     }
@@ -38,16 +39,14 @@ const TerminalArea = ({ workspacePath = 'C:\\nexus-ide' }) => {
     ws.current.onerror = () => {
       setConnected(false);
       setHistory(
-        (prev) =>
-          prev +
-          '\r\n[Connection Error] Убедитесь, что backend запущен на :8000\r\n'
+        (prev) => prev + '\r\n[Connection Error] Убедитесь, что backend запущен на :8000\r\n'
       );
     };
 
     return () => {
       if (ws.current) ws.current.close();
     };
-  }, [workspacePath]);
+  }, [workspacePath, demoMode]);
 
   useEffect(() => {
     if (containerRef.current) {
@@ -61,7 +60,14 @@ const TerminalArea = ({ workspacePath = 'C:\\nexus-ide' }) => {
     if (!trimmedInput) return;
 
     if (trimmedInput.toLowerCase() === 'clear' || trimmedInput.toLowerCase() === 'cls') {
-      setHistory('');
+      setHistory(demoMode ? 'Nexus Demo Terminal\r\n\r\ndemo@nexus $ ' : '');
+      setInput('');
+      return;
+    }
+
+    if (demoMode) {
+      const out = runDemoTerminalCommand(trimmedInput);
+      setHistory((prev) => `${prev}${trimmedInput}\r\n${out}\r\ndemo@nexus $ `);
       setInput('');
       return;
     }
@@ -73,7 +79,7 @@ const TerminalArea = ({ workspacePath = 'C:\\nexus-ide' }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#1e1e1e] text-[#cccccc] font-mono text-[12px]">
+    <div className="flex flex-col h-full bg-[var(--ide-input,#1e1e1e)] text-[#cccccc] font-mono text-[12px]">
       <div
         ref={containerRef}
         className="flex-1 overflow-y-auto whitespace-pre-wrap select-text px-3 py-2 custom-scrollbar"
@@ -82,9 +88,9 @@ const TerminalArea = ({ workspacePath = 'C:\\nexus-ide' }) => {
       </div>
       <form
         onSubmit={handleCommandSubmit}
-        className="flex items-center gap-2 border-t border-[#3c3c3c] px-3 py-1.5 shrink-0"
+        className="flex items-center gap-2 border-t border-[var(--ide-border,#3c3c3c)] px-3 py-1.5 shrink-0"
       >
-        <span className="text-[#4ec9b0] shrink-0">PS&gt;</span>
+        <span className="text-teal-400 shrink-0">{demoMode ? 'demo&gt;' : 'PS&gt;'}</span>
         <input
           type="text"
           value={input}

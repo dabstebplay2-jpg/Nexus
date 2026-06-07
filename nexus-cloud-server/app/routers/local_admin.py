@@ -15,12 +15,16 @@ from app.config import (
     NEXUS_ADMIN_ALLOW_REMOTE,
     NEXUS_ADMIN_DEFAULT_CLOUD_URL,
     NEXUS_ADMIN_PASSWORD,
+    NEXUS_FREE_OPENROUTER_KEY_LIMIT_USD,
     NEXUS_LOCAL_ADMIN,
     NEXUS_REMOTE_ADMIN,
+    OPENROUTER_API_KEY,
+    OPENROUTER_FREE_KEY_LIMIT_RESET,
     POLZA_BACKEND_API_KEY,
     admin_api_enabled,
     database_backend,
     is_testing_mode,
+    openrouter_management_enabled,
 )
 from app.database import InvoiceDB, TransactionDB, UserDB, get_db
 from app.schemas import AdminSupportReply, AdminSupportStatusPatch
@@ -41,6 +45,7 @@ from app.services.admin_analytics import (
 from app.services.admin_user_ops import (
     admin_delete_user,
     admin_grant_tier,
+    admin_refresh_openrouter,
     admin_refresh_routerai,
     admin_reset_password,
     admin_revoke_tier,
@@ -48,6 +53,8 @@ from app.services.admin_user_ops import (
     admin_unlink_google,
     admin_unlink_telegram,
 )
+from app.services.openrouter_provision import user_has_openrouter_key
+from app.tiers import tier_uses_openrouter_free
 from app.services.polza import user_has_polza_key
 from app.services.quota_limits import get_quota_limit_info
 from app.services.platform_funding import compute_funding_metrics, refresh_polza_org_balance, set_polza_org_balance_rub
@@ -133,6 +140,14 @@ def _user_summary(db: Session, user: UserDB) -> dict[str, Any]:
     polza_key_id = getattr(user, "polza_key_id", None)
     paid = tier_requires_payment(tier)
     polza_ready = bool(has_polza and paid and quota.get("quota_enabled"))
+    has_openrouter = user_has_openrouter_key(user)
+    openrouter_hash = getattr(user, "openrouter_key_hash", None)
+    openrouter_ready = bool(tier_uses_openrouter_free(tier) and has_openrouter)
+    openrouter_shared = bool(
+        tier_uses_openrouter_free(tier)
+        and not has_openrouter
+        and bool(OPENROUTER_API_KEY or openrouter_management_enabled())
+    )
     email = user.email or ""
     google_sub = getattr(user, "google_sub", None)
     return {
@@ -144,6 +159,11 @@ def _user_summary(db: Session, user: UserDB) -> dict[str, Any]:
         "polza_key_id": polza_key_id,
         "polza_key_preview": _mask_polza_key_id(polza_key_id),
         "polza_ready": polza_ready,
+        "has_openrouter_key": has_openrouter,
+        "openrouter_key_hash_preview": _mask_polza_key_id(openrouter_hash),
+        "openrouter_key_created_at": _dt_iso(getattr(user, "openrouter_key_created_at", None)),
+        "openrouter_ready": openrouter_ready,
+        "openrouter_uses_shared_key": openrouter_shared,
         "created_at": _dt_iso(user.created_at),
         "subscription_period_start": _dt_iso(getattr(user, "subscription_period_start", None)),
         "subscription_period_end": _dt_iso(getattr(user, "subscription_period_end", None)),
@@ -194,6 +214,7 @@ class UserSaveBody(BaseModel):
     new_password: str | None = Field(None, min_length=6, max_length=128)
     refresh_polza: bool = False
     refresh_routerai: bool = False
+    refresh_openrouter: bool = False
 
 
 @router.get("/site-overview")
@@ -206,6 +227,12 @@ def site_overview(db: Session = Depends(get_db), _: None = Depends(require_admin
         .scalar()
         or 0
     )
+    with_openrouter = (
+        db.query(func.count(UserDB.id))
+        .filter(UserDB.openrouter_api_key_encrypted.isnot(None))
+        .scalar()
+        or 0
+    )
     paid = (
         db.query(func.count(UserDB.id))
         .filter(UserDB.subscription_tier != "FREE")
@@ -215,10 +242,12 @@ def site_overview(db: Session = Depends(get_db), _: None = Depends(require_admin
     return {
         "users_total": total,
         "users_with_polza_key": with_polza,
+        "users_with_openrouter_key": with_openrouter,
         "users_paid_tier": paid,
         "frontend_url": "https://frontend-henna-tau-19.vercel.app",
         "cloud_url": NEXUS_ADMIN_DEFAULT_CLOUD_URL,
         "polza_backend_configured": bool(POLZA_BACKEND_API_KEY),
+        "openrouter_management_configured": openrouter_management_enabled(),
         "remote_admin": NEXUS_REMOTE_ADMIN,
         "testing_mode": is_testing_mode(),
     }
@@ -439,6 +468,28 @@ async def repair_polza_key(
     return {"status": "ok", "user": _user_summary(db, user)}
 
 
+@router.post("/users/{user_id}/repair-openrouter")
+@router.post("/users/{user_id}/refresh-openrouter")
+async def repair_openrouter_key(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin_access),
+):
+    user = db.query(UserDB).filter(UserDB.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    try:
+        ok = await admin_refresh_openrouter(db, user)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if not ok:
+        raise HTTPException(
+            status_code=503,
+            detail="Не удалось создать или обновить ключ OpenRouter (нужен тариф FREE)",
+        )
+    return {"status": "ok", "user": _user_summary(db, user)}
+
+
 @router.put("/users/{user_id}")
 @router.patch("/users/{user_id}")
 async def save_user(
@@ -460,6 +511,7 @@ async def save_user(
             new_password=body.new_password,
             refresh_polza=body.refresh_polza,
             refresh_routerai=body.refresh_routerai,
+            refresh_openrouter=body.refresh_openrouter,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -731,6 +783,43 @@ def admin_patch_support_ticket(
     set_ticket_status(db, ticket_id, body.status)
     log_admin_action("support_status", ticket_id=ticket_id, status=body.status)
     return AdminSupportTicketDetail(**get_admin_ticket_detail(db, ticket_id))
+
+
+@router.get("/openrouter/status")
+def openrouter_status(
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin_access),
+):
+    """Статус per-user ключей OpenRouter (FREE tier)."""
+    users_with_key = (
+        db.query(func.count(UserDB.id))
+        .filter(UserDB.openrouter_api_key_encrypted.isnot(None))
+        .scalar()
+        or 0
+    )
+    return {
+        "management_configured": openrouter_management_enabled(),
+        "shared_fallback_configured": bool(OPENROUTER_API_KEY),
+        "users_with_key": int(users_with_key),
+        "free_key_limit_usd": NEXUS_FREE_OPENROUTER_KEY_LIMIT_USD,
+        "limit_reset": OPENROUTER_FREE_KEY_LIMIT_RESET,
+    }
+
+
+@router.post("/openrouter/verify-management")
+async def verify_openrouter_management(_: None = Depends(require_admin_access)):
+    from app.services.openrouter import OpenRouterError, OpenRouterService
+
+    if not openrouter_management_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="OPENROUTER_MANAGEMENT_API_KEY не задан на сервере",
+        )
+    try:
+        result = await OpenRouterService().verify_management_key()
+    except OpenRouterError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return result
 
 
 @router.get("/polza/pool-status")

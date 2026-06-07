@@ -1,6 +1,6 @@
 # Google OAuth (вход на сайт)
 
-Вход через Google уже реализован в `app/services/google_oauth.py` и `app/routers/auth.py`. Фронт показывает кнопку «Продолжить с Google», когда `GET /v1/auth/config` возвращает `google_oauth_enabled: true` (или задан `VITE_GOOGLE_AUTH_ENABLED=true` на Vercel).
+Вход через Google уже реализован в `app/services/google_oauth.py` и `app/routers/auth.py`. Фронт показывает кнопку «Продолжить с Google», когда `GET /v1/auth/config` возвращает `google_oauth_enabled: true`.
 
 **Не путать** с коннектором Gmail (`GOOGLE_CONNECTOR_*`) — это отдельный OAuth для Nexus Connectors.
 
@@ -18,7 +18,7 @@ sequenceDiagram
   Render-->>Browser: google_oauth_enabled: true
 
   Browser->>Vercel: GET /api/auth/google/start
-  Vercel->>Render: redirect
+  Vercel->>Render: GET /v1/auth/google/start
   Render-->>Browser: 302 accounts.google.com
   Google-->>Vercel: callback /api/auth/google/callback
   Vercel->>Render: /v1/auth/google/callback
@@ -26,37 +26,65 @@ sequenceDiagram
   Browser->>Vercel: POST /api/auth/google/exchange
 ```
 
-Прокси редиректов: `frontend/api/index.js` (Vercel serverless → Render).
+Прокси в проде: **external rewrite** в [`frontend/vercel.json`](../../frontend/vercel.json) — `/api/*` → `https://nexus-cloud-bxcc.onrender.com/v1/*`. Запасной путь: serverless [`frontend/api/index.js`](../../frontend/api/index.js).
 
 Локально: Vite proxy `/api` → `http://127.0.0.1:8080/v1` (`frontend/vite.config.js`).
 
-## Чеклист Render (nexus-cloud-server)
+## Чеклист Render (nexus-cloud)
 
 | Переменная | Значение (прод) |
 |------------|-----------------|
 | `GOOGLE_CLIENT_ID` | OAuth 2.0 Client ID из Google Cloud |
 | `GOOGLE_CLIENT_SECRET` | секрет клиента |
-| `GOOGLE_REDIRECT_URI` | `https://frontend-henna-tau-19.vercel.app/api/auth/google/callback` |
-| `NEXUS_FRONTEND_URL` | `https://frontend-henna-tau-19.vercel.app` |
+| `GOOGLE_REDIRECT_URI` | `https://nexus-zeta-ruby-12.vercel.app/api/auth/google/callback` *(если Vercel `/api` отвечает 404 — используйте Render: `https://nexus-cloud-bxcc.onrender.com/v1/auth/google/callback`)* |
+| `NEXUS_FRONTEND_URL` | `https://nexus-zeta-ruby-12.vercel.app` |
 | `NEXUS_CLOUD_SECRET_KEY` | стабильный ключ (JWT state + exchange codes) |
 
 После изменения env на Render — **Manual Deploy** или дождаться redeploy.
 
+Быстрая синхронизация из локального `.env` (нужен `RENDER_API_KEY`):
+
+```powershell
+cd nexus-cloud-server
+# заполните GOOGLE_* и NEXUS_FRONTEND_URL в .env
+python scripts/sync_google_render_env.py
+```
+
 Проверка:
 
 ```bash
-curl -s https://nexus-cloud-ee17.onrender.com/v1/auth/config
+curl -s https://nexus-cloud-bxcc.onrender.com/v1/auth/config
 ```
 
 Ожидается JSON с `google_oauth_enabled: true` и `google_redirect_uri_configured` с URL Vercel `/api/auth/google/callback`.
+
+## Создать OAuth client с нуля
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → новый проект **Nexus** (или выберите существующий).
+2. **APIs & Services → OAuth consent screen** → **Get started** → User type **External** → App name `Nexus`, support email → **Audience** → **Testing** → **Add users** (ваш Gmail).
+3. **Credentials → Create credentials → OAuth client ID** → Application type **Web application** → имя `Nexus Web`.
+4. **Authorized redirect URIs** — добавьте оба URL из таблицы ниже → **Create**.
+5. Скопируйте **Client ID** и **Client secret**.
+
+Автозаливка на Render (после шагов 1–5):
+
+```powershell
+cd nexus-cloud-server
+.\scripts\setup-google-oauth.ps1
+```
 
 ## Чеклист Google Cloud Console
 
 [APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials) → OAuth 2.0 Client (Web application).
 
-**Authorized redirect URIs** (оба при локальной разработке):
+**Authorized JavaScript origins** (опционально):
 
-- `https://frontend-henna-tau-19.vercel.app/api/auth/google/callback` — прод
+- `https://nexus-zeta-ruby-12.vercel.app`
+- `http://localhost:5173`
+
+**Authorized redirect URIs** (обязательно):
+
+- `https://nexus-zeta-ruby-12.vercel.app/api/auth/google/callback` — прод
 - `http://localhost:5173/api/auth/google/callback` — локально (через Vite proxy)
 
 **OAuth consent screen:**
@@ -88,7 +116,7 @@ NEXUS_CLOUD_SECRET_KEY=...
 VITE_GOOGLE_AUTH_ENABLED=true
 ```
 
-Кнопка появится, даже если первый запрос `/auth/config` упал (cold start Render). Полный OAuth всё равно требует корректных ключей на Render.
+После загрузки `/auth/config` кнопка остаётся только если сервер вернул `google_oauth_enabled: true`. Полный OAuth требует корректных ключей на Render.
 
 ## Ошибки на `/auth/callback`
 

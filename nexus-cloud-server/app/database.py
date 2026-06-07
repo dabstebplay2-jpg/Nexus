@@ -5,7 +5,7 @@ from pathlib import Path
 from passlib.context import CryptContext
 from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, text
 from sqlalchemy.engine.url import make_url
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import DATABASE_URL, database_backend
@@ -68,6 +68,9 @@ class UserDB(Base):
     polza_key_id = Column(String, nullable=True)  # id ключа в org Polza (MCP)
     polza_key_updated_at = Column(DateTime, nullable=True)
     polza_connect_required = Column(Integer, default=0)  # legacy, не используется
+    openrouter_api_key_encrypted = Column(Text, nullable=True)
+    openrouter_key_hash = Column(String, nullable=True)
+    openrouter_key_created_at = Column(DateTime, nullable=True)
     refresh_token = Column(String, nullable=True)
     subscription_period_start = Column(DateTime, nullable=True)
     subscription_period_end = Column(DateTime, nullable=True)
@@ -156,6 +159,11 @@ class SupportTicketDB(Base):
     status = Column(String, default="open", nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, index=True)
+    messages = relationship(
+        "SupportMessageDB",
+        back_populates="ticket",
+        cascade="all, delete-orphan",
+    )
 
 
 class SupportMessageDB(Base):
@@ -166,6 +174,7 @@ class SupportMessageDB(Base):
     body = Column(Text, nullable=False, default="")
     attachments_json = Column(Text, default="[]", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    ticket = relationship("SupportTicketDB", back_populates="messages")
 
 
 class UserMemoryDB(Base):
@@ -275,6 +284,9 @@ _USER_COLUMNS = {
     "polza_key_id": "TEXT",
     "polza_key_updated_at": "DATETIME",
     "polza_connect_required": "INTEGER",
+    "openrouter_api_key_encrypted": "TEXT",
+    "openrouter_key_hash": "TEXT",
+    "openrouter_key_created_at": "DATETIME",
     "subscription_period_start": "DATETIME",
     "subscription_period_end": "DATETIME",
     "google_sub": "TEXT",
@@ -394,6 +406,27 @@ def migrate_schema() -> None:
                 logger.info("DB migrate: cleared legacy RouterAI keys from %s users", cleared.rowcount)
 
         conn.commit()
+
+    ensure_support_tables()
+
+
+def ensure_support_tables() -> None:
+    """Создать таблицы поддержки, если их ещё нет (после деплоя без полного migrate)."""
+    from sqlalchemy import inspect
+
+    insp = inspect(engine)
+    missing = [
+        name
+        for name in ("support_tickets", "support_messages")
+        if not insp.has_table(name)
+    ]
+    if not missing:
+        return
+    logger.warning("DB migrate: creating support tables: %s", ", ".join(missing))
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[SupportTicketDB.__table__, SupportMessageDB.__table__],
+    )
 
 
 def get_db():

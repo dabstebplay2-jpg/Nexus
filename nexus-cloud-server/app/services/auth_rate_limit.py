@@ -127,6 +127,13 @@ def _lockout_key(scope: str, identifier: str, ip: str | None) -> str:
 
 def is_locked_out(scope: str, identifier: str, ip: str | None) -> bool:
     key = _lockout_key(scope, identifier, ip)
+    if redis_persistence_enabled():
+        try:
+            from app.services.redis_rate_limit import redis_is_locked_out
+
+            return redis_is_locked_out(key)
+        except Exception as exc:
+            logger.warning("Redis lockout fallback to memory: %s", exc)
     with _lock:
         until = _lockouts.get(key)
         if until and until > time.time():
@@ -138,6 +145,19 @@ def is_locked_out(scope: str, identifier: str, ip: str | None) -> bool:
 
 def record_failure(scope: str, identifier: str, ip: str | None) -> None:
     key = _lockout_key(scope, identifier, ip)
+    if redis_persistence_enabled():
+        try:
+            from app.services.redis_rate_limit import redis_record_failure
+
+            redis_record_failure(
+                key,
+                max_failures=AUTH_FAIL_MAX,
+                window_sec=AUTH_FAIL_WINDOW_SEC,
+                lockout_sec=AUTH_LOCKOUT_SEC,
+            )
+            return
+        except Exception as exc:
+            logger.warning("Redis failure counter fallback to memory: %s", exc)
     with _lock:
         _prune(key, AUTH_FAIL_WINDOW_SEC, _fail_counts)
         _fail_counts[key].append(time.time())
@@ -148,6 +168,13 @@ def record_failure(scope: str, identifier: str, ip: str | None) -> None:
 
 def clear_failures(scope: str, identifier: str, ip: str | None) -> None:
     key = _lockout_key(scope, identifier, ip)
+    if redis_persistence_enabled():
+        try:
+            from app.services.redis_rate_limit import redis_clear_failures
+
+            redis_clear_failures(key)
+        except Exception as exc:
+            logger.warning("Redis clear failures fallback to memory: %s", exc)
     with _lock:
         _fail_counts.pop(key, None)
         _lockouts.pop(key, None)

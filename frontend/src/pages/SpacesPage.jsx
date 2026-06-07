@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Search, Lock } from 'lucide-react';
+import { Plus, Search, Lock, ChevronLeft } from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
 import NexusComposer from '../components/layout/NexusComposer';
 import ChatMessage from '../components/chat/ChatMessage';
@@ -25,6 +25,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePricingCatalog, tierHasAiFromList } from '../hooks/usePricingCatalog';
 import { useNexusChat } from '../hooks/useNexusChat';
 import { readWebSearchEnabled, writeWebSearchEnabled } from '../lib/webSearchPreference';
+import { detectExplicitWebSearchIntent } from '../lib/webSearchIntent';
 import { findModelByAnyId } from '../lib/modelSelection';
 import { isImageGenModel, detectImageGenIntent } from '../lib/attachments';
 
@@ -43,6 +44,7 @@ export default function SpacesPage() {
   const [mode, setMode] = useState('chat');
   const [search, setSearch] = useState('');
   const [webSearch, setWebSearch] = useState(readWebSearchEnabled);
+  const [webSearchHighlight, setWebSearchHighlight] = useState(false);
   const messagesEndRef = useRef(null);
 
   const allModels = useMemo(
@@ -160,6 +162,11 @@ export default function SpacesPage() {
       finalIsMediaModel = true;
     }
 
+    if (!webSearch && mode === 'chat' && detectExplicitWebSearchIntent(text)) {
+      setWebSearchHighlight(true);
+      window.setTimeout(() => setWebSearchHighlight(false), 2200);
+    }
+
     await sendMessage({
       text,
       mode,
@@ -201,7 +208,7 @@ export default function SpacesPage() {
         }
       >
         {!inChat ? (
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="nx-scroll-region custom-scrollbar">
             <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
                 <h1 className="text-2xl sm:text-3xl font-semibold">Пространства</h1>
@@ -323,19 +330,27 @@ export default function SpacesPage() {
           </div>
         ) : (
           <main className="flex-1 flex flex-col min-w-0 min-h-0">
-            <div className="px-4 py-2 border-b border-[var(--nx-border)] text-xs text-[var(--nx-muted)] shrink-0">
-              {activeWs?.emoji} {activeWs?.name} · контекст ~24 сообщений + глобальная память из настроек
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--nx-border)] shrink-0">
               <button
                 type="button"
                 onClick={() => setState((s) => ({ ...s, activeConversationId: null }))}
-                className="ml-3 text-teal-500 hover:underline"
+                className="p-2 -ml-2 rounded-lg hover:bg-[var(--nx-surface-hover)] text-teal-400 min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0"
+                aria-label="Назад к списку"
               >
-                ← К списку
+                <ChevronLeft size={20} />
               </button>
+              <div className="min-w-0">
+                <p className="font-medium text-sm text-[var(--nx-text)] truncate">
+                  {activeWs?.emoji} {activeWs?.name}
+                </p>
+                <p className="text-[10px] text-[var(--nx-muted)] truncate">
+                  контекст ~24 сообщений + глобальная память
+                </p>
+              </div>
             </div>
             <div className="flex flex-1 min-h-0 min-w-0 flex-col lg:flex-row">
               <div className="flex flex-col flex-1 min-w-0 min-h-0">
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="nx-scroll-region custom-scrollbar">
                   {activeConv?.messages?.map((m, i) => {
                     const modelMeta =
                       m.role === 'assistant' && m.model
@@ -375,6 +390,7 @@ export default function SpacesPage() {
                   placeholder="Сообщение в пространстве…"
                   webSearch={webSearch}
                   onWebSearchChange={handleWebSearchChange}
+                  webSearchHighlight={webSearchHighlight}
                 />
               </div>
               {codePanel.open && codePanel.files.length > 0 && (

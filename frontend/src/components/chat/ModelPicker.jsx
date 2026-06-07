@@ -469,7 +469,7 @@ export default function ModelPicker({
   ) : null;
 
   const btnClass = compact
-    ? `w-full flex items-center justify-between gap-2 px-4 py-2.5 min-h-[52px] rounded-full text-base font-medium hover:bg-[var(--nx-surface-hover)] ${
+    ? `w-full flex items-center justify-between gap-2 px-3 md:px-4 py-2 md:py-2.5 min-h-[44px] md:min-h-[52px] rounded-full text-sm md:text-base font-medium hover:bg-[var(--nx-surface-hover)] ${
         disabled ? 'opacity-50' : ''
       } ${open ? 'bg-[var(--nx-surface-hover)]' : ''}`
     : `w-full flex items-center justify-between gap-2 text-left text-xs rounded-lg border px-2.5 py-2 ${

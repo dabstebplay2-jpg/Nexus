@@ -5,8 +5,8 @@ const SECRET_REFRESH = 'nexus.refreshToken';
 
 /** Vercel /api proxy — доступен, когда Render.com блокируется провайдером. */
 const CLOUD_FALLBACK_BASES = [
-  'https://frontend-henna-tau-19.vercel.app/api',
-  'https://nexus-cloud-ee17.onrender.com/v1',
+  'https://nexus-zeta-ruby-12.vercel.app/api',
+  'https://nexus-cloud-bxcc.onrender.com/v1',
 ];
 
 /** @type {vscode.ExtensionContext | null} */
@@ -17,7 +17,7 @@ const authChangedEmitter = new vscode.EventEmitter();
 function cloudUrl() {
   return vscode.workspace
     .getConfiguration('nexus')
-    .get('cloudUrl', 'https://frontend-henna-tau-19.vercel.app/api')
+    .get('cloudUrl', 'https://nexus-zeta-ruby-12.vercel.app/api')
     .replace(/\/$/, '');
 }
 
@@ -181,7 +181,7 @@ async function requestEmailCode(email) {
     }));
   } catch (e) {
     throw new Error(
-      `Нет связи с облаком Nexus (${e?.message || 'fetch failed'}). Проверьте интернет или укажите nexus.cloudUrl = https://frontend-henna-tau-19.vercel.app/api`
+      `Нет связи с облаком Nexus (${e?.message || 'fetch failed'}). Проверьте интернет или укажите nexus.cloudUrl = https://nexus-zeta-ruby-12.vercel.app/api`
     );
   }
   if (!res.ok) {
@@ -210,11 +210,11 @@ async function signInWithGoogle() {
   const config = await fetchAuthConfig();
   if (config._networkError) {
     throw new Error(
-      'Не удалось связаться с облаком. Укажите в настройках nexus.cloudUrl = https://frontend-henna-tau-19.vercel.app/api'
+      'Не удалось связаться с облаком. Укажите в настройках nexus.cloudUrl = https://nexus-zeta-ruby-12.vercel.app/api'
     );
   }
   if (!config.google_oauth_enabled) {
-    throw new Error('Google OAuth на сервере недоступен. Используйте код на email.');
+    throw new Error('Google OAuth на сервере недоступен. Попробуйте позже.');
   }
   const bridge = `${webAppUrl()}/auth/ide-login`;
   await vscode.env.openExternal(vscode.Uri.parse(bridge));

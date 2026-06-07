@@ -100,7 +100,7 @@ function getAccountHtml() {
 
   <div id="logged-out">
     <h2>Вход в Nexus</h2>
-    <p class="sub">Как на сайте: Google или код из письма. Пароль не нужен.</p>
+    <p class="sub" id="loginSub">Вход через Google — как на сайте Nexus. Пароль не нужен.</p>
 
     <div class="card" id="main-buttons">
       <button type="button" class="btn btn-primary" id="btnGoogle">
@@ -196,10 +196,16 @@ function getAccountHtml() {
       setBusy(false);
       if (m.type === 'authState') {
         document.body.classList.toggle('authed', !!m.authorized);
+        const btnGoogle = document.getElementById('btnGoogle');
+        const btnEmail = document.getElementById('btnEmail');
+        const loginSub = document.getElementById('loginSub');
+        if (m.emailAuthEnabled === false) {
+          btnEmail?.classList.add('hidden');
+          if (loginSub) loginSub.textContent = 'Вход только через Google — один аккаунт на сайте и в IDE.';
+        }
         if (m.googleEnabled === false) {
-          document.getElementById('btnGoogle').disabled = true;
-          document.getElementById('btnGoogle').querySelector('.btn-desc').textContent =
-            'Сейчас недоступно — используйте код на email';
+          btnGoogle.disabled = true;
+          btnGoogle.querySelector('.btn-desc').textContent = 'Сейчас недоступно на сервере';
         }
       }
       if (m.type === 'status') setStatus(m.text, m.kind);
@@ -285,6 +291,7 @@ class AccountWebviewProvider {
       type: 'authState',
       authorized: session.authorized,
       googleEnabled: config.google_oauth_enabled,
+      emailAuthEnabled: config.email_auth_enabled !== false,
     });
     if (!session.authorized) return;
 
@@ -325,6 +332,10 @@ class AccountWebviewProvider {
         return;
       }
       if (msg.type === 'sendCode') {
+        const cfg = await auth.fetchAuthConfig();
+        if (cfg.email_auth_enabled === false) {
+          throw new Error('Вход по email отключён. Используйте Google.');
+        }
         await auth.requestEmailCode(msg.email);
         this.post(webview, { type: 'codeSent' });
         return;

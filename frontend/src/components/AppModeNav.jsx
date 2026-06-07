@@ -1,11 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { MessageSquare, LayoutDashboard, Puzzle } from 'lucide-react';
+import { MessageSquare, Code2, Puzzle } from 'lucide-react';
 
 const MODES = [
   { path: '/', label: 'Чат', icon: MessageSquare, match: (p) => p === '/' || p.startsWith('/chat') },
-  { path: '/dashboard', label: 'Кабинет', icon: LayoutDashboard, match: (p) => p === '/dashboard' },
-  { path: '/ide', label: 'Для IDE', icon: Puzzle, match: (p) => p === '/ide' || p.startsWith('/ide/') },
+  { path: '/ide/lite', label: 'IDE Web', icon: Code2, match: (p) => p === '/ide/lite' },
+  { path: '/ide', label: 'Скачать IDE', icon: Puzzle, match: (p) => p === '/ide' },
 ];
 
 export default function AppModeNav({ compact = false }) {

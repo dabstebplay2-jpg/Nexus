@@ -131,7 +131,7 @@ export default function PricingPage() {
 
   return (
     <AppShell hideHistory onOpenPricing={() => navigate('/profile')}>
-      <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10">
+      <div className="nx-scroll-region custom-scrollbar relative z-10">
         <div className="max-w-[min(1400px,100%)] mx-auto px-4 sm:px-6 py-10">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -171,11 +171,13 @@ export default function PricingPage() {
             </p>
           </motion.div>
 
-          <TierPicker
-            mode={authStatus.authorized ? 'subscribe' : 'select'}
-            currentTierId={authStatus.profile?.subscription_tier}
-            layout="grid"
-          />
+          <div id="tier-picker" className="scroll-mt-24 pb-24 md:pb-0">
+            <TierPicker
+              mode={authStatus.authorized ? 'subscribe' : 'select'}
+              currentTierId={authStatus.profile?.subscription_tier}
+              layout="grid"
+            />
+          </div>
 
           {authStatus.authorized && (
             <motion.div
@@ -316,6 +318,21 @@ export default function PricingPage() {
 
           <LegalFooter className="mt-12 rounded-2xl border border-white/5 bg-black/20" />
         </div>
+      </div>
+      <div
+        className="md:hidden fixed inset-x-0 z-20 px-4 py-3 border-t border-[var(--nx-border)] bg-[color-mix(in_srgb,var(--nx-sidebar)_96%,transparent)] backdrop-blur-xl"
+        style={{ bottom: 'calc(var(--nx-dock-h) + var(--nx-safe-bottom))' }}
+      >
+        <button
+          type="button"
+          onClick={() =>
+            document.getElementById('tier-picker')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
+          className="w-full py-3.5 min-h-[48px] rounded-2xl bg-teal-500 hover:bg-teal-400 text-white font-semibold text-base flex items-center justify-center gap-2"
+        >
+          Оформить тариф
+          <ArrowRight size={18} />
+        </button>
       </div>
     </AppShell>
   );

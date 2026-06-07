@@ -84,6 +84,48 @@ async def mcp_list_api_keys() -> list[dict[str, Any]]:
     return []
 
 
+def _api_key_row_id(row: dict[str, Any]) -> str | None:
+    for field in ("id", "key_id", "keyId", "hash"):
+        val = row.get(field)
+        if val is not None and str(val).strip():
+            return str(val).strip()
+    return None
+
+
+def _api_key_row_name(row: dict[str, Any]) -> str:
+    for field in ("name", "label", "title", "user", "email"):
+        val = row.get(field)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
+async def find_polza_keys_by_name(name: str) -> list[dict[str, Any]]:
+    """Ключи Polza с каноническим именем (без учёта регистра)."""
+    target = (name or "").strip().lower()
+    if not target:
+        return []
+    rows = await mcp_list_api_keys()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        row_name = _api_key_row_name(row).lower()
+        if row_name == target:
+            out.append(row)
+    return out
+
+
+async def delete_polza_keys_by_name(name: str) -> int:
+    """Удалить все ключи Polza с указанным именем. Возвращает число удалённых."""
+    deleted = 0
+    for row in await find_polza_keys_by_name(name):
+        key_id = _api_key_row_id(row)
+        if key_id and await mcp_delete_api_key(key_id=key_id):
+            deleted += 1
+    return deleted
+
+
 async def mcp_create_api_key(
     *,
     name: str,

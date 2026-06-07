@@ -51,6 +51,12 @@ def analytics_summary(db: Session) -> dict:
     tg_linked = (
         db.query(func.count(UserDB.id)).filter(UserDB.telegram_id.isnot(None)).scalar() or 0
     )
+    with_openrouter = (
+        db.query(func.count(UserDB.id))
+        .filter(UserDB.openrouter_api_key_encrypted.isnot(None))
+        .scalar()
+        or 0
+    )
 
     return {
         "users_total": int(total),
@@ -58,6 +64,7 @@ def analytics_summary(db: Session) -> dict:
         "users_new_30d": int(new_30d),
         "users_paid": int(paid),
         "users_telegram_linked": int(tg_linked),
+        "users_with_openrouter_key": int(with_openrouter),
         "mrr_usd_estimate": round(float(mrr_usd), 2),
         "transactions_total": int(tx_count),
         "transactions_volume_usd": round(float(tx_volume), 4),

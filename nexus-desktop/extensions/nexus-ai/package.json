@@ -2,7 +2,7 @@
   "name": "nexus-ai",
   "displayName": "Nexus AI",
   "description": "Cloud AI chat with streaming, editor context, web search, thinking mode, and IDE agent tools",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/nexus-ide/nexus-ide"

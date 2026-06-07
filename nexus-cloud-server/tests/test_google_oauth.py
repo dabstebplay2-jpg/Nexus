@@ -30,6 +30,15 @@ def test_new_google_user_empty_password_not_null(db):
     assert user.hashed_password == ""
 
 
+def test_jwks_kid_lookup_uses_getitem_not_find_by_kid():
+    """PyJWT 2.8: PyJWKSet[kid], not find_by_kid()."""
+    from jwt import PyJWKSet
+
+    assert not hasattr(PyJWKSet.from_dict, "find_by_kid")
+    jwk_set = type("FakeSet", (), {"__getitem__": lambda self, k: "ok"})()
+    assert jwk_set["kid-test"] == "ok"
+
+
 def test_jwt_oauth_state_roundtrip():
     verifier = "v" * 48
     token = go._encode_oauth_state(verifier, "https://app.example.com")

@@ -13,6 +13,7 @@ from app.config import (
     AUTH_OTP_REQUEST_PER_EMAIL,
     NEXUS_FRONTEND_URL,
     TELEGRAM_BOT_USERNAME,
+    email_auth_enabled,
     google_oauth_configured,
     telegram_bot_enabled,
     telegram_login_domain,
@@ -34,7 +35,7 @@ from app.schemas import (
     UserRegister,
 )
 from app.security import create_access_token, get_current_user
-from app.services.auth_session import ensure_paid_subscription_polza, issue_tokens_and_setup
+from app.services.auth_session import issue_tokens_and_setup
 from app.services.auth_rate_limit import RateLimitExceeded
 from app.services.email_login import request_login_code, verify_login_code
 from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
@@ -120,6 +121,7 @@ def _profile_payload(user: UserDB, db: Session) -> dict:
         "topup_balance_usd": balance_usd,
         "topup_balance_rub": usd_to_rub(balance_usd, rate),
         "period_end": quota.get("period_end"),
+        "period_expired": bool(quota.get("period_expired")),
         "has_polza_key": user_has_polza_key(user),
         "polza_connect_required": bool(getattr(user, "polza_connect_required", 0)),
         "ai_enabled": tier_allows_ai(tier)
@@ -204,10 +206,14 @@ async def login(payload: UserLogin, request: Request, db: Session = Depends(get_
 def auth_config():
     from app.config import GOOGLE_REDIRECT_URI, oauth_allowed_redirect_bases, redis_persistence_enabled
 
+    email_on = email_auth_enabled()
     return AuthConfigResponse(
         google_oauth_enabled=google_oauth_configured(),
-        telegram_auth_enabled=telegram_bot_enabled(),
-        telegram_bot_username=(TELEGRAM_BOT_USERNAME or None) if telegram_bot_enabled() else None,
+        email_auth_enabled=email_on,
+        telegram_auth_enabled=telegram_bot_enabled() and email_on,
+        telegram_bot_username=(TELEGRAM_BOT_USERNAME or None)
+        if telegram_bot_enabled() and email_on
+        else None,
         telegram_login_domain=telegram_login_domain() if telegram_bot_enabled() else None,
         otp_resend_cooldown_sec=60,
         otp_email_window_sec=AUTH_OTP_REQUEST_EMAIL_WINDOW_SEC,
@@ -224,6 +230,11 @@ async def email_request_code(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    if not email_auth_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="Вход по email отключён. Используйте «Продолжить с Google».",
+        )
     try:
         return await request_login_code(db, str(payload.email), _client_ip(request))
     except RateLimitExceeded as e:
@@ -240,6 +251,11 @@ async def email_request_code(
 
 @router.post("/email/verify-code", response_model=TokenResponse)
 async def email_verify_code(payload: EmailVerifyCode, db: Session = Depends(get_db)):
+    if not email_auth_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="Вход по email отключён. Используйте «Продолжить с Google».",
+        )
     try:
         return await verify_login_code(db, str(payload.email), payload.code)
     except ValueError as e:
@@ -377,6 +393,16 @@ async def email_bind_verify(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+@router.post("/logout", response_model=MessageResponse)
+def logout_session(
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    current_user.refresh_token = None
+    db.commit()
+    return {"message": "ok"}
+
+
 @router.post("/refresh", response_model=TokenResponse)
 def refresh_session(payload: RefreshRequest, db: Session = Depends(get_db)):
     user = db.query(UserDB).filter(UserDB.refresh_token == payload.refresh_token).first()
@@ -406,9 +432,26 @@ async def repair_polza_key(
             status_code=403,
             detail="Облачный ИИ доступен только после оплаты платного тарифа.",
         )
-    from app.services.polza import provision_polza_for_user, user_has_polza_key
+    from app.services.invoice_pool import get_user_period_pool_usd
+    from app.services.polza import (
+        provision_polza_for_user,
+        sync_polza_key_limit_after_payment,
+        user_has_polza_key,
+    )
+    from app.tiers import tier_monthly_cap
 
-    ok = await provision_polza_for_user(current_user, db, force=True)
+    pool_usd = float(get_user_period_pool_usd(db, current_user) or tier_monthly_cap(tier))
+    pool_rub = usd_to_rub(pool_usd, get_usd_rub_rate_sync())
+
+    if user_has_polza_key(current_user):
+        ok = await sync_polza_key_limit_after_payment(current_user, pool_rub=pool_rub)
+        if ok:
+            db.commit()
+            db.refresh(current_user)
+            return {"status": "ok", "has_polza_key": True}
+        ok = await provision_polza_for_user(current_user, db, pool_rub=pool_rub, force=True)
+    else:
+        ok = await provision_polza_for_user(current_user, db, pool_rub=pool_rub, force=False)
     db.refresh(current_user)
     if not ok:
         raise HTTPException(
@@ -427,7 +470,5 @@ async def get_profile(
         await ensure_testing_subscription(db, current_user, tier=current_user.subscription_tier or "ULTRA")
     else:
         await enforce_paid_subscription(db, current_user, trigger="profile")
-        db.refresh(current_user)
-        await ensure_paid_subscription_polza(db, current_user)
         db.refresh(current_user)
     return _profile_payload(current_user, db)

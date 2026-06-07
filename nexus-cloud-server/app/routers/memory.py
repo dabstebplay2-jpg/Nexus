@@ -137,9 +137,13 @@ async def synthesize_user_memory(
     try:
         await apply_usage_billing(db, current_user, model=model, usage=data.get("usage"))
         db.commit()
-    except Exception:
+    except Exception as exc:
         logger.exception("memory synthesize billing")
         db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Не удалось списать использование памяти. Проверьте подписку и баланс.",
+        ) from exc
 
     choice = data.get("choices", [{}])[0]
     reply = (choice.get("message", {}) or {}).get("content", "") or ""

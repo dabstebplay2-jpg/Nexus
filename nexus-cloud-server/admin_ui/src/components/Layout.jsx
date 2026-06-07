@@ -18,7 +18,7 @@ const NAV = [
   { id: 'transactions', label: 'Транзакции', icon: Receipt },
   { id: 'invoices', label: 'Счета', icon: FileText },
   { id: 'support', label: 'Поддержка', icon: MessageSquare },
-  { id: 'routerai', label: 'Polza.ai', icon: Zap },
+  { id: 'routerai', label: 'ИИ-провайдеры', icon: Zap },
   { id: 'audit', label: 'Аудит', icon: ScrollText },
   { id: 'logs', label: 'Логи', icon: Server },
 ];

@@ -48,7 +48,10 @@ async def check_topup_status(invoice_id: str):
 
 @router.post("/subscribe")
 async def create_subscription(payload: SubscribePayload):
-    res = await cloud_request("POST", "/v1/billing/subscribe", json_data={"tier": payload.tier})
+    body = {"tier": payload.tier}
+    if payload.promo_code:
+        body["promo_code"] = payload.promo_code
+    res = await cloud_request("POST", "/v1/billing/subscribe", json_data=body)
     if res.status_code == 401:
         raise HTTPException(status_code=401, detail="Войдите в аккаунт.")
     if res.status_code not in (200, 201):
@@ -58,6 +61,23 @@ async def create_subscription(payload: SubscribePayload):
             detail = res.text or "Ошибка облачного сервера"
         if res.status_code >= 500:
             detail = "Ошибка сервера при создании счёта. Перезапустите cloud (8080) и попробуйте снова."
+        raise HTTPException(status_code=res.status_code, detail=detail)
+    return res.json()
+
+
+@router.get("/promo")
+async def billing_promo_catalog():
+    res = await cloud_request("GET", "/v1/billing/promo")
+    if res.status_code != 200:
+        raise HTTPException(status_code=res.status_code, detail="Не удалось загрузить промокоды")
+    return res.json()
+
+
+@router.post("/promo/redeem")
+async def billing_promo_redeem(body: dict):
+    res = await cloud_request("POST", "/v1/billing/promo/redeem", json_data=body)
+    if res.status_code != 200:
+        detail = res.json().get("detail", res.text) if res.content else res.text
         raise HTTPException(status_code=res.status_code, detail=detail)
     return res.json()
 

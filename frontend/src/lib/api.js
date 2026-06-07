@@ -21,7 +21,8 @@ export const CLOUD_PUBLIC_URL = cloudPublicUrlFromEnv();
 /** Прямой Render — fallback если /api на Vercel недоступен (404) */
 export const CLOUD_FALLBACK_URL = (
   import.meta.env.VITE_CLOUD_FALLBACK_URL ||
-  'https://nexus-cloud-ee17.onrender.com'
+  import.meta.env.VITE_CLOUD_URL ||
+  'https://nexus-cloud-bxcc.onrender.com'
 ).replace(/\/$/, '');
 
 export const DIRECT_CLOUD_API_BASE = `${CLOUD_FALLBACK_URL}/v1`;

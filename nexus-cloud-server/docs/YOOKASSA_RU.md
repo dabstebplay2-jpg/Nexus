@@ -5,7 +5,7 @@
 1. [yookassa.ru](https://yookassa.ru) → регистрация магазина (ИП/ООО).
 2. **Интеграция → Ключи API** — скопируйте `shopId` и **секретный ключ**.
 3. **Интеграция → HTTP-уведомления**:
-   - URL: `https://nexus-cloud-ee17.onrender.com/v1/billing/yookassa/webhook`
+   - URL: `https://nexus-cloud-bxcc.onrender.com/v1/billing/yookassa/webhook`
    - События: `payment.succeeded` (и при необходимости `payment.waiting_for_capture`)
 4. Тестовый магазин — для проверки без реальных денег (отдельные ключи).
 
@@ -14,7 +14,7 @@
 ```env
 YOOKASSA_SHOP_ID=123456
 YOOKASSA_SECRET_KEY=live_...
-NEXUS_FRONTEND_URL=https://frontend-henna-tau-19.vercel.app
+NEXUS_FRONTEND_URL=https://nexus-zeta-ruby-12.vercel.app
 YOOKASSA_RETURN_PATH=/pricing
 NEXUS_BILLING_TEST_MODE=false
 ```

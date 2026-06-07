@@ -21,11 +21,17 @@ export default function LegalFooter({ className = '' }) {
         </div>
         <nav className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs">
           <DiscordInviteLink className="text-indigo-300/90 hover:text-indigo-200" />
+          <Link to="/ide/lite" className="hover:text-white transition-colors">
+            IDE Web
+          </Link>
+          <Link to="/ide" className="hover:text-white transition-colors">
+            Скачать IDE
+          </Link>
           <Link to="/pricing" className="hover:text-white transition-colors">
             Тарифы
           </Link>
           <Link to="/updates" className="hover:text-white transition-colors">
-            Что нового
+            Изменения
           </Link>
           <Link to="/requisites" className="hover:text-white transition-colors">
             Реквизиты

@@ -64,6 +64,7 @@ export default function DashboardPage() {
     { label: 'Платных', value: summary?.users_paid ?? '—' },
     { label: 'MRR (оценка)', value: summary ? `$${summary.mrr_usd_estimate}` : '—' },
     { label: 'TG привязано', value: summary?.users_telegram_linked ?? '—' },
+    { label: 'OpenRouter ключей', value: summary?.users_with_openrouter_key ?? '—' },
     { label: 'Счетов pending', value: summary?.invoices_pending ?? '—' },
   ];
 

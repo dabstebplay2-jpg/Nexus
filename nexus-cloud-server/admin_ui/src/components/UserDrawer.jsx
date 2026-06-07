@@ -5,6 +5,25 @@ import { useToast } from '../context/ToastContext';
 
 const TIERS = ['FREE', 'HOBBY', 'STANDARD', 'PRO', 'ULTRA'];
 
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return iso.slice(0, 10);
+}
+
+function polzaLabel(u) {
+  if (!u?.has_polza_key) return 'нет';
+  if (u.polza_ready) return 'активен';
+  return 'есть, ждёт тариф/квоту';
+}
+
+function openrouterLabel(u) {
+  if (u?.openrouter_ready) return 'активен (per-user)';
+  if (u?.has_openrouter_key) return 'есть ключ';
+  if (u?.openrouter_uses_shared_key) return 'общий ключ';
+  if (u?.subscription_tier === 'FREE') return 'нет (выдастся при чате)';
+  return '—';
+}
+
 export default function UserDrawer({ userId, onClose, onUpdated }) {
   const { push } = useToast();
   const [detail, setDetail] = useState(null);
@@ -64,6 +83,7 @@ export default function UserDrawer({ userId, onClose, onUpdated }) {
         balance_usd: balance !== '' ? Number(balance) : undefined,
         new_password: password.length >= 6 ? password : undefined,
         refresh_polza: extra.refreshPolza || false,
+        refresh_openrouter: extra.refreshOpenrouter || false,
       };
       await adminFetch(`/users/${userId}`, { method: 'PUT', body: JSON.stringify(body) });
       push('Сохранено');
@@ -128,12 +148,6 @@ export default function UserDrawer({ userId, onClose, onUpdated }) {
 
   if (!userId) return null;
 
-  const polzaStatus = u?.has_polza_key
-    ? u.polza_ready
-      ? 'активен'
-      : 'есть, ждёт тариф/квоту'
-    : 'нет';
-
   return (
     <>
       <div className="drawer-backdrop" onClick={onClose} />
@@ -150,10 +164,40 @@ export default function UserDrawer({ userId, onClose, onUpdated }) {
               ID {u.id} · {u.subscription_tier}
               {u.is_tg_shadow ? ' · TG-shadow' : ''}
             </p>
-            <p className="muted" style={{ fontSize: '0.85rem', marginBottom: '1rem' }}>
-              Polza: <strong>{polzaStatus}</strong>
-              {u.polza_key_preview ? ` · ${u.polza_key_preview}` : ''}
-            </p>
+
+            <h3 style={{ fontSize: '0.9rem', marginTop: '0.75rem' }}>ИИ-ключи</h3>
+            <div className="muted" style={{ fontSize: '0.85rem', marginBottom: '0.75rem', lineHeight: 1.5 }}>
+              <div>
+                <strong>Polza:</strong> {polzaLabel(u)}
+                {u.polza_key_preview ? ` · ${u.polza_key_preview}` : ''}
+                {u.polza_key_id ? ` · id ${u.polza_key_id}` : ''}
+              </div>
+              <div>
+                <strong>OpenRouter:</strong> {openrouterLabel(u)}
+                {u.openrouter_key_hash_preview ? ` · ${u.openrouter_key_hash_preview}` : ''}
+                {u.openrouter_key_created_at
+                  ? ` · создан ${fmtDate(u.openrouter_key_created_at)}`
+                  : ''}
+              </div>
+            </div>
+
+            <h3 style={{ fontSize: '0.9rem' }}>Квота и подписка</h3>
+            <div className="muted" style={{ fontSize: '0.85rem', marginBottom: '0.75rem', lineHeight: 1.5 }}>
+              <div>
+                Квота:{' '}
+                {u.quota_enabled
+                  ? `$${Number(u.monthly_spent_usd || 0).toFixed(2)} / $${Number(u.monthly_cap_usd || 0).toFixed(2)} (осталось $${Number(u.monthly_remaining_usd || 0).toFixed(2)})`
+                  : 'выключена'}
+              </div>
+              <div>
+                Период: {fmtDate(u.subscription_period_start)} — {fmtDate(u.subscription_period_end)}
+              </div>
+              <div>
+                Регистрация: {fmtDate(u.created_at)}
+                {u.email_verified ? ' · email подтверждён' : ' · email не подтверждён'}
+              </div>
+              {u.auth_methods ? <div>Способы входа: {u.auth_methods}</div> : null}
+            </div>
 
             <div className="tier-row">
               {TIERS.map((t) => (
@@ -189,6 +233,14 @@ export default function UserDrawer({ userId, onClose, onUpdated }) {
               <button type="button" className="btn" disabled={busy} onClick={() => saveUser({ refreshPolza: true })}>
                 Обновить ключ Polza
               </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={() => saveUser({ refreshOpenrouter: true })}
+              >
+                Обновить ключ OpenRouter
+              </button>
             </div>
 
             <p className="muted" style={{ fontSize: '0.8rem' }}>
@@ -211,6 +263,32 @@ export default function UserDrawer({ userId, onClose, onUpdated }) {
               ) : null}
             </div>
 
+            {detail.invoices?.length ? (
+              <>
+                <h3 style={{ fontSize: '0.9rem', marginTop: '1rem' }}>Счета</h3>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>RUB</th>
+                      <th>Статус</th>
+                      <th>Дата</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.invoices.slice(0, 8).map((inv) => (
+                      <tr key={inv.id}>
+                        <td>{inv.id}</td>
+                        <td>{inv.amount_rub}</td>
+                        <td>{inv.status}</td>
+                        <td>{fmtDate(inv.created_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            ) : null}
+
             {detail.transactions?.length ? (
               <>
                 <h3 style={{ fontSize: '0.9rem', marginTop: '1rem' }}>Транзакции</h3>
@@ -227,7 +305,7 @@ export default function UserDrawer({ userId, onClose, onUpdated }) {
                       <tr key={t.id}>
                         <td>{t.tx_type}</td>
                         <td>{t.amount_usd}</td>
-                        <td>{(t.created_at || '').slice(0, 10)}</td>
+                        <td>{fmtDate(t.created_at)}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -2,7 +2,7 @@
   "name": "nexus-welcome",
   "displayName": "Nexus Welcome",
   "description": "First-run guide and recommended extensions",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "nexus",
   "license": "MIT",
   "engines": { "vscode": "^1.85.0" },
@@ -34,11 +34,11 @@
             "id": "signIn",
             "title": "Войти в аккаунт",
             "description": "Подключите облако Nexus для ИИ и подписок.",
-            "completionEvents": ["onCommand:nexus.signIn"],
+            "completionEvents": ["onCommand:nexus.signInGoogle"],
             "media": {
               "image": "media/brand/logo/brand.png",
               "altText": "Nexus",
-              "markdown": "Команда палитры: **Nexus: Sign In**"
+              "markdown": "Команда палитры: **Nexus: Sign In with Google**"
             }
           },
           {

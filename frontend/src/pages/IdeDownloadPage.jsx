@@ -24,7 +24,7 @@ const DESKTOP_URL =
 const RELEASES_PAGE = 'https://github.com/nexus-ide/nexus-ide/releases/latest';
 
 const NEXUS_AI_ID = 'nexus.nexus-ai';
-const NEXUS_AI_VERSION = import.meta.env.VITE_NEXUS_AI_VERSION || '1.7.0';
+const NEXUS_AI_VERSION = import.meta.env.VITE_NEXUS_AI_VERSION || '1.8.0';
 
 /** Прямая ссылка на VSIX (стабильный URL на том же домене, что и сайт). */
 const NEXUS_AI_VSIX_URL =
@@ -33,7 +33,7 @@ const NEXUS_AI_VSIX_URL =
 const NEXUS_AI_PAGE_URL = '/ide/extension/nexus-ai';
 
 const BUNDLED = [
-  { id: 'nexus.nexus-auth', name: 'Nexus Account', desc: 'Вход (Google / код на email), токены, профиль.' },
+  { id: 'nexus.nexus-auth', name: 'Nexus Account', desc: 'Вход через Google, токены, профиль и синхронизация с сайтом.' },
   {
     id: 'nexus.nexus-billing',
     name: 'Nexus Billing',
@@ -58,7 +58,7 @@ const AI_FEATURES = [
 const INSTALL_STEPS = [
   'Скачайте VSIX Nexus AI (кнопка ниже) или установите Nexus IDE Desktop со встроенными расширениями.',
   'VSCodium / VS Code: Extensions → ⋯ → Install from VSIX… → выберите файл.',
-  'Войдите: палитра → Nexus: Sign In (тот же аккаунт, что на сайте).',
+  'Войдите: палитра → Nexus: Sign In with Google (тот же аккаунт, что на сайте).',
   'Панель Nexus → AI Chat: модель, при необходимости ⚡ Агент.',
 ];
 
@@ -88,20 +88,53 @@ export default function IdeDownloadPage() {
     <AppShell hideHistory>
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar relative z-10 w-full overscroll-y-contain">
         <div className="max-w-3xl mx-auto px-4 py-10 sm:py-12 pb-16">
-          <div className="text-center mb-10">
+          <div className="text-center mb-8">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-[11px] font-semibold text-teal-300 mb-4">
               <Package size={14} />
-              Расширения Nexus
+              Nexus IDE
             </span>
             <h1 className="text-3xl sm:text-4xl font-semibold text-[var(--nx-text)] mb-3">
-              Расширение для IDE
+              IDE Web или Desktop
             </h1>
             <p className="text-[var(--nx-muted)] text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
-              Облачный ИИ, вход и тарифы — в боковой панели VSCodium. Тот же чат и агент, что на сайте.
+              Браузер — быстрый старт с демо-проектом и Agent. Desktop — полный LSP, OpenVSX и терминал.
             </p>
           </div>
 
-          <section className="rounded-2xl border border-teal-500/35 bg-teal-500/5 p-5 mb-8">
+          <div className="grid sm:grid-cols-2 gap-4 mb-10">
+            <Link
+              to="/ide/lite"
+              className="group rounded-2xl border-2 border-teal-500/40 bg-teal-500/10 p-6 text-left hover:border-teal-400/60 hover:bg-teal-500/15 transition-colors"
+            >
+              <div className="flex items-center gap-2 text-teal-300 font-semibold mb-2">
+                <Code2 size={22} />
+                Открыть IDE Web
+              </div>
+              <p className="text-xs text-[var(--nx-muted)] leading-relaxed mb-4">
+                Редактор и Agent в браузере. Демо-проект на проде, полный workspace с локальным backend.
+              </p>
+              <span className="inline-flex items-center gap-1 text-sm font-semibold text-teal-200 group-hover:gap-2 transition-all">
+                Запустить <ArrowRight size={16} />
+              </span>
+            </Link>
+            <a
+              href="#download-vsix"
+              className="group rounded-2xl border border-[var(--nx-border)] bg-[var(--nx-surface)] p-6 text-left hover:border-[var(--nx-border)] hover:bg-[var(--nx-surface-hover)] transition-colors"
+            >
+              <div className="flex items-center gap-2 text-[var(--nx-text)] font-semibold mb-2">
+                <Download size={22} className="text-teal-400" />
+                Скачать Desktop / VSIX
+              </div>
+              <p className="text-xs text-[var(--nx-muted)] leading-relaxed mb-4">
+                VSCodium + расширения Nexus: LSP, отладчик, OpenVSX, реальный терминал.
+              </p>
+              <span className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--nx-muted)] group-hover:text-[var(--nx-text)] group-hover:gap-2 transition-all">
+                К загрузкам <ArrowRight size={16} />
+              </span>
+            </a>
+          </div>
+
+          <section id="download-vsix" className="rounded-2xl border border-teal-500/35 bg-teal-500/5 p-5 mb-8 scroll-mt-8">
             <h2 className="text-base font-semibold text-[var(--nx-text)] mb-1 flex items-center gap-2">
               <Download size={18} className="text-teal-400" />
               Nexus AI · v{NEXUS_AI_VERSION}

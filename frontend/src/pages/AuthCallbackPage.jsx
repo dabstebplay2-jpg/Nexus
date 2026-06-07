@@ -12,7 +12,7 @@ const OAUTH_ERROR_MESSAGES = {
   oauth_token:
     'Ошибка обмена кода с Google. Проверьте GOOGLE_CLIENT_SECRET и GOOGLE_REDIRECT_URI на Render (должны совпадать с Google Console).',
   oauth_redirect:
-    'Неверный redirect URI. В Google Cloud Console → OAuth client → Authorized redirect URIs добавьте точно: https://frontend-henna-tau-19.vercel.app/api/auth/google/callback (и при необходимости https://nexus-cloud-ee17.onrender.com/v1/auth/google/callback). На Render переменная GOOGLE_REDIRECT_URI должна совпадать с первым URL.',
+    'Неверный redirect URI. В Google Cloud Console → OAuth client → Authorized redirect URIs добавьте точно: https://nexus-zeta-ruby-12.vercel.app/api/auth/google/callback. На Render переменная GOOGLE_REDIRECT_URI должна совпадать с этим URL.',
   oauth_client:
     'Неверный Client ID или Client Secret на сервере. Обновите GOOGLE_CLIENT_ID и GOOGLE_CLIENT_SECRET на Render.',
   oauth_jwt: 'Не удалось проверить токен Google. Попробуйте снова через минуту.',
@@ -162,7 +162,7 @@ export default function AuthCallbackPage() {
 
   if (desktopUri) {
     return (
-      <div className="min-h-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg">
+      <div className="nx-dvh-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg">
         <p className="text-zinc-300 text-sm leading-relaxed">
           Вход через Google выполнен. Если VSCodium не открылся сам, нажмите кнопку ниже и подтвердите открытие
           приложения.
@@ -180,7 +180,7 @@ export default function AuthCallbackPage() {
 
   if (mergeOffer) {
     return (
-      <div className="min-h-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg">
+      <div className="nx-dvh-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg">
         <h1 className="text-lg text-zinc-100 font-medium">Привязать Telegram?</h1>
         <p className="text-zinc-400 text-sm leading-relaxed">
           Вы уже вошли как <span className="text-zinc-200">{mergeOffer.emailLabel}</span>. Ссылка из бота ведёт на
@@ -210,7 +210,7 @@ export default function AuthCallbackPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg">
+      <div className="nx-dvh-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg">
         <p className="text-red-400 text-sm leading-relaxed">{error}</p>
         <Link to="/?panel=auth" className="text-cyan-400 hover:underline">
           Вернуться к входу
@@ -220,7 +220,7 @@ export default function AuthCallbackPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#07070a] flex items-center justify-center text-cyan-400">
+    <div className="nx-dvh-screen bg-[#07070a] flex items-center justify-center text-cyan-400">
       <RefreshCw className="animate-spin mr-2" size={24} />
       <span>Завершаем вход…</span>
     </div>

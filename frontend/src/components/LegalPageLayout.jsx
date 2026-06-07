@@ -5,7 +5,7 @@ import LegalFooter from './LegalFooter';
 
 export default function LegalPageLayout({ title, children }) {
   return (
-    <div className="relative min-h-screen bg-[#07070a] text-zinc-200 flex flex-col">
+    <div className="relative nx-dvh-screen bg-[#07070a] text-zinc-200 flex flex-col">
       <SiteNav />
       <main className="relative z-10 flex-1">
         <div className="mx-auto max-w-3xl px-6 py-12">

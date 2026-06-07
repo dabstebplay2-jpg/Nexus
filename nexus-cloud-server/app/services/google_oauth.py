@@ -168,9 +168,10 @@ async def _verify_id_token_jwks(id_token: str) -> dict:
     if not kid:
         raise ValueError("id_token без kid")
     jwks = await _load_google_jwks()
-    signing = PyJWKSet.from_dict(jwks).find_by_kid(kid)
-    if signing is None:
-        raise ValueError(f"нет ключа JWKS для kid={kid}")
+    try:
+        signing = PyJWKSet.from_dict(jwks)[kid]
+    except KeyError as exc:
+        raise ValueError(f"нет ключа JWKS для kid={kid}") from exc
     return jwt.decode(
         id_token,
         signing.key,

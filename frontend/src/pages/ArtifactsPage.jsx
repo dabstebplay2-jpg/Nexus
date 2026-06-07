@@ -36,7 +36,7 @@ export default function ArtifactsPage() {
 
   return (
     <AppShell hideHistory onOpenPricing={() => {}}>
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <div className="px-4 sm:px-6 py-6 sm:py-8 border-b border-[var(--nx-border)]">
           <h1 className="text-2xl font-semibold">Артефакты</h1>
           <p className="text-sm text-[var(--nx-muted)] mt-1">
@@ -64,7 +64,7 @@ export default function ArtifactsPage() {
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+        <div className="nx-scroll-region custom-scrollbar px-4 sm:px-6 py-6">
           {!artifactsReady ? (
             <p className="text-sm text-[var(--nx-muted)]">Загрузка…</p>
           ) : filtered.length === 0 ? (
@@ -85,7 +85,7 @@ export default function ArtifactsPage() {
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
               {filtered.map((art) => {
                 const Icon = kindIcon(art.kind);
                 const preview = artifactPreviewSrc(art);
@@ -97,7 +97,7 @@ export default function ArtifactsPage() {
                 return (
                   <article
                     key={art.id}
-                    className="nx-glass rounded-2xl border border-[var(--nx-border)] overflow-hidden flex flex-col"
+                    className="nx-glass rounded-xl sm:rounded-2xl border border-[var(--nx-border)] overflow-hidden flex flex-col"
                   >
                     <div className="aspect-[4/3] bg-black/30 flex items-center justify-center relative">
                       {preview ? (
@@ -107,7 +107,7 @@ export default function ArtifactsPage() {
                           className="w-full h-full object-contain"
                         />
                       ) : (
-                        <Icon size={32} className="text-[var(--nx-muted)]" />
+                        <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-[var(--nx-muted)]" />
                       )}
                       <button
                         type="button"
@@ -118,15 +118,15 @@ export default function ArtifactsPage() {
                         <Trash2 size={14} />
                       </button>
                     </div>
-                    <div className="p-3 flex-1 flex flex-col gap-2">
-                      <h3 className="text-sm font-medium line-clamp-2">{art.title}</h3>
-                      <p className="text-xs text-[var(--nx-muted)]">
+                    <div className="p-2 sm:p-3 flex-1 flex flex-col gap-1.5 sm:gap-2">
+                      <h3 className="text-xs sm:text-sm font-medium line-clamp-2">{art.title}</h3>
+                      <p className="text-[10px] sm:text-xs text-[var(--nx-muted)]">
                         {new Date(art.createdAt || Date.now()).toLocaleString('ru-RU')}
                       </p>
                       {art.sourceChatId ? (
                         <Link
                           to="/"
-                          className="text-xs text-cyan-400/90 hover:text-cyan-300 truncate"
+                          className="text-[10px] sm:text-xs text-cyan-400/90 hover:text-cyan-300 truncate"
                         >
                           Из чата
                         </Link>
@@ -136,13 +136,13 @@ export default function ArtifactsPage() {
                           href={openHref}
                           target="_blank"
                           rel="noreferrer"
-                          className="mt-auto inline-flex items-center gap-1 text-xs text-zinc-300 hover:text-white"
+                          className="mt-auto inline-flex items-center gap-1 text-[10px] sm:text-xs text-zinc-300 hover:text-white"
                         >
                           <ExternalLink size={12} />
                           Открыть
                         </a>
                       ) : art.kind === 'code' && art.content?.code ? (
-                        <pre className="text-[10px] text-zinc-500 line-clamp-4 font-mono">
+                        <pre className="text-[9px] sm:text-[10px] text-zinc-500 line-clamp-4 font-mono">
                           {art.content.code}
                         </pre>
                       ) : null}

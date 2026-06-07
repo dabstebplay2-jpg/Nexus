@@ -108,10 +108,24 @@ OPENROUTER_HTTP_REFERER = (
 OPENROUTER_APP_TITLE = (os.environ.get("OPENROUTER_APP_TITLE") or "Nexus").strip()
 NEXUS_FREE_OPENROUTER_DAILY_LIMIT = int(os.environ.get("NEXUS_FREE_OPENROUTER_DAILY_LIMIT", "100") or "100")
 NEXUS_FREE_OPENROUTER_RPM = int(os.environ.get("NEXUS_FREE_OPENROUTER_RPM", "15") or "15")
+OPENROUTER_MANAGEMENT_API_KEY = (os.environ.get("OPENROUTER_MANAGEMENT_API_KEY") or "").strip()
+_OPENROUTER_KEY_LIMIT_RAW = (os.environ.get("NEXUS_FREE_OPENROUTER_KEY_LIMIT_USD") or "").strip()
+NEXUS_FREE_OPENROUTER_KEY_LIMIT_USD: float | None = (
+    float(_OPENROUTER_KEY_LIMIT_RAW) if _OPENROUTER_KEY_LIMIT_RAW else None
+)
+OPENROUTER_FREE_KEY_LIMIT_RESET = (
+    (os.environ.get("OPENROUTER_FREE_KEY_LIMIT_RESET") or "daily").strip().lower() or None
+)
+if OPENROUTER_FREE_KEY_LIMIT_RESET not in (None, "daily", "weekly", "monthly"):
+    OPENROUTER_FREE_KEY_LIMIT_RESET = "daily"
+
+
+def openrouter_management_enabled() -> bool:
+    return bool(OPENROUTER_MANAGEMENT_API_KEY)
 
 
 def openrouter_free_tier_enabled() -> bool:
-    return bool(OPENROUTER_API_KEY)
+    return bool(OPENROUTER_API_KEY) or openrouter_management_enabled()
 
 
 # Только локальная разработка: кнопка «подтвердить оплату» без ЮKassa. В проде — false.
@@ -272,6 +286,16 @@ OAUTH_STATE_TTL_SEC = int(os.environ.get("OAUTH_STATE_TTL_SEC", "600"))
 
 def google_oauth_configured() -> bool:
     return bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and GOOGLE_REDIRECT_URI)
+
+
+def email_auth_enabled() -> bool:
+    """OTP на email. По умолчанию выкл., если настроен Google OAuth (прод без Resend-домена)."""
+    raw = (os.environ.get("NEXUS_EMAIL_AUTH_ENABLED") or "").strip().lower()
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return not google_oauth_configured()
 
 
 # Connector OAuth (отдельно от входа Google)

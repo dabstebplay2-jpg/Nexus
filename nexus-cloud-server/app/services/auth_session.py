@@ -11,28 +11,12 @@ from sqlalchemy.orm import Session
 from app.config import is_testing_mode
 from app.database import UserDB
 from app.security import create_access_token
-from app.services.polza import ensure_polza_key_for_user, suspend_polza_for_user, user_has_polza_key
-from app.services.subscription_guard import enforce_paid_subscription, user_has_active_paid_subscription
+from app.services.polza import suspend_polza_for_user
+from app.services.subscription_guard import enforce_paid_subscription
 from app.services.testing_mode import ensure_testing_subscription
 from app.tiers import normalize_tier, tier_requires_payment
 
 logger = logging.getLogger(__name__)
-
-
-async def ensure_paid_subscription_polza(db: Session, user: UserDB) -> None:
-    """После оплаты: автовыдача ключа Polza (MCP), без действий пользователя."""
-    tier = normalize_tier(user.subscription_tier)
-    if not tier_requires_payment(tier):
-        return
-    if not user_has_active_paid_subscription(db, user):
-        return
-    if not user_has_polza_key(user):
-        await ensure_polza_key_for_user(db, user)
-
-
-async def ensure_paid_subscription_routerai(db: Session, user: UserDB) -> None:
-    """Legacy alias."""
-    await ensure_paid_subscription_polza(db, user)
 
 
 def _add_auth_method(user: UserDB, method: str) -> None:
@@ -55,9 +39,7 @@ async def issue_tokens_and_setup(db: Session, user: UserDB, *, mark_email_verifi
         if not await enforce_paid_subscription(db, user, trigger="auth_session"):
             tier = "FREE"
         db.refresh(user)
-        if tier_requires_payment(tier) and user_has_active_paid_subscription(db, user):
-            await ensure_paid_subscription_polza(db, user)
-        elif not tier_requires_payment(tier):
+        if not tier_requires_payment(tier):
             await suspend_polza_for_user(user, db)
 
     refresh_token = "ref_" + str(uuid.uuid4())

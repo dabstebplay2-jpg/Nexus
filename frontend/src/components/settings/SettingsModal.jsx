@@ -55,10 +55,10 @@ const SECTIONS = [
 
 const HELP_LINKS = [
   { label: 'Тарифы и оплата', to: '/pricing' },
-  { label: 'IDE в браузере (Lite)', to: '/ide/lite' },
-  { label: 'Расширение для IDE', to: '/ide' },
+  { label: 'IDE Web', to: '/ide/lite' },
+  { label: 'Скачать IDE', to: '/ide' },
   { label: 'Реквизиты', to: '/requisites' },
-  { label: 'Что нового', to: '/updates' },
+  { label: 'Изменения', to: '/updates' },
   { label: 'Оферта', to: '/offer' },
   { label: 'Конфиденциальность', to: '/privacy' },
 ];
@@ -512,10 +512,7 @@ function SectionUsage() {
   const topupRub = p?.topup_balance_rub ?? (p?.balance_rub ?? 0);
   const tier = (p?.subscription_tier || 'FREE').toUpperCase();
   const needsPolzaRepair = tier !== 'FREE' && !p?.has_polza_key;
-  const hasPool =
-    (p?.monthly_cap_rub ?? 0) > 0 ||
-    (p?.daily_cap_rub ?? 0) > 0 ||
-    topupRub > 0;
+  const hasPool = (p?.monthly_cap_rub ?? 0) > 0 || topupRub > 0;
 
   const handleRepairPolza = async () => {
     setRepairBusy(true);
@@ -543,10 +540,10 @@ function SectionUsage() {
             desc="Лимит подписки на 30 дней — ключ ИИ выдаётся Nexus автоматически после оплаты"
           >
             <span className="text-sm font-semibold tabular-nums">
-              {formatBalanceRub(p.monthly_remaining_rub ?? p.daily_remaining_rub ?? 0)}
+              {formatBalanceRub(p.monthly_remaining_rub ?? 0)}
               <span className="text-[var(--nx-muted)] font-normal">
                 {' '}
-                / {formatBalanceRub(p.monthly_cap_rub ?? p.daily_cap_rub)}
+                / {formatBalanceRub(p.monthly_cap_rub ?? 0)}
               </span>
             </span>
           </SettingsRow>
@@ -566,7 +563,7 @@ function SectionUsage() {
               {formatBalanceRub(p.total_remaining_rub ?? (p.monthly_remaining_rub ?? 0) + topupRub)}
             </span>
           </SettingsRow>
-          {(p.monthly_remaining_rub ?? p.daily_remaining_rub ?? 0) <= 0 && topupRub <= 0 && (
+          {(p.monthly_remaining_rub ?? 0) <= 0 && topupRub <= 0 && (
             <button
               type="button"
               className="settings-btn settings-btn--primary w-full mt-2"
@@ -577,8 +574,19 @@ function SectionUsage() {
             </button>
           )}
           {p.period_end && (
-            <SettingsRow label="Период до" desc="Дата сброса или продления">
-              <span className="text-sm text-[var(--nx-muted)]">{p.period_end}</span>
+            <SettingsRow
+              label={p.period_expired ? 'Период истёк' : 'Период до'}
+              desc={
+                p.period_expired
+                  ? 'Продлите подписку в «Тарифы» или пополните баланс'
+                  : 'Дата окончания 30-дневного пула подписки'
+              }
+            >
+              <span
+                className={`text-sm ${p.period_expired ? 'text-amber-400' : 'text-[var(--nx-muted)]'}`}
+              >
+                {p.period_end}
+              </span>
             </SettingsRow>
           )}
           <div className="mt-2 rounded-lg border border-[var(--nx-border)] p-3">

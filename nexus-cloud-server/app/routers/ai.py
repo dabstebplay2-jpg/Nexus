@@ -20,7 +20,7 @@ from app.schemas import CloudChatRequest, ResearchRequest, SimpleChatRequest
 from app.security import get_current_user
 from app.services.ai_billing import apply_usage_billing
 from app.services.quota_limits import QuotaLimitExceeded, assert_quota_budget
-from app.services.polza import ensure_polza_key_for_user
+from app.services.polza import user_has_polza_key
 from app.services.subscription_guard import enforce_paid_subscription
 from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
 from app.services.auth_rate_limit import check_rate_limit
@@ -38,6 +38,7 @@ from app.services.web_search_context import (
     web_search_quick,
 )
 from app.services.web_search_agent import run_web_search_session
+from app.services.web_search_gate import resolve_web_search_need
 from app.services.message_builder import (
     build_router_payload,
     extract_message_images,
@@ -52,7 +53,8 @@ from app.services.connector_agent_loop import run_connector_agent_phase
 from app.services.image_materialize import materialize_image_list, materialize_image_url
 from app.services.models_registry import tier_rank
 from app.config import is_testing_mode
-from app.services.openrouter import OpenRouterError, OpenRouterService, require_openrouter_api_key
+from app.services.openrouter import OpenRouterError, OpenRouterService
+from app.services.openrouter_provision import ensure_openrouter_key_for_user, user_has_openrouter_key
 from app.tiers import tier_allows_ai, tier_requires_payment, tier_uses_openrouter_free
 
 router = APIRouter(prefix="/v1/ai", tags=["ai"])
@@ -110,13 +112,10 @@ async def _check_tier_ai_access(user: UserDB, db: Session):
             detail="ИИ доступен только после оплаты подписки (Hobby и выше). Free — без облачного ИИ.",
         )
     if not user_has_polza_key(user):
-        ok = await ensure_polza_key_for_user(db, user)
-        db.refresh(user)
-        if not ok and not user_has_polza_key(user):
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Ключ облачного ИИ создаётся автоматически. Повторите через минуту или напишите в поддержку.",
-            )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ключ облачного ИИ выдаётся после оплаты тарифа. Подождите минуту или нажмите «Восстановить ключ» в настройках.",
+        )
 
 
 def _check_quota_limit(db: Session, user: UserDB):
@@ -137,14 +136,23 @@ def _check_quota_limit(db: Session, user: UserDB):
             ) from exc
         end = info.get("resets_at") or info.get("period_end") or ""
         balance_usd = float(info.get("user_balance_usd") or 0)
+        if info.get("period_expired") or info.get("renewal_required"):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    f"Период подписки закончился{f' ({end})' if end else ''}. "
+                    "Продлите тариф в разделе «Тарифы»"
+                    f"{'' if balance_usd <= 0 else f' или используйте баланс пополнения ({usd_to_rub(balance_usd, rate):.0f} ₽).'}"
+                ),
+            ) from exc
         if balance_usd <= 0:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=(
-                    f"Пул ИИ исчерпан: {usd_to_rub(info['spent_usd'], rate):.0f} ₽ из "
+                    f"Месячный пул ИИ исчерпан: {usd_to_rub(info['spent_usd'], rate):.0f} ₽ из "
                     f"{usd_to_rub(info.get('subscription_cap_usd') or info['cap_usd'], rate):.0f} ₽. "
                     f"Пополните баланс в разделе «Тарифы»"
-                    f"{f' или дождитесь продления {end}.' if end else '.'}"
+                    f"{f' или продлите подписку до {end}.' if end else '.'}"
                 ),
             ) from exc
         raise HTTPException(
@@ -212,10 +220,10 @@ async def _check_model_access(user: UserDB, model: str, *, allow_tools: bool = F
             )
 
 
-def _require_chat_api_key(user: UserDB) -> str:
+async def _require_chat_api_key(user: UserDB, db: Session) -> str:
     if _user_on_free_openrouter(user):
         try:
-            return require_openrouter_api_key()
+            return await ensure_openrouter_key_for_user(user, db)
         except OpenRouterError as e:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
@@ -226,19 +234,39 @@ def _require_chat_api_key(user: UserDB) -> str:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
 
 
-async def _call_openrouter(payload: dict, user: UserDB) -> dict:
-    del user
+def _with_openrouter_user(payload: dict, user: UserDB) -> dict:
+    if not _user_on_free_openrouter(user):
+        return payload
+    body = dict(payload)
+    body["user"] = str(user.id)
+    return body
+
+
+async def _call_openrouter(payload: dict, user: UserDB, db: Session) -> dict:
     try:
-        api_key = require_openrouter_api_key()
+        api_key = await _require_chat_api_key(user, db)
     except OpenRouterError as e:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+    body = _with_openrouter_user(payload, user)
     try:
-        response = await _openrouter.chat_completions(payload, timeout=120.0, api_key=api_key)
+        response = await _openrouter.chat_completions(body, timeout=120.0, api_key=api_key)
     except httpx.HTTPError as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Ошибка соединения с OpenRouter: {e}",
         ) from e
+
+    if response.status_code in (401, 403) and user_has_openrouter_key(user):
+        logger.warning("OpenRouter key for user %s returned %s. Reprovisioning key...", user.id, response.status_code)
+        try:
+            from app.services.openrouter_provision import delete_openrouter_key_for_user
+            await delete_openrouter_key_for_user(user, db)
+            db.refresh(user)
+            api_key = await ensure_openrouter_key_for_user(user, db)
+            response = await _openrouter.chat_completions(body, timeout=120.0, api_key=api_key)
+        except Exception as exc:
+            logger.error("Failed to reprovision OpenRouter key for user %s on 401/403: %s", user.id, exc)
+
     if response.status_code == 200:
         return response.json()
     code = response.status_code
@@ -255,7 +283,12 @@ async def _call_openrouter(payload: dict, user: UserDB) -> dict:
 
 async def _call_inference(payload: dict, user: UserDB, db: Session | None = None) -> dict:
     if _user_on_free_openrouter(user):
-        return await _call_openrouter(payload, user)
+        if db is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="DB session required for OpenRouter inference.",
+            )
+        return await _call_openrouter(payload, user, db)
     return await _call_polza(payload, user, db)
 
 
@@ -493,7 +526,12 @@ async def _stream_chat_tokens(
     }
 
 
-async def _stream_polza_tokens(api_key: str, payload: dict):
+async def _stream_polza_tokens(
+    api_key: str,
+    payload: dict,
+    user: UserDB | None = None,
+    db: Session | None = None,
+):
     async for item in _stream_chat_tokens(
         POLZA_CHAT_URL,
         api_key,
@@ -506,15 +544,53 @@ async def _stream_polza_tokens(api_key: str, payload: dict):
         yield item
 
 
-async def _stream_openrouter_tokens(api_key: str, payload: dict):
-    async for item in _stream_chat_tokens(
-        OPENROUTER_CHAT_URL,
-        api_key,
-        payload,
-        provider_label="OpenRouter",
-        auth_error_detail="Ошибка доступа к бесплатным моделям OpenRouter.",
-    ):
-        yield item
+async def _stream_openrouter_tokens(
+    api_key: str,
+    payload: dict,
+    user: UserDB | None = None,
+    db: Session | None = None,
+):
+    current_key = api_key
+    first_try = True
+
+    while True:
+        auth_failure_detected = False
+        async for item in _stream_chat_tokens(
+            OPENROUTER_CHAT_URL,
+            current_key,
+            payload,
+            provider_label="OpenRouter",
+            auth_error_detail="Ошибка доступа к бесплатным моделям OpenRouter.",
+        ):
+            if isinstance(item, str) and '"auth_failure": true' in item:
+                auth_failure_detected = True
+                continue
+            yield item
+
+        if auth_failure_detected and first_try and user and db:
+            if user_has_openrouter_key(user):
+                logger.warning(
+                    "OpenRouter stream returned 401/403 for user %s. Reprovisioning key...",
+                    user.id,
+                )
+                try:
+                    from app.services.openrouter_provision import (
+                        delete_openrouter_key_for_user,
+                    )
+
+                    await delete_openrouter_key_for_user(user, db)
+                    db.refresh(user)
+                    current_key = await ensure_openrouter_key_for_user(user, db)
+                    first_try = False
+                    continue
+                except Exception as exc:
+                    logger.error(
+                        "Failed to reprovision key on stream auth failure for user %s: %s",
+                        user.id,
+                        exc,
+                    )
+
+        break
 
 
 def _stream_fn_for_user(user: UserDB):
@@ -642,10 +718,28 @@ async def simple_chat_stream(
     model = await _resolve_simple_chat_model(payload, current_user)
     memory_text = get_enabled_memory_text(db, current_user.id)
     router_body = build_router_payload(model, payload, memory_content=memory_text)
-    use_web = bool(payload.use_web_search)
+    web_preference = bool(payload.use_web_search)
 
-    api_key = _require_chat_api_key(current_user)
+    api_key = await _require_chat_api_key(current_user, db)
     stream_tokens = _stream_fn_for_user(current_user)
+
+    user_text = last_user_message_text(payload.messages)
+    search_decision = await resolve_web_search_need(
+        user_text,
+        preference_enabled=web_preference,
+        api_key=api_key,
+        subscription_tier=current_user.subscription_tier or "STANDARD",
+    )
+    use_web = search_decision.should_search
+    search_skipped = web_preference and not use_web
+    search_skip_reason = search_decision.reason if search_skipped else ""
+    if web_preference or use_web:
+        logger.info(
+            "web search gate: preference=%s use_web=%s reason=%s",
+            web_preference,
+            use_web,
+            search_decision.reason,
+        )
 
     user_id = current_user.id
 
@@ -657,6 +751,14 @@ async def simple_chat_stream(
         stream_sources: list[dict] = []
         stream_engine = ""
         body = dict(router_body)
+        if search_skipped:
+            yield _sse_event(
+                {
+                    "type": "status",
+                    "content": "search_skipped",
+                    "reason": search_skip_reason,
+                }
+            )
         if use_web:
             pre_search_reasoning = ""
             yield _sse_event({"type": "status", "content": "planning"})
@@ -740,7 +842,7 @@ async def simple_chat_stream(
                         user_for_conn,
                         model=model,
                         messages=body_messages,
-                        call_routerai=_call_inference,
+                        call_routerai=lambda p, u: _call_inference(p, u, db),
                     ):
                         yield _sse_event(conn_evt)
                     body["messages"] = body_messages
@@ -753,13 +855,16 @@ async def simple_chat_stream(
         stream_reply_text = ""
         had_thinking = False
         had_tokens = False
-        router_payload = {
-            **body,
-            "stream": True,
-            "stream_options": {"include_usage": True},
-        }
+        router_payload = _with_openrouter_user(
+            {
+                **body,
+                "stream": True,
+                "stream_options": {"include_usage": True},
+            },
+            current_user,
+        )
         try:
-            async for item in stream_tokens(api_key, router_payload):
+            async for item in stream_tokens(api_key, router_payload, user=current_user, db=db):
                 if isinstance(item, dict):
                     usage = item.get("usage")
                     reply_images = item.get("images") or []
@@ -840,7 +945,7 @@ async def research_chat(
         )
     await _check_model_access(current_user, model)
 
-    api_key = _require_chat_api_key(current_user)
+    api_key = await _require_chat_api_key(current_user, db)
 
     if depth == "deep":
         from app.config import WEB_SEARCH_DEEP_MAX_SOURCES

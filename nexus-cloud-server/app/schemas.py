@@ -66,6 +66,7 @@ class TokenResponse(BaseModel):
 
 class AuthConfigResponse(BaseModel):
     google_oauth_enabled: bool
+    email_auth_enabled: bool = True
     telegram_auth_enabled: bool = False
     telegram_bot_username: str | None = None
     telegram_login_domain: str | None = None

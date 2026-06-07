@@ -15,13 +15,18 @@ def test_user_snapshot_roundtrip_preserves_polza_fields(db_session):
     user.polza_key_id = "pk-1"
     user.polza_key_updated_at = datetime(2026, 6, 5, 12, 0, 0)
     user.polza_connect_required = 0
+    user.openrouter_api_key_encrypted = "enc:sk-or-test"
+    user.openrouter_key_hash = "or-hash-1"
+    user.openrouter_key_created_at = datetime(2026, 6, 6, 10, 0, 0)
     db.commit()
 
     payload = export_snapshot(db)
-    assert payload["v"] == 2
+    assert payload["v"] == 4
     polza_row = payload["users"][0]
     assert polza_row["polza_api_key_encrypted"] == "enc:pza_test"
     assert polza_row["polza_key_id"] == "pk-1"
+    assert polza_row["openrouter_api_key_encrypted"] == "enc:sk-or-test"
+    assert polza_row["openrouter_key_hash"] == "or-hash-1"
 
     import_snapshot(db, payload)
     restored = db.query(UserDB).filter(UserDB.id == 1).one()
@@ -29,6 +34,9 @@ def test_user_snapshot_roundtrip_preserves_polza_fields(db_session):
     assert restored.polza_user_id == "pu-1"
     assert restored.polza_key_id == "pk-1"
     assert restored.polza_key_updated_at == datetime(2026, 6, 5, 12, 0, 0)
+    assert restored.openrouter_api_key_encrypted == "enc:sk-or-test"
+    assert restored.openrouter_key_hash == "or-hash-1"
+    assert restored.openrouter_key_created_at == datetime(2026, 6, 6, 10, 0, 0)
 
 
 def test_user_from_dict_v1_snapshot_without_polza_defaults_none(db_session):
@@ -43,3 +51,5 @@ def test_user_from_dict_v1_snapshot_without_polza_defaults_none(db_session):
     restored = db.query(UserDB).filter(UserDB.email == "legacy@example.com").one()
     assert restored.polza_api_key_encrypted is None
     assert restored.polza_key_id is None
+    assert restored.openrouter_api_key_encrypted is None
+    assert restored.openrouter_key_hash is None

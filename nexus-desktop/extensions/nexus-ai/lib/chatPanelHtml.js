@@ -65,7 +65,7 @@ function getChatPanelHtml(webview) {
       </div>
       <div class="composer-toolbar">
         <select id="agent" title="Агент"><option value="">Без агента</option></select>
-        <button type="button" class="chip-btn icon-only globe-btn" id="btnGlobe" title="Поиск в интернете">🌐</button>
+        <button type="button" class="chip-btn icon-only globe-btn" id="btnGlobe" title="Автопоиск в сети — только когда нужны свежие факты">🌐</button>
         <select id="searchDepth" title="Глубина поиска" disabled>
           <option value="quick">Быстрый</option>
           <option value="standard" selected>Обычный</option>

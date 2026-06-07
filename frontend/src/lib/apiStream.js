@@ -2,30 +2,66 @@ import { getApiBase } from './api';
 import { tryRefreshSession } from './apiClient';
 import { authHeaders } from './authStorage';
 
+/** SSE/стримы могут идти дольше обычных REST-запросов. */
+const API_STREAM_TIMEOUT_MS = 300_000;
+
 function buildUrl(base, path) {
   return path.startsWith('http') ? path : `${base}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
-/** fetch для SSE-потоков (без короткого abort таймаута). */
+function streamNetworkError(path, cause) {
+  const msg = cause?.message || String(cause);
+  if (msg === 'Failed to fetch' || cause?.name === 'TypeError') {
+    return 'Нет связи с сервером. Проверьте интернет; если Render заблокирован у провайдера — обновите страницу (API идёт через Vercel).';
+  }
+  if (cause?.name === 'AbortError') {
+    return 'Поток ответа прерван по таймауту. Попробуйте ещё раз.';
+  }
+  return msg || 'Ошибка сети';
+}
+
+async function streamFetchOnce(url, init) {
+  return fetch(url, init);
+}
+
+/** fetch для SSE-потоков с таймаутом и refresh при 401. */
 export async function apiStreamFetch(path, init = {}) {
   const base = await getApiBase();
   const headers = authHeaders(init.headers || {});
   if (init.body && !headers['Content-Type'] && !headers['content-type']) {
     headers['Content-Type'] = 'application/json';
   }
-  let res = await fetch(buildUrl(base, path), { ...init, headers });
-  if (res.status === 401) {
-    const ok = await tryRefreshSession();
-    if (ok) {
-      const retryBase = await getApiBase();
-      const headers2 = authHeaders(init.headers || {});
-      if (init.body && !headers2['Content-Type'] && !headers2['content-type']) {
-        headers2['Content-Type'] = 'application/json';
-      }
-      res = await fetch(buildUrl(retryBase, path), { ...init, headers: headers2 });
-    }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_STREAM_TIMEOUT_MS);
+  if (init.signal) {
+    if (init.signal.aborted) controller.abort();
+    else init.signal.addEventListener('abort', () => controller.abort(), { once: true });
   }
-  return res;
+
+  try {
+    let res = await streamFetchOnce(buildUrl(base, path), { ...init, headers, signal: controller.signal });
+    if (res.status === 401) {
+      const ok = await tryRefreshSession();
+      if (ok) {
+        const retryBase = await getApiBase();
+        const headers2 = authHeaders(init.headers || {});
+        if (init.body && !headers2['Content-Type'] && !headers2['content-type']) {
+          headers2['Content-Type'] = 'application/json';
+        }
+        res = await streamFetchOnce(buildUrl(retryBase, path), {
+          ...init,
+          headers: headers2,
+          signal: controller.signal,
+        });
+      }
+    }
+    return res;
+  } catch (cause) {
+    throw new Error(streamNetworkError(path, cause));
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 /**

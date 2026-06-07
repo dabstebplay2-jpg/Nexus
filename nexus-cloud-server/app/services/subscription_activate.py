@@ -10,13 +10,14 @@ from app.database import InvoiceDB, TransactionDB, UserDB
 from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
 from app.services.quota_limits import get_quota_limit_info, start_subscription_period
 from app.services.polza import (
-    ensure_polza_key_for_user,
+    provision_polza_for_user,
     sync_polza_key_limit_after_payment,
     user_has_polza_key,
 )
 from app.services.subscription_audit_log import log_tier_granted, subscription_state_snapshot
 from app.services.subscription_guard import admin_subscription_invoice_id, record_admin_subscription_invoice
-from app.tiers import normalize_tier, tier_monthly_cap, tier_requires_payment
+from app.services.openrouter_provision import delete_openrouter_key_for_user
+from app.tiers import normalize_tier, tier_monthly_cap, tier_requires_payment, tier_uses_openrouter_free
 
 logger = logging.getLogger("app.subscription")
 
@@ -52,6 +53,9 @@ async def activate_paid_tier(
     tier = normalize_tier(tier)
     prev = normalize_tier(previous_tier or user.subscription_tier)
     source = grant_source or "payment"
+
+    if tier_requires_payment(tier) and tier_uses_openrouter_free(prev):
+        await delete_openrouter_key_for_user(user, db)
 
     if not tier_requires_payment(tier):
         user.subscription_tier = tier
@@ -113,7 +117,7 @@ async def activate_paid_tier(
                 ok,
             )
         else:
-            ok = await ensure_polza_key_for_user(db, user)
+            ok = await provision_polza_for_user(user, db, pool_rub=pool_rub, force=False)
             db.commit()
             logger.info(
                 "[ПОДПИСКА: ВЫДАЧА] автовыдача Polza для %s (тариф %s) ok=%s",

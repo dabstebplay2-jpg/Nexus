@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.config import (
     NEXUS_ADMIN_DEFAULT_CLOUD_URL,
@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Nexus Cloud Authorization & Billing Server v2.0")
 app.state.db_ready = False
+app.state.redis_hydrate_done = True
 
 
 @app.middleware("http")
@@ -47,6 +48,13 @@ async def _ensure_db_schema(request, call_next):
     if not getattr(app.state, "db_ready", False):
         migrate_schema()
         app.state.db_ready = True
+    if not getattr(app.state, "redis_hydrate_done", True):
+        path = request.url.path
+        if path not in ("/health", "/v1/health"):
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Инициализация хранилища, повторите через несколько секунд."},
+            )
     return await call_next(request)
 
 
@@ -55,6 +63,11 @@ async def _ensure_db_schema(request, call_next):
 def health(verbose: bool = False):
     payload: dict = {"status": "ok", "service": "nexus-cloud"}
     if verbose:
+        from sqlalchemy import inspect
+
+        from app.database import engine
+
+        insp = inspect(engine)
         payload.update(
             {
                 "testing_mode": is_testing_mode(),
@@ -62,46 +75,28 @@ def health(verbose: bool = False):
                 "database": database_backend(),
                 "database_persistent": not database_is_ephemeral(),
                 "redis_persistence": redis_persistence_enabled(),
+                "support_ready": insp.has_table("support_tickets") and insp.has_table("support_messages"),
             }
         )
     return payload
 
 
-@app.on_event("startup")
-async def _startup():
-    from app.production_guard import assert_production_config
-
-    assert_production_config()
-    migrate_schema()
-    app.state.db_ready = True
-
+async def _background_warmup() -> None:
+    """Тяжёлая инициализация — не блокирует bind порта на Render."""
     from app.config import redis_persistence_enabled
     from app.services.redis_sync import hydrate_from_redis, install_redis_commit_hook
 
     if redis_persistence_enabled():
-        hydrate_from_redis()
+        try:
+            n = await asyncio.wait_for(asyncio.to_thread(hydrate_from_redis), timeout=120.0)
+            logger.info("Redis hydrate finished (%s users)", n)
+        except asyncio.TimeoutError:
+            logger.error("Redis hydrate timed out after 120s")
+        except Exception as exc:
+            logger.exception("Redis hydrate failed: %s", exc)
+        finally:
+            app.state.redis_hydrate_done = True
         install_redis_commit_hook()
-
-    if database_is_ephemeral():
-        logger.warning(
-            "База SQLite на хостинге НЕ сохраняется между деплоями — пользователи пропадают. "
-            "Подключите PostgreSQL: docs/PERSISTENT_DATABASE_RU.md"
-        )
-    else:
-        logger.info("Database: %s (persistent)", database_backend())
-
-    if admin_api_enabled():
-        from app.services.admin_audit import install_admin_log_handler
-
-        install_admin_log_handler()
-    if NEXUS_LOCAL_ADMIN:
-        logging.getLogger("app.admin_proxy").setLevel(logging.INFO)
-        logger.info(
-            "Admin UI: http://127.0.0.1:<port>/local-admin/ (cloud: %s) | proxy v2.1",
-            NEXUS_ADMIN_DEFAULT_CLOUD_URL,
-        )
-    if NEXUS_REMOTE_ADMIN:
-        logger.info("Remote admin API enabled (password required)")
 
     try:
         rate = await refresh_usd_rub_rate(force=True)
@@ -117,20 +112,6 @@ async def _startup():
     except Exception as exc:
         logger.warning("Прогрев каталога моделей не удался (non-fatal): %s", exc)
 
-    if not os.environ.get("VERCEL"):
-
-        async def _fx_daily_loop() -> None:
-            while True:
-                await asyncio.sleep(3600)
-                try:
-                    r = await refresh_usd_rub_rate()
-                    logger.info("FX hourly refresh: %.4f", r)
-                except Exception as exc:
-                    logger.warning("FX hourly refresh failed: %s", exc)
-
-        asyncio.create_task(_fx_daily_loop())
-
-    # На Vercel serverless полный обход пользователей при старте может упереться в таймаут
     if not os.environ.get("VERCEL"):
         from app.database import SessionLocal, UserDB
         from app.services.polza import suspend_polza_for_user
@@ -154,18 +135,71 @@ async def _startup():
     if POLZA_BACKEND_API_KEY:
         from app.services.polza import PolzaService
 
-        backend_check = await PolzaService().verify_backend_key()
-        if backend_check.get("ok"):
-            logger.info(
-                "Polza.ai: backend-ключ OK (баланс org ≈ %.0f ₽).",
-                float(backend_check.get("balance_rub") or 0),
-            )
-        else:
-            logger.error("Polza.ai: %s", backend_check.get("message", "backend-ключ не работает"))
+        try:
+            backend_check = await PolzaService().verify_backend_key()
+            if backend_check.get("ok"):
+                logger.info(
+                    "Polza.ai: backend-ключ OK (баланс org ≈ %.0f ₽).",
+                    float(backend_check.get("balance_rub") or 0),
+                )
+            else:
+                logger.error("Polza.ai: %s", backend_check.get("message", "backend-ключ не работает"))
+        except Exception as exc:
+            logger.warning("Polza backend check failed (non-fatal): %s", exc)
     else:
         logger.warning(
             "Polza.ai: POLZA_BACKEND_API_KEY не задан. Мониторинг org-баланса и MCP недоступны."
         )
+
+
+@app.on_event("startup")
+async def _startup():
+    from app.production_guard import assert_production_config
+
+    logger.info("Nexus Cloud startup: binding port after quick init…")
+    assert_production_config()
+    migrate_schema()
+    app.state.db_ready = True
+    app.state.redis_hydrate_done = not (
+        redis_persistence_enabled() and database_backend() != "postgresql"
+    )
+
+    if database_is_ephemeral():
+        logger.warning(
+            "База SQLite на хостинге НЕ сохраняется между деплоями — пользователи пропадают. "
+            "Подключите PostgreSQL: docs/PERSISTENT_DATABASE_RU.md"
+        )
+    else:
+        logger.info("Database: %s (persistent)", database_backend())
+
+    if admin_api_enabled():
+        from app.services.admin_audit import install_admin_log_handler
+
+        install_admin_log_handler()
+    if NEXUS_LOCAL_ADMIN:
+        logging.getLogger("app.admin_proxy").setLevel(logging.INFO)
+        logger.info(
+            "Admin UI: http://127.0.0.1:<port>/local-admin/ (cloud: %s) | proxy v2.1",
+            NEXUS_ADMIN_DEFAULT_CLOUD_URL,
+        )
+    if NEXUS_REMOTE_ADMIN:
+        logger.info("Remote admin API enabled (password required)")
+
+    if not os.environ.get("VERCEL"):
+
+        async def _fx_daily_loop() -> None:
+            while True:
+                await asyncio.sleep(3600)
+                try:
+                    r = await refresh_usd_rub_rate()
+                    logger.info("FX hourly refresh: %.4f", r)
+                except Exception as exc:
+                    logger.warning("FX hourly refresh failed: %s", exc)
+
+        asyncio.create_task(_fx_daily_loop())
+
+    asyncio.create_task(_background_warmup())
+    logger.info("Nexus Cloud ready — background warmup started")
 
 _cors_origins = admin_cors_origins()
 _cors_credentials = "*" not in _cors_origins

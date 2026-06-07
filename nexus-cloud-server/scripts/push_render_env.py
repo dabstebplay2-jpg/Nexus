@@ -27,6 +27,7 @@ RENDER_KEYS = [
     "NEXUS_CLOUD_SECRET_KEY",
     "NEXUS_CLOUD_DATABASE_URL",
     "NEXUS_CORS_ORIGINS",
+    "NEXUS_EMAIL_AUTH_ENABLED",
     "NEXUS_BILLING_TEST_MODE",
     "NEXUS_TESTING_MODE",
     "NEXUS_REMOTE_ADMIN",
@@ -57,19 +58,23 @@ RENDER_KEYS = [
 ]
 
 DEFAULTS = {
-    "POLZA_OAUTH_CALLBACK_URL": "https://nexus-cloud-ee17.onrender.com/v1/auth/polza/callback",
+    "POLZA_OAUTH_CALLBACK_URL": "https://nexus-cloud-bxcc.onrender.com/v1/auth/polza/callback",
     "POLZA_APP_NAME": "Nexus",
-    "NEXUS_CORS_ORIGINS": "https://frontend-henna-tau-19.vercel.app,https://nexus-ide.vercel.app",
+    "NEXUS_CORS_ORIGINS": "https://nexus-zeta-ruby-12.vercel.app,https://nexus-ide.vercel.app",
+    "NEXUS_FRONTEND_URL": "https://nexus-zeta-ruby-12.vercel.app",
+    "GOOGLE_REDIRECT_URI": "https://nexus-cloud-bxcc.onrender.com/v1/auth/google/callback",
+    "NEXUS_EMAIL_AUTH_ENABLED": "false",
     "NEXUS_BILLING_TEST_MODE": "false",
     "NEXUS_PROMO_CODES_ENABLED": "false",
     "NEXUS_TESTING_MODE": "false",
     "NEXUS_REMOTE_ADMIN": "true",
     "NEXUS_LOCAL_ADMIN": "false",
     "OPENROUTER_BASE_URL": "https://openrouter.ai/api/v1",
-    "OPENROUTER_HTTP_REFERER": "https://frontend-henna-tau-19.vercel.app",
+    "OPENROUTER_HTTP_REFERER": "https://nexus-zeta-ruby-12.vercel.app",
     "OPENROUTER_APP_TITLE": "Nexus",
     "NEXUS_FREE_OPENROUTER_DAILY_LIMIT": "100",
     "NEXUS_FREE_OPENROUTER_RPM": "15",
+    "YOOKASSA_RETURN_PATH": "/pricing",
 }
 
 _WEAK_SECRET_MARKERS = (
