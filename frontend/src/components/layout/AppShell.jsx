@@ -463,7 +463,7 @@ export default function AppShell({
           </header>
         )}
         <div
-          className={`flex-1 flex min-h-0 overflow-hidden ${
+          className={`nx-page-host flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden ${
             showMobileTabBarWithKeyboard && !compactChrome ? 'max-md:pb-[calc(var(--nx-dock-h)+var(--nx-safe-bottom))]' : ''
           }`}
         >

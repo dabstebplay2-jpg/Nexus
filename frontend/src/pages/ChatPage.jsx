@@ -525,13 +525,13 @@ export default function ChatPage() {
           </div>
         }
       >
-        <main className="flex-1 flex flex-col min-w-0 relative">
+        <main className="flex-1 flex flex-col min-w-0 min-h-0 relative">
           {chatsLoading ? (
             <div className="flex-1 flex items-center justify-center text-sm text-[var(--nx-muted)]">
               Загрузка истории чатов…
             </div>
           ) : !hasMessages ? (
-            <div className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-clip">
+            <div className="nx-scroll-region w-full custom-scrollbar">
               <div className="w-full max-w-[var(--nx-content-max)] mx-auto flex flex-col items-center px-4 pt-4 pb-[calc(var(--nx-dock-h)+var(--nx-safe-bottom)+1rem)]">
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
@@ -628,7 +628,7 @@ export default function ChatPage() {
                 <div
                   ref={scrollContainerRef}
                   onScroll={handleMessagesScroll}
-                  className="flex-1 overflow-y-auto custom-scrollbar"
+                  className="nx-scroll-region custom-scrollbar"
                 >
                   {activeConv.messages.map((m, i) => {
                     const modelMeta =

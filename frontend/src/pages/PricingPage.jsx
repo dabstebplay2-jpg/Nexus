@@ -131,7 +131,7 @@ export default function PricingPage() {
 
   return (
     <AppShell hideHistory onOpenPricing={() => navigate('/profile')}>
-      <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10">
+      <div className="nx-scroll-region custom-scrollbar relative z-10">
         <div className="max-w-[min(1400px,100%)] mx-auto px-4 sm:px-6 py-10">
           <motion.div
             initial={{ opacity: 0, y: 16 }}

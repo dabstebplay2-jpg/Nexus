@@ -12,6 +12,20 @@ test.describe('mobile viewport smoke', () => {
     const viewport = page.viewportSize();
     expect(heroBox).not.toBeNull();
     expect(heroBox.width).toBeLessThanOrEqual(viewport.width);
+
+    const scrollable = await page.evaluate(() => {
+      const host = document.querySelector('.nx-page-host');
+      const region = document.querySelector('.nx-scroll-region');
+      const el = region || host;
+      if (!el) return { ok: false, reason: 'no-scroll-container' };
+      const canScroll = el.scrollHeight > el.clientHeight + 8;
+      const before = el.scrollTop;
+      el.scrollTop = before + 48;
+      const moved = el.scrollTop > before;
+      el.scrollTop = before;
+      return { ok: canScroll ? moved : true, canScroll, moved };
+    });
+    expect(scrollable.ok).toBe(true);
   });
 
   test('pricing loads', async ({ page }) => {

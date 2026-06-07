@@ -1,6 +1,23 @@
 {
   "entries": [
     {
+      "version": "0.1.45",
+      "date": "15 июня 2026 г.",
+      "dateISO": "2026-06-15",
+      "title": "Мобильный скролл",
+      "summary": "Восстановлена прокрутка на телефоне: исправлена flex-цепочка и убран overflow-x: clip с body.",
+      "changes": [
+        {
+          "label": "Исправлено",
+          "text": "Прокрутка на мобиле в чате, тарифах, пространствах и артефактах — touch-scroll снова работает."
+        },
+        {
+          "label": "Исправлено",
+          "text": "AppShell: flex-col для page-host, класс nx-scroll-region с -webkit-overflow-scrolling."
+        }
+      ]
+    },
+    {
       "version": "0.1.44",
       "date": "14 июня 2026 г.",
       "dateISO": "2026-06-14",

@@ -36,7 +36,7 @@ export default function ArtifactsPage() {
 
   return (
     <AppShell hideHistory onOpenPricing={() => {}}>
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <div className="px-4 sm:px-6 py-6 sm:py-8 border-b border-[var(--nx-border)]">
           <h1 className="text-2xl font-semibold">Артефакты</h1>
           <p className="text-sm text-[var(--nx-muted)] mt-1">
@@ -64,7 +64,7 @@ export default function ArtifactsPage() {
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+        <div className="nx-scroll-region custom-scrollbar px-4 sm:px-6 py-6">
           {!artifactsReady ? (
             <p className="text-sm text-[var(--nx-muted)]">Загрузка…</p>
           ) : filtered.length === 0 ? (

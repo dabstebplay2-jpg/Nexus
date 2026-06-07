@@ -208,7 +208,7 @@ export default function SpacesPage() {
         }
       >
         {!inChat ? (
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="nx-scroll-region custom-scrollbar">
             <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
                 <h1 className="text-2xl sm:text-3xl font-semibold">Пространства</h1>
@@ -350,7 +350,7 @@ export default function SpacesPage() {
             </div>
             <div className="flex flex-1 min-h-0 min-w-0 flex-col lg:flex-row">
               <div className="flex flex-col flex-1 min-w-0 min-h-0">
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="nx-scroll-region custom-scrollbar">
                   {activeConv?.messages?.map((m, i) => {
                     const modelMeta =
                       m.role === 'assistant' && m.model
