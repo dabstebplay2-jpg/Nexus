@@ -27,4 +27,23 @@ if (Test-Path $setup) {
 }
 if (-not (Test-Path $portable) -and -not (Test-Path $setup)) {
   Write-Host "Check dist/ for electron-builder output" -ForegroundColor Yellow
+  exit 1
 }
+
+# Mirror release artifacts into dist-build/ (local download folder).
+$distBuild = Join-Path (Get-Location) "dist-build"
+New-Item -ItemType Directory -Path $distBuild -Force | Out-Null
+
+Get-ChildItem $distBuild -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+if (Test-Path (Join-Path $distBuild "win-unpacked")) {
+  Remove-Item (Join-Path $distBuild "win-unpacked") -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Copy-Item $portable $distBuild
+Copy-Item $setup $distBuild
+$blockmap = Join-Path dist "NexusBrowser-$version-Setup.exe.blockmap"
+if (Test-Path $blockmap) { Copy-Item $blockmap $distBuild }
+$unpacked = Join-Path dist "win-unpacked"
+if (Test-Path $unpacked) { Copy-Item $unpacked $distBuild -Recurse }
+
+Write-Host "dist-build: synced v$version" -ForegroundColor Green

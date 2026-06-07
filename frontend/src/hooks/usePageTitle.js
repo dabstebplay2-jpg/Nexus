@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom';
 const TITLES = {
   '/': 'Чат',
   '/ide/lite': 'IDE Web',
+  '/browser': 'Скачать Browser',
   '/ide': 'Скачать IDE',
   '/pricing': 'Тарифы',
   '/updates': 'Изменения',

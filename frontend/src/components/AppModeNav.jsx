@@ -1,10 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { MessageSquare, Code2, Puzzle } from 'lucide-react';
+import { MessageSquare, Code2, Puzzle, Globe } from 'lucide-react';
 
 const MODES = [
   { path: '/', label: 'Чат', icon: MessageSquare, match: (p) => p === '/' || p.startsWith('/chat') },
   { path: '/ide/lite', label: 'IDE Web', icon: Code2, match: (p) => p === '/ide/lite' },
+  { path: '/browser', label: 'Browser', icon: Globe, match: (p) => p === '/browser' },
   { path: '/ide', label: 'Скачать IDE', icon: Puzzle, match: (p) => p === '/ide' },
 ];
 

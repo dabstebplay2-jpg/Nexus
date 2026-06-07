@@ -20,5 +20,13 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, 'renderer-dist'),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/react-markdown')) return 'markdown';
+          if (id.includes('node_modules/lucide-react')) return 'icons';
+        },
+      },
+    },
   },
 });

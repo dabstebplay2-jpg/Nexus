@@ -1,17 +1,24 @@
-import { useCallback, useEffect, useState, useRef } from 'react';
-import { MoreVertical, Plus, Volume2, VolumeX, Pin } from 'lucide-react';
+import { useCallback, useEffect, useState, useRef, lazy, Suspense } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MoreVertical, Plus, Volume2, VolumeX, Pin, EyeOff } from 'lucide-react';
+import BrandLogo from './components/BrandLogo';
 import Omnibox from './components/Omnibox';
-import Sidebar from './components/Sidebar';
 import BrowserMenu from './components/BrowserMenu';
+
+const Sidebar = lazy(() => import('./components/Sidebar'));
 import TabContextMenu from './components/TabContextMenu';
 import NewTabPage from './pages/NewTabPage';
 import SettingsPage from './pages/SettingsPage';
+import ExtensionsPage from './pages/ExtensionsPage';
 import { useSettings } from './hooks/useSettings';
 import { useBreakpoint } from './hooks/useBreakpoint';
 import { omniboxSearch } from './lib/api';
+import { handleBrowserShortcut } from './lib/shortcuts';
+import { buildTabStripModel, TAB_GROUP_COLORS } from './lib/tabGroups';
 
 const NEXUS_NEWTAB = 'nexus://newtab';
 const NEXUS_SETTINGS = 'nexus://settings';
+const NEXUS_EXTENSIONS = 'nexus://extensions';
 
 export default function App() {
   const { settings, searchEngines, update: updateSettings } = useSettings();
@@ -34,8 +41,11 @@ export default function App() {
   const [findWholeWord, setFindWholeWord] = useState(false);
   const [findResults, setFindResults] = useState({ activeMatchOrdinal: 0, numberOfMatches: 0 });
   const findInputRef = useRef(null);
+  const omniboxRef = useRef(null);
   const chromeRef = useRef(null);
   const menuAnchorRef = useRef(null);
+  const tabsRef = useRef([]);
+  const activeTabIdRef = useRef(null);
 
   const [downloads, setDownloads] = useState([]);
   const [showDownloads, setShowDownloads] = useState(false);
@@ -52,6 +62,11 @@ export default function App() {
   const [tabMenu, setTabMenu] = useState(null);
   const [dragTabId, setDragTabId] = useState(null);
   const [toast, setToast] = useState(null);
+  const [passwordPrompt, setPasswordPrompt] = useState(null);
+  const [settingsSection, setSettingsSection] = useState('search');
+  const [shieldsBlocked, setShieldsBlocked] = useState(0);
+  const bookmarksListRef = useRef(bookmarksList);
+  bookmarksListRef.current = bookmarksList;
 
   const activeTab = tabs.find((t) => t.active);
   const activeTabId = activeTab?.id;
@@ -74,12 +89,14 @@ export default function App() {
   }, []);
 
   const handleTabsChanged = useCallback((newTabs) => {
+    tabsRef.current = newTabs;
     setTabs(newTabs);
     const active = newTabs.find((t) => t.active);
+    activeTabIdRef.current = active?.id ?? null;
     if (active?.url === NEXUS_NEWTAB) setInternalView('newtab');
     else if (active?.url === NEXUS_SETTINGS) setInternalView('settings');
+    else if (active?.url === NEXUS_EXTENSIONS) setInternalView('extensions');
     else setInternalView(null);
-
   }, []);
 
   useEffect(() => {
@@ -91,21 +108,13 @@ export default function App() {
     const unsubInternal = window.nexusBrowser.tabs.onInternal(({ url }) => {
       if (url === NEXUS_NEWTAB) setInternalView('newtab');
       else if (url === NEXUS_SETTINGS) setInternalView('settings');
+      else if (url === NEXUS_EXTENSIONS) setInternalView('extensions');
     });
     refreshSession();
     window.nexusBrowser.sync?.getStatus().then(setSyncStatus).catch(() => {});
-    const unsubAuth = window.nexusBrowser.auth.onChanged(async (data) => {
+    const unsubAuth = window.nexusBrowser.auth.onChanged((data) => {
       refreshSession();
       if (data?.error) setAuthError(data.error);
-      if (data?.authorized) {
-        try {
-          const status = await window.nexusBrowser.sync.forceSync();
-          setSyncStatus(status);
-          if (status?.pendingSessionRestore?.tabs?.length) {
-            setRestorePrompt(status.pendingSessionRestore);
-          }
-        } catch { /* ignore */ }
-      }
     });
     const unsubSync = window.nexusBrowser.sync?.onStatusChanged?.((status) => {
       setSyncStatus(status);
@@ -118,15 +127,6 @@ export default function App() {
       window.nexusBrowser.sync.getRemoteTabSession().then(setRemoteTabSession);
     });
 
-    const unsubFind = window.nexusBrowser.tabs.onFoundInPage((data) => {
-      if (data.tabId === activeTabId) {
-        setFindResults({
-          activeMatchOrdinal: data.activeMatchOrdinal,
-          numberOfMatches: data.numberOfMatches,
-        });
-      }
-    });
-
     const unsubDlStarted = window.nexusBrowser.downloads.onStarted((data) => {
       setDownloads((prev) => [data, ...prev]);
       setShowDownloads(true);
@@ -137,48 +137,80 @@ export default function App() {
     const unsubDlDone = window.nexusBrowser.downloads.onDone((data) => {
       setDownloads((prev) => prev.map((d) => (d.id === data.id ? { ...d, ...data } : d)));
     });
+    const unsubPasswordPrompt = window.nexusBrowser.passwords?.onPrompt?.((data) => {
+      setPasswordPrompt(data);
+    });
 
     const handleKeyDown = (e) => {
-      const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.key === 'f') {
-        e.preventDefault();
-        setShowFind((prev) => {
-          if (!prev) setTimeout(() => findInputRef.current?.focus(), 100);
-          else window.nexusBrowser.tabs.stopFindInPage(activeTabId, 'clearSelection');
-          return !prev;
-        });
-      }
-      if (mod && e.key === 't') { e.preventDefault(); createNewTab(); }
-      if (mod && e.key === 'w') { e.preventDefault(); if (activeTabId) closeTab(activeTabId); }
-      if (mod && e.key === 'j') { e.preventDefault(); setShowDownloads(true); }
-      if (mod && e.key === 'h') { e.preventDefault(); setShowHistory(true); setShowBookmarks(false); }
-      if (mod && e.key === 'p') { e.preventDefault(); window.nexusBrowser.tabs.print(activeTabId); }
-      if (e.key === 'F11') { e.preventDefault(); window.nexusBrowser.window.toggleFullscreen(); }
-      if (e.key === 'F12') { e.preventDefault(); window.nexusBrowser.tabs.toggleDevTools(activeTabId); }
-      if (mod && e.shiftKey && e.key === 'N') { e.preventDefault(); showToast('Режим инкогнито — скоро'); }
-      if (mod && e.key === 'Tab') {
-        e.preventDefault();
-        const idx = tabs.findIndex((t) => t.active);
-        const next = e.shiftKey
-          ? tabs[(idx - 1 + tabs.length) % tabs.length]
-          : tabs[(idx + 1) % tabs.length];
-        if (next) window.nexusBrowser.tabs.activate(next.id);
-      }
-      if (mod && /^[1-9]$/.test(e.key)) {
-        const target = tabs[Number(e.key) - 1];
-        if (target) { e.preventDefault(); window.nexusBrowser.tabs.activate(target.id); }
-      }
+      const tabId = activeTabIdRef.current;
+      const tabList = tabsRef.current;
+      handleBrowserShortcut(e, {
+        tabId,
+        tabList,
+        omniboxRef,
+        onToggleFind: () => {
+          setShowFind((prev) => {
+            if (!prev) setTimeout(() => findInputRef.current?.focus(), 100);
+            else if (tabId) window.nexusBrowser.tabs.stopFindInPage(tabId, 'clearSelection');
+            return !prev;
+          });
+        },
+        onStopFind: () => {},
+        onNewTab: (incognito) => window.nexusBrowser.tabs.create(undefined, incognito),
+        onToggleBookmarksBar: async () => {
+          const s = await window.nexusBrowser.storage.settings();
+          await window.nexusBrowser.storage.updateSettings({ showBookmarksBar: !s.showBookmarksBar });
+        },
+        onToggleBookmarksPanel: () => { setShowBookmarks((v) => !v); setShowHistory(false); },
+        onToggleHistory: () => { setShowHistory(true); setShowBookmarks(false); },
+        onToggleDownloads: () => setShowDownloads(true),
+        onOpenPrivacy: () => {
+          setSettingsSection('privacy');
+          window.nexusBrowser.tabs.navigate(activeTabIdRef.current, NEXUS_SETTINGS);
+        },
+        onBookmark: async () => {
+          const tab = tabList.find((t) => t.id === tabId);
+          if (!tab || tab.isInternal) return;
+          const url = tab.url;
+          const exists = bookmarksListRef.current.some((b) => b.url === url);
+          const list = exists
+            ? await window.nexusBrowser.storage.removeBookmark(url)
+            : await window.nexusBrowser.storage.addBookmark({ url, title: tab.title || url });
+          setBookmarksList(list);
+          showToast(exists ? 'Закладка удалена' : 'Закладка добавлена');
+        },
+        showToast,
+      });
     };
+    const unsubShields = window.nexusBrowser.shields?.onBlocked?.((data) => {
+      setShieldsBlocked(data?.count || 0);
+    });
+    window.nexusBrowser.shields?.getStats?.().then((s) => setShieldsBlocked(s?.blocked || 0));
+
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      unsub(); unsubInternal(); unsubAuth(); unsubFind();
+      unsub(); unsubInternal(); unsubAuth();
       unsubDlStarted(); unsubDlUpdated(); unsubDlDone();
+      unsubPasswordPrompt?.();
       unsubSync?.();
       unsubSyncData?.();
+      unsubShields?.();
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleTabsChanged, refreshSession, activeTabId, tabs]);
+  }, [handleTabsChanged, refreshSession]);
+
+  useEffect(() => {
+    const unsubFind = window.nexusBrowser.tabs.onFoundInPage((data) => {
+      if (data.tabId === activeTabIdRef.current) {
+        setFindResults({
+          activeMatchOrdinal: data.activeMatchOrdinal,
+          numberOfMatches: data.numberOfMatches,
+        });
+      }
+    });
+    return () => unsubFind();
+  }, []);
 
   useEffect(() => {
     if (!settings) return;
@@ -240,8 +272,8 @@ export default function App() {
   const onNavigate = (tabId, input, options) =>
     window.nexusBrowser.tabs.navigate(tabId, input, options);
 
-  const createNewTab = async () => {
-    await window.nexusBrowser.tabs.create();
+  const createNewTab = async (isIncognito = false) => {
+    await window.nexusBrowser.tabs.create(undefined, isIncognito);
   };
 
   const closeTab = async (tabId) => {
@@ -254,9 +286,48 @@ export default function App() {
     window.nexusBrowser.sidebar.setOpen(next);
   };
 
-  const openSettings = async () => {
+  const openSettings = async (section = 'search') => {
+    setSettingsSection(section);
     await onNavigate(activeTabId, NEXUS_SETTINGS);
   };
+
+  const renderTabChip = (t) => (
+    <div
+      key={t.id}
+      className={`tab ${t.active ? 'active' : ''} ${t.pinned ? 'pinned' : ''} ${t.discarded ? 'discarded' : ''} tab--${settings?.tabShape || 'rounded'}`}
+      style={t.groupId ? {
+        borderLeftColor: TAB_GROUP_COLORS[(settings.tabGroups || []).find((g) => g.id === t.groupId)?.color] || TAB_GROUP_COLORS.blue,
+        borderLeftWidth: 3,
+        borderLeftStyle: 'solid',
+      } : undefined}
+      draggable
+      onDragStart={() => setDragTabId(t.id)}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={() => {
+        if (dragTabId) {
+          const toIdx = tabs.findIndex((x) => x.id === t.id);
+          window.nexusBrowser.tabs.reorder(dragTabId, toIdx);
+          setDragTabId(null);
+        }
+      }}
+      onClick={() => window.nexusBrowser.tabs.activate(t.id)}
+      onContextMenu={(e) => { e.preventDefault(); setTabMenu({ x: e.clientX, y: e.clientY, tab: t }); }}
+      onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(t.id); } }}
+    >
+      {t.pinned && <Pin size={10} />}
+      {t.isIncognito && <EyeOff size={12} className="incognito-icon" style={{ color: 'var(--color-accent)' }} />}
+      {t.url?.startsWith('http') && !t.isIncognito && (
+        <img className="tab-favicon" src={getFaviconUrl(t.url)} alt="" onError={(e) => { e.target.style.display = 'none'; }} />
+      )}
+      {t.isPlaying && (t.muted ? <VolumeX size={12} /> : <Volume2 size={12} />)}
+      <span className="tab-title">{t.loading ? '…' : t.title || t.url}</span>
+      {!t.pinned && (
+        <button type="button" className="tab-close" onClick={(e) => { e.stopPropagation(); closeTab(t.id); }}>×</button>
+      )}
+    </div>
+  );
+
+  const tabStripModel = buildTabStripModel(tabs, settings?.tabGroups || []);
 
   const getFaviconUrl = (url) => {
     try {
@@ -304,6 +375,12 @@ export default function App() {
       case 'close': closeTab(id); break;
       case 'closeOthers': window.nexusBrowser.tabs.closeOthers(id); break;
       case 'closeRight': window.nexusBrowser.tabs.closeToRight(id); break;
+      case 'newGroup': {
+        const { groupId } = await window.nexusBrowser.tabs.createGroup('Группа', 'blue');
+        await window.nexusBrowser.tabs.setGroup(id, groupId);
+        break;
+      }
+      case 'removeFromGroup': await window.nexusBrowser.tabs.setGroup(id, null); break;
       default: break;
     }
   };
@@ -363,7 +440,7 @@ export default function App() {
 
   return (
     <div
-      className={`app-shell ${compact ? 'app-shell--compact' : ''} ${drawerSidebar ? 'app-shell--drawer' : ''}`}
+      className={`app-shell ${compact ? 'app-shell--compact' : ''} ${drawerSidebar ? 'app-shell--drawer' : ''} ${activeTab?.isIncognito ? 'incognito-theme' : ''}`}
       data-theme={settings.theme}
     >
       {authError && (
@@ -390,45 +467,30 @@ export default function App() {
       )}
 
       <header className="chrome" ref={chromeRef}>
-        <div className="tabs-row">
-          {tabs.map((t) => (
-            <div
-              key={t.id}
-              className={`tab ${t.active ? 'active' : ''} ${t.pinned ? 'pinned' : ''}`}
-              draggable
-              onDragStart={() => setDragTabId(t.id)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => {
-                if (dragTabId) {
-                  const toIdx = tabs.findIndex((x) => x.id === t.id);
-                  window.nexusBrowser.tabs.reorder(dragTabId, toIdx);
-                  setDragTabId(null);
-                }
-              }}
-              onClick={() => window.nexusBrowser.tabs.activate(t.id)}
-              onContextMenu={(e) => { e.preventDefault(); setTabMenu({ x: e.clientX, y: e.clientY, tab: t }); }}
-              onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(t.id); } }}
-            >
-              {t.pinned && <Pin size={10} />}
-              {t.url?.startsWith('http') && (
-                <img className="tab-favicon" src={getFaviconUrl(t.url)} alt="" onError={(e) => { e.target.style.display = 'none'; }} />
-              )}
-              {t.isPlaying && (t.muted ? <VolumeX size={12} /> : <Volume2 size={12} />)}
-              <span className="tab-title">{t.loading ? '…' : t.title || t.url}</span>
-              {!t.pinned && (
-                <button type="button" className="tab-close" onClick={(e) => { e.stopPropagation(); closeTab(t.id); }}>×</button>
-              )}
-            </div>
-          ))}
-          <button type="button" className="btn btn-sm btn-icon tab-new-btn" onClick={() => createNewTab()}>
-            <Plus size={14} />
-          </button>
-
-          <button ref={menuAnchorRef} type="button" className="btn btn-sm btn-icon menu-btn" onClick={() => setMenuOpen(!menuOpen)}>
-            <MoreVertical size={16} />
-          </button>
-          <div className="tabs-row-spacer" aria-hidden="true" />
-        </div>
+        {settings?.tabPosition !== 'side' && (
+          <div className="tabs-row">
+            {tabStripModel.map((item) => (
+              item.kind === 'group' ? (
+                <button
+                  key={`group-${item.group.id}`}
+                  type="button"
+                  className={`tab-group-chip tab-group-chip--${item.group.color}`}
+                  style={{ '--group-color': TAB_GROUP_COLORS[item.group.color] || TAB_GROUP_COLORS.blue }}
+                  onClick={() => window.nexusBrowser.tabs.toggleGroupCollapsed(item.group.id)}
+                  title={item.group.collapsed ? 'Развернуть группу' : 'Свернуть группу'}
+                >
+                  <span className="tab-group-dot" />
+                  {item.group.title}
+                  {item.group.collapsed ? ` (${tabs.filter((t) => t.groupId === item.group.id).length})` : ''}
+                </button>
+              ) : renderTabChip(item.tab)
+            ))}
+            <button type="button" className="btn btn-sm btn-icon tab-new-btn" onClick={() => createNewTab()}>
+              <Plus size={14} />
+            </button>
+            <div className="tabs-row-spacer" aria-hidden="true" />
+          </div>
+        )}
 
         {settings.showBookmarksBar && filteredBookmarks.length > 0 && (
           <div className="bookmarks-bar">
@@ -441,18 +503,26 @@ export default function App() {
         )}
 
         <Omnibox
+          ref={omniboxRef}
           tabs={tabs}
           activeTabId={activeTabId}
           onNavigate={onNavigate}
+          shieldsBlocked={shieldsBlocked}
+          onOpenShields={() => openSettings('privacy')}
+          onActivateMediaTab={(id) => window.nexusBrowser.tabs.activate(id)}
           onSearch={handleNtpSearch}
           searchResult={searchResult}
           setSearchResult={setSearchResult}
           bookmarksList={bookmarksList}
           setBookmarksList={setBookmarksList}
-          downloads={downloads}
-          showDownloads={showDownloads}
-          setShowDownloads={setShowDownloads}
-          sidebarOpen={sidebarOpen}
+        downloads={downloads}
+        showDownloads={showDownloads}
+        setShowDownloads={setShowDownloads}
+        showHistory={showHistory}
+        setShowHistory={setShowHistory}
+        showBookmarks={showBookmarks}
+        setShowBookmarks={setShowBookmarks}
+        sidebarOpen={sidebarOpen}
           toggleSidebar={toggleSidebar}
           settings={settings}
           searchEngines={searchEngines}
@@ -462,10 +532,29 @@ export default function App() {
           authorized={authorized}
           onSignIn={() => window.nexusBrowser.auth.signInGoogle()}
           onSignOut={async () => { await window.nexusBrowser.auth.signOut(); refreshSession(); }}
-          onOpenSettings={openSettings}
+          onOpenSettings={() => openSettings('search')}
+          onMenuToggle={() => setMenuOpen(!menuOpen)}
+          menuAnchorRef={menuAnchorRef}
           compact={compact}
         />
       </header>
+
+      {passwordPrompt && (
+        <div className="password-prompt-banner">
+          <div className="password-prompt-content">
+            <span>Сохранить пароль для <strong>{new URL(passwordPrompt.origin).hostname}</strong>?</span>
+            <span className="password-prompt-username">Логин: {passwordPrompt.username}</span>
+          </div>
+          <div className="password-prompt-actions">
+            <button type="button" className="btn btn-primary btn-sm" onClick={async () => {
+              await window.nexusBrowser.passwords.save(passwordPrompt);
+              setPasswordPrompt(null);
+              showToast('Пароль сохранен');
+            }}>Сохранить</button>
+            <button type="button" className="btn btn-sm" onClick={() => setPasswordPrompt(null)}>Не сейчас</button>
+          </div>
+        </div>
+      )}
 
       <BrowserMenu
         open={menuOpen}
@@ -480,7 +569,7 @@ export default function App() {
         onShowHistory={() => { setShowHistory(true); setShowBookmarks(false); }}
         onShowDownloads={() => setShowDownloads(true)}
         onShowBookmarks={() => { setShowBookmarks(true); setShowHistory(false); }}
-        onShowSettings={openSettings}
+        onShowSettings={() => openSettings('search')}
         onClearData={async () => {
           if (confirm('Удалить историю, cookies и кэш?')) {
             await window.nexusBrowser.privacy.clearBrowsingData();
@@ -511,6 +600,36 @@ export default function App() {
       )}
 
       <div className="main-row">
+        {settings?.tabPosition === 'side' && (
+          <div className="tabs-column">
+            <div className="tabs-column-header">
+              <BrandLogo variant="icon" className="tabs-column-brand" imgClassName="tabs-column-brand__img" alt="Nexus" />
+              <button type="button" className="btn btn-sm btn-icon tab-new-btn" onClick={() => createNewTab()}>
+                <Plus size={14} />
+              </button>
+            </div>
+            <div className="tabs-column-list">
+              {tabs.map((t) => (
+                <div
+                  key={t.id}
+                  className={`tab tab--side ${t.active ? 'active' : ''} ${t.pinned ? 'pinned' : ''} ${t.isIncognito ? 'tab-incognito' : ''} tab--${settings?.tabShape || 'rounded'}`}
+                  onClick={() => window.nexusBrowser.tabs.activate(t.id)}
+                  onContextMenu={(e) => { e.preventDefault(); setTabMenu({ x: e.clientX, y: e.clientY, tab: t }); }}
+                  onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(t.id); } }}
+                >
+                  {t.isIncognito && <EyeOff size={12} className="incognito-icon" style={{ color: 'var(--color-accent)' }} />}
+                  {t.url?.startsWith('http') && !t.isIncognito && (
+                    <img className="tab-favicon" src={getFaviconUrl(t.url)} alt="" onError={(e) => { e.target.style.display = 'none'; }} />
+                  )}
+                  <span className="tab-title">{t.loading ? '…' : t.title || t.url}</span>
+                  {!t.pinned && (
+                    <button type="button" className="tab-close" onClick={(e) => { e.stopPropagation(); closeTab(t.id); }}>×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="browser-spacer">
           {internalView === 'newtab' && (
             <NewTabPage
@@ -521,8 +640,10 @@ export default function App() {
               onUpdateShortcuts={(ntpShortcuts) => updateSettings({ ntpShortcuts })}
             />
           )}
+          {internalView === 'extensions' && <ExtensionsPage />}
           {internalView === 'settings' && (
             <SettingsPage
+              initialSection={settingsSection}
               settings={settings}
               searchEngines={searchEngines}
               onUpdate={updateSettings}
@@ -686,17 +807,29 @@ export default function App() {
             onClick={() => toggleSidebar()}
           />
         )}
-        {sidebarOpen && (
-          <Sidebar
-            authorized={authorized}
-            onSignIn={() => window.nexusBrowser.auth.signInGoogle()}
-            onSignOut={async () => { await window.nexusBrowser.auth.signOut(); refreshSession(); }}
-            profile={profile}
-            activeTabId={activeTabId}
-            drawer={drawerSidebar}
-            onClose={() => toggleSidebar()}
-          />
-        )}
+        <AnimatePresence>
+          {sidebarOpen && (
+            <motion.div
+              className="sidebar-motion-wrap"
+              initial={window.matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { x: 24, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={window.matchMedia('(prefers-reduced-motion: reduce)').matches ? undefined : { x: 24, opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+            >
+              <Suspense fallback={<aside className="sidebar sidebar--loading"><span>Загрузка AI…</span></aside>}>
+                <Sidebar
+                  authorized={authorized}
+                  onSignIn={() => window.nexusBrowser.auth.signInGoogle()}
+                  onSignOut={async () => { await window.nexusBrowser.auth.signOut(); refreshSession(); }}
+                  profile={profile}
+                  activeTabId={activeTabId}
+                  drawer={drawerSidebar}
+                  onClose={() => toggleSidebar()}
+                />
+              </Suspense>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

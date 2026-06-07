@@ -1,14 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, forwardRef } from 'react';
 import {
-  Sparkles, Star, Home, RotateCw, ArrowLeft, ArrowRight, Settings, MoreHorizontal, Download,
+  Sparkles, Star, Home, RotateCw, ArrowLeft, ArrowRight, Settings, MoreHorizontal, Download, History, Shield,
 } from 'lucide-react';
+import GlobalMediaControls from './GlobalMediaControls';
 import UserAvatar from './UserAvatar';
 import SuggestDropdown from './SuggestDropdown';
 import OmniboxOverflowMenu from './OmniboxOverflowMenu';
 import { useOmniboxSuggestions } from '../hooks/useOmniboxSuggestions';
 import { omniboxSearch } from '../lib/api';
 
-export default function Omnibox({
+const Omnibox = forwardRef(function Omnibox({
   tabs,
   activeTabId,
   onNavigate,
@@ -19,6 +20,10 @@ export default function Omnibox({
   downloads,
   showDownloads,
   setShowDownloads,
+  showHistory,
+  setShowHistory,
+  showBookmarks,
+  setShowBookmarks,
   sidebarOpen,
   toggleSidebar,
   settings,
@@ -31,8 +36,13 @@ export default function Omnibox({
   onSignIn,
   onSignOut,
   onOpenSettings,
+  onMenuToggle,
+  menuAnchorRef,
   compact = false,
-}) {
+  shieldsBlocked = 0,
+  onOpenShields,
+  onActivateMediaTab,
+}, inputRef) {
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -206,9 +216,11 @@ export default function Omnibox({
         <button type="button" className="btn btn-sm btn-icon" onClick={() => window.nexusBrowser.tabs.reload(activeTabId)} title="Обновить">
           <RotateCw size={14} />
         </button>
-        <button type="button" className="btn btn-sm btn-icon" onClick={handleHome} title="Домой">
-          <Home size={14} />
-        </button>
+        {settings?.showHomeButton !== false && (
+          <button type="button" className="btn btn-sm btn-icon" onClick={handleHome} title="Домой">
+            <Home size={14} />
+          </button>
+        )}
       </div>
       )}
 
@@ -232,8 +244,14 @@ export default function Omnibox({
 
       <div className="omnibox-container">
         {engine && <span className="omnibox-engine-icon" title={engine.name}>{engine.icon}</span>}
+        {activeTab?.isIncognito && (
+          <span className="omnibox-incognito-icon" title="Режим инкогнито" style={{ position: 'absolute', left: '32px', color: 'var(--color-accent)', display: 'flex', alignItems: 'center', zIndex: 1 }}>
+            <EyeOff size={14} />
+          </span>
+        )}
         <input
-          className="omnibox"
+          ref={inputRef}
+          className={`omnibox ${activeTab?.isIncognito ? 'omnibox--incognito' : ''}`}
           placeholder={placeholder}
           value={value}
           onChange={(e) => {
@@ -316,7 +334,36 @@ export default function Omnibox({
         <Sparkles size={14} />
       </button>
 
+      {!compact && (
+        <button
+          type="button"
+          className={`btn btn-sm btn-icon shields-btn ${settings?.shieldsEnabled !== false ? 'active' : ''}`}
+          onClick={onOpenShields}
+          title={`Nexus Shields${shieldsBlocked ? ` — заблокировано: ${shieldsBlocked}` : ''}`}
+        >
+          <Shield size={14} />
+          {shieldsBlocked > 0 && <span className="shields-count">{shieldsBlocked > 99 ? '99+' : shieldsBlocked}</span>}
+        </button>
+      )}
+
+      <GlobalMediaControls onActivateTab={onActivateMediaTab} />
+
       <div className={`chrome-trailing ${compact ? 'chrome-trailing--compact' : ''}`}>
+        {!compact && settings?.showHistoryButton !== false && (
+          <button type="button" className={`btn btn-sm btn-icon ${showHistory ? 'active' : ''}`} onClick={() => { setShowHistory(!showHistory); setShowBookmarks(false); }} title="История">
+            <History size={14} />
+          </button>
+        )}
+        {!compact && settings?.showBookmarksButton !== false && (
+          <button type="button" className={`btn btn-sm btn-icon ${showBookmarks ? 'active' : ''}`} onClick={() => { setShowBookmarks(!showBookmarks); setShowHistory(false); }} title="Закладки">
+            <Star size={14} />
+          </button>
+        )}
+        {!compact && settings?.showDownloadsButton !== false && downloads.length > 0 && (
+          <button type="button" className={`btn btn-sm btn-icon ${showDownloads ? 'active' : ''}`} onClick={() => setShowDownloads(!showDownloads)} title="Загрузки">
+            <Download size={14} />
+          </button>
+        )}
         <UserAvatar
           profile={profile}
           authorized={authorized}
@@ -332,7 +379,18 @@ export default function Omnibox({
         >
           <Settings size={16} />
         </button>
+        <button
+          ref={menuAnchorRef}
+          type="button"
+          className="btn btn-sm btn-icon chrome-settings-btn"
+          onClick={onMenuToggle}
+          title="Меню"
+        >
+          <MoreVertical size={16} />
+        </button>
       </div>
     </div>
   );
-}
+});
+
+export default Omnibox;

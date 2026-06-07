@@ -15,6 +15,7 @@ import {
   LifeBuoy,
   Radio,
   Code2,
+  Globe,
 } from 'lucide-react';
 import ProfileMenu from './ProfileMenu';
 import BrandLogo from '../brand/BrandLogo';
@@ -46,8 +47,16 @@ const NAV_GROUPS = [
     items: [{ path: '/artifacts', label: 'Артефакты', icon: LayoutGrid, match: (p) => p === '/artifacts' }],
   },
   {
-    title: 'IDE',
+    title: 'Приложения',
     items: [
+      {
+        path: '/browser',
+        label: 'Скачать Browser',
+        title: 'Nexus Browser для Windows',
+        icon: Globe,
+        match: (p) => p === '/browser',
+        badge: 'new',
+      },
       {
         path: '/ide',
         label: 'Скачать IDE',

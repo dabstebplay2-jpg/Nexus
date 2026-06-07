@@ -7,7 +7,27 @@ const {
   session,
   Menu,
   dialog,
+  protocol,
+  net,
+  nativeImage,
 } = require('electron');
+
+const APP_ICON_PATH = path.join(__dirname, '..', 'product', 'brand', 'icon.ico');
+const APP_ICON_PNG_FALLBACK = path.join(__dirname, '..', 'product', 'brand', 'icon.png');
+
+function resolveAppIconPath() {
+  if (require('fs').existsSync(APP_ICON_PATH)) return APP_ICON_PATH;
+  return APP_ICON_PNG_FALLBACK;
+}
+
+function getAppIcon() {
+  try {
+    const image = nativeImage.createFromPath(resolveAppIconPath());
+    return image.isEmpty() ? undefined : image;
+  } catch {
+    return undefined;
+  }
+}
 const { TabManager, NEXUS_NEWTAB } = require('./tabs');
 const { getOmniboxSuggestions } = require('./omniboxSuggestions');
 const auth = require('./auth');
@@ -28,14 +48,23 @@ const {
   saveChatSession,
   setChatSyncExporter,
   readStore,
+  writeStore,
   getRemoteTabSession,
+  getLocalTabSession,
+  getPasswords,
+  savePassword,
+  removePassword,
 } = require('./storage');
 const { listSearchEngines } = require('./searchEngines');
 const { resolveNewTabUrl } = require('./navUtils');
 const { runBrowserTool } = require('./browserAgent');
 const sync = require('./sync');
+const shields = require('./shields');
+const mediaRegistry = require('./mediaRegistry');
+const extensionsBridge = require('./extensionsBridge');
 
 const isDev = !app.isPackaged;
+const STARTUP_SYNC_DELAY_MS = 12_000;
 const RENDERER_URL = isDev
   ? 'http://127.0.0.1:5174'
   : `file://${path.join(__dirname, '..', 'renderer-dist', 'index.html')}`;
@@ -91,12 +120,15 @@ function applyTitleBarOverlay(theme) {
 function createWindow() {
   const settings = getSettings();
   const overlayColors = titleBarOverlayColors(settings.theme);
+  const appIcon = getAppIcon();
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 360,
     minHeight: 500,
+    show: false,
     title: '',
+    icon: appIcon,
     backgroundColor: '#0f0f0f',
     autoHideMenuBar: true,
     frame: process.platform === 'darwin',
@@ -110,10 +142,14 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      backgroundThrottling: true,
     },
   });
 
   mainWindow._sidebarOpen = settings.sidebarOpen !== false;
+  mainWindow.once('ready-to-show', () => {
+    if (!mainWindow.isDestroyed()) mainWindow.show();
+  });
   mainWindow.loadURL(RENDERER_URL);
 
   tabManager = new TabManager(mainWindow, chromeBounds());
@@ -135,13 +171,29 @@ function createWindow() {
   tabManager.onInternalNavigate = (url) => {
     mainWindow?.webContents.send('tabs:internal', { url });
   };
-  tabManager.createTab(resolveNewTabUrl(settings));
+  const localSession = getLocalTabSession();
+  if (settings.restoreSessionOnLogin !== false && localSession?.tabs?.length) {
+    tabManager.restoreSession(localSession.tabs, localSession.activeIndex);
+  } else {
+    tabManager.createTab(resolveNewTabUrl(settings));
+  }
 
   mainWindow.on('resize', () => tabManager.setChromeBounds(chromeBounds()));
 
-  if (isDev) {
+  if (isDev && process.env.NEXUS_BROWSER_DEVTOOLS === '1') {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
+}
+
+function scheduleStartupSync() {
+  if (!auth.getAccessToken()) return;
+  setTimeout(() => {
+    sync.fullSync().then(() => {
+      const settings = getSettings();
+      mainWindow?.webContents.send('settings:changed', settings);
+      mainWindow?.webContents.send('sync:status', sync.getStatus());
+    }).catch(() => {});
+  }, STARTUP_SYNC_DELAY_MS);
 }
 
 function registerProtocol() {
@@ -173,13 +225,12 @@ function handleProtocolUrl(url) {
 
 function completeAuthExchange(code) {
   return auth.completeGoogleExchange(code).then(async () => {
-    try {
-      await sync.fullSync();
-      const settings = getSettings();
-      mainWindow?.webContents.send('settings:changed', settings);
-    } catch {
-      /* sync optional */
-    }
+    setTimeout(() => {
+      sync.fullSync().then(() => {
+        const settings = getSettings();
+        mainWindow?.webContents.send('settings:changed', settings);
+      }).catch(() => {});
+    }, 2000);
     mainWindow?.webContents.send('auth:changed', { authorized: true });
   });
 }
@@ -213,6 +264,12 @@ auth.setAuthExchangeHandler((exchange) => {
 });
 
 app.whenReady().then(() => {
+  protocol.handle('local-file', (request) => {
+    const url = request.url.replace('local-file://', '');
+    const decoded = decodeURIComponent(url);
+    return net.fetch('file:///' + decoded);
+  });
+
   Menu.setApplicationMenu(null);
 
   const suffix = auth.brand.userAgentSuffix || 'NexusBrowser/0.1';
@@ -224,8 +281,34 @@ app.whenReady().then(() => {
     const settings = getSettings();
     const downloadsPath = settings.downloadPath || app.getPath('downloads');
     const filename = item.getFilename();
-    const savePath = path.join(downloadsPath, filename);
-    item.setSavePath(savePath);
+
+    const startDownload = (savePath) => {
+      if (!savePath) {
+        item.cancel();
+        return;
+      }
+      item.setSavePath(savePath);
+      attachDownloadHandlers(item, filename, savePath);
+    };
+
+    if (settings.askDownloadLocation) {
+      dialog.showSaveDialog(mainWindow, {
+        defaultPath: path.join(downloadsPath, filename),
+        filters: [{ name: 'All Files', extensions: ['*'] }],
+      }).then((result) => {
+        if (result.canceled || !result.filePath) {
+          item.cancel();
+          return;
+        }
+        startDownload(result.filePath);
+      });
+      return;
+    }
+
+    startDownload(path.join(downloadsPath, filename));
+  });
+
+  function attachDownloadHandlers(item, filename, savePath) {
 
     const downloadId = String(Date.now()) + Math.random().toString().slice(2, 6);
     activeDownloadItems.set(downloadId, item);
@@ -263,11 +346,27 @@ app.whenReady().then(() => {
       updateDownloadRecord(downloadId, done);
       mainWindow?.webContents.send('download:done', done);
     });
-  });
+  }
 
   registerProtocol();
   createWindow();
   setupIpc();
+  mediaRegistry.setMainWindow(mainWindow);
+  extensionsBridge.initExtensionsBridge(tabManager, mainWindow);
+  extensionsBridge.hookTabManager(tabManager, mainWindow);
+  (async () => {
+    try {
+      await extensionsBridge.installWebStore();
+      await extensionsBridge.loadStoredExtensions();
+    } catch (e) {
+      console.error('Extensions init failed', e);
+    }
+    try {
+      await shields.initShields(tabManager, mainWindow);
+    } catch (e) {
+      console.error('Shields init failed', e);
+    }
+  })();
   sync.setStatusNotify((status) => {
     mainWindow?.webContents.send('sync:status', status);
   });
@@ -277,13 +376,7 @@ app.whenReady().then(() => {
     mainWindow?.webContents.send('sync:dataChanged');
   });
   sync.startPeriodicSync(() => mainWindow);
-  if (auth.getAccessToken()) {
-    sync.fullSync().then(() => {
-      const settings = getSettings();
-      mainWindow?.webContents.send('settings:changed', settings);
-      mainWindow?.webContents.send('sync:status', sync.getStatus());
-    }).catch(() => {});
-  }
+  scheduleStartupSync();
   flushPendingExchange();
 
   const winProto = process.argv.find((a) => a.startsWith('nexus-browser://'));
@@ -310,8 +403,9 @@ app.on('window-all-closed', () => {
 
 function setupIpc() {
   ipcMain.handle('tabs:list', () => tabManager.listTabs());
-  ipcMain.handle('tabs:create', (_e, url) => {
-    tabManager.createTab(url || undefined);
+  ipcMain.handle('tabs:create', (_e, arg) => {
+    const { url, isIncognito } = arg || {};
+    tabManager.createTab(url || undefined, isIncognito);
     return tabManager.listTabs();
   });
   ipcMain.handle('tabs:activate', (_e, id) => {
@@ -320,6 +414,10 @@ function setupIpc() {
   });
   ipcMain.handle('tabs:close', (_e, id) => {
     tabManager.closeTab(id);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:reopenClosed', () => {
+    tabManager.reopenClosedTab();
     return tabManager.listTabs();
   });
   ipcMain.handle('tabs:navigate', (_e, { tabId, input, options }) => {
@@ -353,6 +451,31 @@ function setupIpc() {
     tabManager.closeTabsToRight(id || tabManager.activeId);
     return tabManager.listTabs();
   });
+  ipcMain.handle('tabs:setGroup', (_e, { tabId, groupId }) => {
+    tabManager.setTabGroup(tabId, groupId);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:createGroup', (_e, { title, color }) => {
+    const groupId = tabManager.createTabGroup(title, color);
+    mainWindow?.webContents.send('settings:changed', getSettings());
+    return { groupId, tabs: tabManager.listTabs(), groups: tabManager.getTabGroups() };
+  });
+  ipcMain.handle('tabs:updateGroup', (_e, { groupId, patch }) => {
+    tabManager.updateTabGroup(groupId, patch);
+    mainWindow?.webContents.send('settings:changed', getSettings());
+    return { groups: tabManager.getTabGroups(), tabs: tabManager.listTabs() };
+  });
+  ipcMain.handle('tabs:removeGroup', (_e, groupId) => {
+    tabManager.removeTabGroup(groupId);
+    mainWindow?.webContents.send('settings:changed', getSettings());
+    return { groups: tabManager.getTabGroups(), tabs: tabManager.listTabs() };
+  });
+  ipcMain.handle('tabs:toggleGroupCollapsed', (_e, groupId) => {
+    tabManager.toggleTabGroupCollapsed(groupId);
+    mainWindow?.webContents.send('settings:changed', getSettings());
+    return { groups: tabManager.getTabGroups(), tabs: tabManager.listTabs() };
+  });
+  ipcMain.handle('tabs:getGroups', () => tabManager.getTabGroups());
   ipcMain.handle('tabs:goBack', (_e, id) => {
     tabManager.goBack(id || tabManager.activeId);
     return tabManager.listTabs();
@@ -373,8 +496,9 @@ function setupIpc() {
     return tabManager.listTabs();
   });
   ipcMain.handle('tabs:getZoom', (_e, id) => tabManager.getZoom(id || tabManager.activeId));
-  ipcMain.handle('tabs:toggleDevTools', (_e, id) => {
-    tabManager.toggleDevTools(id || tabManager.activeId);
+  ipcMain.handle('tabs:toggleDevTools', (_e, arg) => {
+    const { id, panel } = typeof arg === 'object' && arg ? arg : { id: arg, panel: 'default' };
+    tabManager.toggleDevTools(id || tabManager.activeId, panel || 'default');
   });
   ipcMain.handle('tabs:findInPage', (_e, { tabId, text, options }) => {
     tabManager.findInPage(tabId || tabManager.activeId, text, options);
@@ -400,6 +524,16 @@ function setupIpc() {
   });
   ipcMain.handle('chrome:setTitleBarTheme', (_e, theme) => {
     applyTitleBarOverlay(theme);
+  });
+  ipcMain.handle('chrome:pickWallpaper', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [
+        { name: 'Media Files', extensions: ['jpg', 'jpeg', 'png', 'webp', 'mp4', 'webm'] },
+      ],
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    return result.filePaths[0];
   });
   ipcMain.handle('chrome:getBuildInfo', () => ({
     version: app.getVersion(),
@@ -439,6 +573,7 @@ function setupIpc() {
     mainWindow?.webContents.send('settings:changed', next);
     if (partial.sidebarWidth) tabManager?.setChromeBounds(chromeBounds());
     if (partial.theme) applyTitleBarOverlay(next.theme);
+    shields.onSettingsChanged(tabManager);
     sync.onSettingsChanged();
     return next;
   });
@@ -480,6 +615,113 @@ function setupIpc() {
     sync.clearPendingSessionRestore();
     return sync.getStatus();
   });
+  ipcMain.handle('passwords:list', () => getPasswords());
+  ipcMain.handle('passwords:save', (_e, creds) => savePassword(creds));
+  ipcMain.handle('passwords:remove', (_e, id) => removePassword(id));
+  ipcMain.handle('extensions:pickAndLoad', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const extPath = result.filePaths[0];
+    try {
+      const ext = await extensionsBridge.getBrowserSession().loadExtension(extPath, { allowFileAccess: true });
+      const store = readStore();
+      store.extensionPaths = store.extensionPaths || [];
+      if (!store.extensionPaths.includes(extPath)) {
+        store.extensionPaths.push(extPath);
+        writeStore(store);
+      }
+      return {
+        id: ext.id,
+        name: ext.name,
+        version: ext.version,
+        path: extPath,
+      };
+    } catch (e) {
+      throw new Error(`Ошибка загрузки расширения: ${e.message}`);
+    }
+  });
+  ipcMain.handle('extensions:list', () => {
+    const list = extensionsBridge.getBrowserSession().getAllExtensions();
+    const store = readStore();
+    const paths = store.extensionPaths || [];
+    return list.map((ext) => {
+      const extPath = paths.find((p) => p.includes(ext.name) || p.endsWith(ext.id)) || ext.path;
+      return {
+        id: ext.id,
+        name: ext.name,
+        version: ext.version,
+        path: extPath,
+      };
+    });
+  });
+  ipcMain.handle('extensions:installFromStore', async (_e, extensionId) => {
+    return extensionsBridge.installFromStore(extensionId);
+  });
+  ipcMain.handle('extensions:openWebStore', async () => {
+    tabManager.createTab('https://chromewebstore.google.com/');
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('extensions:remove', (_e, { id, path }) => {
+    try {
+      extensionsBridge.getBrowserSession().removeExtension(id);
+      const store = readStore();
+      store.extensionPaths = (store.extensionPaths || []).filter((p) => p !== path);
+      writeStore(store);
+      return { ok: true };
+    } catch (e) {
+      throw new Error(`Ошибка удаления расширения: ${e.message}`);
+    }
+  });
+
+  ipcMain.on('password:request-autofill', (event, origin) => {
+    const list = getPasswords();
+    const match = list.find((p) => p.origin === origin);
+    if (match) {
+      event.sender.send('password:fill', {
+        username: match.username,
+        password: match.password,
+      });
+    }
+  });
+
+  ipcMain.on('password:save-prompt', (event, { origin, username, password }) => {
+    mainWindow?.webContents.send('password:prompt', { origin, username, password });
+  });
+
+  ipcMain.on('media:state', (event, payload) => {
+    const tab = tabManager?.tabs.find((t) => t.view?.webContents === event.sender);
+    if (!tab) return;
+    mediaRegistry.updateSession(tab.id, payload);
+  });
+
+  ipcMain.handle('media:getActive', () => mediaRegistry.getActiveSession());
+  ipcMain.handle('media:action', async (_e, { tabId, action }) => {
+    const tab = tabManager?.tabs.find((t) => t.id === tabId);
+    if (!tab?.view) return { ok: false };
+    const script = action === 'play'
+      ? `(() => { try { navigator.mediaSession?.metadata; document.querySelector('video,audio')?.play(); } catch(_){} })()`
+      : action === 'pause'
+        ? `(() => { try { document.querySelector('video,audio')?.pause(); } catch(_){} })()`
+        : action === 'next'
+          ? `(() => { try { navigator.mediaSession?.setActionHandler && null; } catch(_){} window.dispatchEvent(new KeyboardEvent('keydown',{key:'MediaTrackNext',code:'MediaTrackNext'})); })()`
+          : `(() => { try { window.dispatchEvent(new KeyboardEvent('keydown',{key:'MediaTrackPrevious',code:'MediaTrackPrevious'})); } catch(_){} })()`;
+    await tab.view.webContents.executeJavaScript(script, true).catch(() => {});
+    return { ok: true };
+  });
+
+  ipcMain.handle('shields:getStats', () => ({ blocked: shields.getBlockedCount() }));
+  ipcMain.handle('shields:resetStats', () => {
+    shields.resetBlockedCount();
+    return { blocked: 0 };
+  });
+  ipcMain.handle('shields:setSiteException', (_e, { hostname, exception }) => {
+    shields.setSiteException(hostname, exception);
+    shields.onSettingsChanged(tabManager);
+    return getSettings();
+  });
+  ipcMain.handle('shields:getSiteException', (_e, hostname) => shields.getSiteException(hostname));
   ipcMain.handle('chrome:setCompactMode', (_e, compact) => {
     if (mainWindow) {
       mainWindow._compactMode = Boolean(compact);
@@ -493,10 +735,12 @@ function setupIpc() {
   ipcMain.handle('storage:downloads', () => getDownloads());
   ipcMain.handle('storage:chatGet', (_e, tabId) => {
     const tab = tabManager?.tabs.find((t) => t.id === tabId);
+    if (tab?.isIncognito) return [];
     return getChatSession(tabId, tab?.url);
   });
   ipcMain.handle('storage:chatSave', (_e, { tabId, messages }) => {
     const tab = tabManager?.tabs.find((t) => t.id === tabId);
+    if (tab?.isIncognito) return [];
     const list = saveChatSession(tabId, messages, tab?.url);
     sync.onChatChanged();
     return list;

@@ -12,6 +12,11 @@ export default function TabContextMenu({ x, y, tab, onClose, onAction }) {
         {tab.muted ? 'Включить звук' : 'Без звука'}
       </button>
       <hr />
+      <button type="button" onClick={() => { onAction('newGroup'); onClose(); }}>Новая группа</button>
+      {tab.groupId && (
+        <button type="button" onClick={() => { onAction('removeFromGroup'); onClose(); }}>Убрать из группы</button>
+      )}
+      <hr />
       <button type="button" onClick={() => { onAction('close'); onClose(); }}>Закрыть вкладку</button>
       <button type="button" onClick={() => { onAction('closeOthers'); onClose(); }}>Закрыть другие</button>
       <button type="button" onClick={() => { onAction('closeRight'); onClose(); }}>Закрыть справа</button>

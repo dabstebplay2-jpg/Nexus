@@ -13,6 +13,7 @@ import RequisitesPage from './pages/RequisitesPage';
 import OfferPage from './pages/OfferPage';
 import PrivacyPage from './pages/PrivacyPage';
 import IdeDownloadPage from './pages/IdeDownloadPage';
+import BrowserDownloadPage from './pages/BrowserDownloadPage';
 import IdeExtensionDownloadPage from './pages/IdeExtensionDownloadPage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import IdeAuthBridgePage from './pages/IdeAuthBridgePage';
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="/connectors/callback" element={<ConnectorsCallbackPage />} />
           <Route path="/profile" element={<DashboardPage />} />
           <Route path="/dashboard" element={<Navigate to="/profile" replace />} />
+          <Route path="/browser" element={<BrowserDownloadPage />} />
           <Route path="/ide" element={<IdeDownloadPage />} />
           <Route path="/ide/extension/nexus-ai" element={<IdeExtensionDownloadPage />} />
           <Route path="/ide/lite" element={<IdeLitePage />} />

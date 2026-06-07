@@ -56,6 +56,7 @@ const SECTIONS = [
 const HELP_LINKS = [
   { label: 'Тарифы и оплата', to: '/pricing' },
   { label: 'IDE Web', to: '/ide/lite' },
+  { label: 'Скачать Browser', to: '/browser' },
   { label: 'Скачать IDE', to: '/ide' },
   { label: 'Реквизиты', to: '/requisites' },
   { label: 'Изменения', to: '/updates' },

@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
+const { app, safeStorage } = require('electron');
 
 const FILE = () => path.join(app.getPath('userData'), 'nexus-browser-store.json');
 
@@ -27,6 +27,33 @@ const DEFAULT_SETTINGS = {
   syncTabs: true,
   restoreSessionOnLogin: true,
   tabOrder: [],
+  wallpaperType: 'none',
+  wallpaperPath: '',
+  wallpaperBlur: 0,
+  wallpaperBrightness: 100,
+  wallpaperContrast: 100,
+  tabShape: 'rounded',
+  tabPosition: 'top',
+  showHomeButton: true,
+  showDownloadsButton: true,
+  showBookmarksButton: true,
+  showHistoryButton: true,
+  compactMode: false,
+  syncMethod: 'account',
+  syncSecretKey: '',
+  performanceMemorySaver: true,
+  performanceMemorySaverTimeout: 30,
+  devToolsMode: 'bottom',
+  shieldsEnabled: true,
+  blockAds: true,
+  blockTrackers: true,
+  blockFingerprinting: false,
+  httpsUpgrade: false,
+  performanceMaxLiveTabs: 12,
+  performanceSaveData: false,
+  tabGroups: [],
+  shieldExceptions: {},
+  extensionStoreIds: [],
 };
 
 const SYNC_SETTINGS_KEYS = [
@@ -34,24 +61,34 @@ const SYNC_SETTINGS_KEYS = [
   'defaultZoom', 'sidebarOpen', 'theme', 'language', 'showBookmarksBar',
   'accentColor', 'fontSize', 'sidebarWidth', 'ntpShortcuts', 'syncEnabled',
   'syncHistory', 'syncChats', 'syncTabs', 'restoreSessionOnLogin',
+  'wallpaperType', 'wallpaperPath', 'wallpaperBlur', 'wallpaperBrightness', 'wallpaperContrast',
+  'tabShape', 'tabPosition', 'showHomeButton', 'showDownloadsButton', 'showBookmarksButton', 'showHistoryButton', 'compactMode',
+  'syncMethod', 'performanceMemorySaver', 'performanceMemorySaverTimeout', 'devToolsMode',
+  'shieldsEnabled', 'blockAds', 'blockTrackers', 'blockFingerprinting', 'httpsUpgrade',
+  'performanceMaxLiveTabs', 'performanceSaveData', 'tabGroups', 'shieldExceptions', 'extensionStoreIds',
 ];
 
 let chatSyncExporter = null;
+let storeCache = null;
 
 function setChatSyncExporter(fn) {
   chatSyncExporter = fn;
 }
 
 function readStore() {
+  if (storeCache) return storeCache;
   try {
     const raw = fs.readFileSync(FILE(), 'utf8');
-    return JSON.parse(raw);
+    storeCache = JSON.parse(raw);
+    return storeCache;
   } catch {
-    return { bookmarks: [], history: [], settings: {}, downloads: [], chatSessions: {} };
+    storeCache = { bookmarks: [], history: [], settings: {}, downloads: [], chatSessions: {} };
+    return storeCache;
   }
 }
 
 function writeStore(data) {
+  storeCache = data;
   fs.mkdirSync(path.dirname(FILE()), { recursive: true });
   fs.writeFileSync(FILE(), JSON.stringify(data, null, 2), 'utf8');
 }
@@ -294,6 +331,63 @@ function saveChatSession(tabId, messages, pageUrl) {
   return sliced;
 }
 
+function getPasswords() {
+  const store = readStore();
+  const list = store.passwords || [];
+  return list.map((p) => {
+    let decryptedPassword = '';
+    try {
+      if (safeStorage.isEncryptionAvailable() && p.encryptedPassword) {
+        decryptedPassword = safeStorage.decryptString(Buffer.from(p.encryptedPassword, 'hex'));
+      } else {
+        decryptedPassword = p.password || '';
+      }
+    } catch (e) {
+      decryptedPassword = p.password || '';
+    }
+    return {
+      id: p.id,
+      origin: p.origin,
+      username: p.username,
+      password: decryptedPassword,
+    };
+  });
+}
+
+function savePassword({ origin, username, password }) {
+  const store = readStore();
+  store.passwords = store.passwords || [];
+  store.passwords = store.passwords.filter((p) => !(p.origin === origin && p.username === username));
+
+  let encryptedPassword = '';
+  if (safeStorage.isEncryptionAvailable()) {
+    try {
+      encryptedPassword = safeStorage.encryptString(password).toString('hex');
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  store.passwords.push({
+    id: String(Date.now()) + Math.random().toString().slice(2, 6),
+    origin,
+    username,
+    encryptedPassword: encryptedPassword || undefined,
+    password: encryptedPassword ? undefined : password,
+    createdAt: Date.now(),
+  });
+
+  writeStore(store);
+  return getPasswords();
+}
+
+function removePassword(id) {
+  const store = readStore();
+  store.passwords = (store.passwords || []).filter((p) => p.id !== id);
+  writeStore(store);
+  return getPasswords();
+}
+
 const { mergeSyncPayload } = require('./syncMerge');
 
 function buildMergedPayload(remotePayload, remoteAt) {
@@ -330,6 +424,9 @@ module.exports = {
   updateDownloadRecord,
   getChatSession,
   saveChatSession,
+  getPasswords,
+  savePassword,
+  removePassword,
   readStore,
   writeStore,
 };

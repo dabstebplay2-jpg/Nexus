@@ -1,5 +1,6 @@
 const NEXUS_SETTINGS = 'nexus://settings';
 const NEXUS_NEWTAB = 'nexus://newtab';
+const NEXUS_EXTENSIONS = 'nexus://extensions';
 
 function looksLikeUrl(input) {
   const t = (input || '').trim();
@@ -11,7 +12,7 @@ function looksLikeUrl(input) {
 
 function isInternalUrl(input) {
   const t = (input || '').trim().toLowerCase();
-  return t === NEXUS_SETTINGS || t === NEXUS_NEWTAB || t.startsWith('nexus://');
+  return t === NEXUS_SETTINGS || t === NEXUS_NEWTAB || t === NEXUS_EXTENSIONS || t.startsWith('nexus://');
 }
 
 function resolveNavigationTarget(input) {
@@ -36,6 +37,7 @@ function resolveNewTabUrl(settings) {
 module.exports = {
   NEXUS_SETTINGS,
   NEXUS_NEWTAB,
+  NEXUS_EXTENSIONS,
   looksLikeUrl,
   isInternalUrl,
   resolveNavigationTarget,

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { LogOut, Sparkles, X } from 'lucide-react';
+import { LogOut, X } from 'lucide-react';
+import BrandLogo from './BrandLogo';
 import { fetchModels, parseBrowserTools, streamAgentChat, streamContextChat } from '../lib/api';
 
 export default function Sidebar({
@@ -167,7 +168,10 @@ export default function Sidebar({
   return (
     <aside className={`sidebar ${drawer ? 'sidebar--drawer' : ''}`}>
       <div className="sidebar-header">
-        <span><Sparkles size={14} /> Nexus AI</span>
+        <span className="sidebar-brand">
+          <BrandLogo variant="icon" className="sidebar-brand__logo" imgClassName="sidebar-brand__img" alt="Nexus" />
+          Nexus AI
+        </span>
         <div className="toolbar">
           {drawer && (
             <button type="button" className="btn btn-sm btn-icon" onClick={onClose} title="Закрыть">
@@ -206,7 +210,7 @@ export default function Sidebar({
       <div className="chat-messages">
         {!authorized ? (
           <div className="sidebar-empty">
-            <Sparkles size={32} />
+            <BrandLogo variant="icon" className="sidebar-empty__logo" imgClassName="sidebar-empty__img" alt="Nexus" />
             <p className="muted">Войдите в Nexus для ИИ-ассистента и агента.</p>
             <button type="button" className="btn btn-primary" onClick={onSignIn}>Войти через Google</button>
           </div>

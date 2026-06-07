@@ -76,7 +76,7 @@ export default function BrowserMenu({
         <button type="button" className="menu-item" onClick={() => { onNewWindow(); onClose(); }}>
           <span>Новое окно</span><kbd>Ctrl+N</kbd>
         </button>
-        <button type="button" className="menu-item muted-item" onClick={onClose} title="Скоро">
+        <button type="button" className="menu-item" onClick={() => { onNewTab(true); onClose(); }}>
           <span>Окно инкогнито</span><kbd>Ctrl+Shift+N</kbd>
         </button>
       </div>

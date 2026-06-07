@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Sparkles, Plus, Pencil, Trash2 } from 'lucide-react';
+import BrandLogo from '../components/BrandLogo';
 import SuggestDropdown from '../components/SuggestDropdown';
 import { useOmniboxSuggestions } from '../hooks/useOmniboxSuggestions';
 
@@ -98,9 +99,35 @@ export default function NewTabPage({
     }
   };
 
+  const wallpaperUrl = settings?.wallpaperPath
+    ? (settings.wallpaperPath.startsWith('http') ? settings.wallpaperPath : `local-file://${settings.wallpaperPath}`)
+    : '';
+
   return (
     <div className="ntp">
-      <h1 className="ntp-logo">Nexus</h1>
+      {settings?.wallpaperType === 'image' && wallpaperUrl && (
+        <div className="ntp-wallpaper" style={{
+          backgroundImage: `url(${wallpaperUrl})`,
+          filter: `blur(${settings.wallpaperBlur || 0}px) brightness(${settings.wallpaperBrightness ?? 100}%) contrast(${settings.wallpaperContrast ?? 100}%)`
+        }} />
+      )}
+      {settings?.wallpaperType === 'video' && wallpaperUrl && (
+        <div className="ntp-wallpaper">
+          <video
+            src={wallpaperUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            style={{
+              filter: `blur(${settings.wallpaperBlur || 0}px) brightness(${settings.wallpaperBrightness ?? 100}%) contrast(${settings.wallpaperContrast ?? 100}%)`
+            }}
+          />
+        </div>
+      )}
+      <div className="ntp-logo">
+        <BrandLogo variant="full" imgClassName="ntp-logo__img" alt="Nexus" fallback="text" fallbackText="Nexus" />
+      </div>
       <div className="ntp-search-wrap">
         <form className="ntp-search" onSubmit={submit}>
           {engine && <span className="ntp-engine">{engine.icon}</span>}

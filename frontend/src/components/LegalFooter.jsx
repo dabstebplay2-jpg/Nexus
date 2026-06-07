@@ -24,6 +24,9 @@ export default function LegalFooter({ className = '' }) {
           <Link to="/ide/lite" className="hover:text-white transition-colors">
             IDE Web
           </Link>
+          <Link to="/browser" className="hover:text-white transition-colors">
+            Скачать Browser
+          </Link>
           <Link to="/ide" className="hover:text-white transition-colors">
             Скачать IDE
           </Link>

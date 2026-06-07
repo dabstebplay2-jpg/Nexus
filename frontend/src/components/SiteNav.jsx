@@ -61,6 +61,12 @@ export default function SiteNav() {
                 Настройки
               </Link>
               <Link
+                to="/browser"
+                className="flex items-center gap-1.5 rounded-full bg-violet-500/10 px-4 py-2 text-sm font-semibold text-violet-300 border border-violet-500/30 hover:bg-violet-500/20"
+              >
+                Скачать Browser
+              </Link>
+              <Link
                 to="/ide"
                 className="flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/20"
               >
@@ -119,6 +125,13 @@ export default function SiteNav() {
                 <>
                   <Link to="/?settings=account" className={linkClass('/profile')} onClick={() => setMobileOpen(false)}>
                     Настройки
+                  </Link>
+                  <Link
+                    to="/browser"
+                    className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-violet-500/15 py-3 text-sm font-semibold text-violet-300 border border-violet-500/30"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    Скачать Browser
                   </Link>
                   <Link
                     to="/ide"

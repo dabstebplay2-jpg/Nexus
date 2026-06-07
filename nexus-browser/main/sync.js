@@ -1,4 +1,5 @@
 const os = require('os');
+const crypto = require('crypto');
 const auth = require('./auth');
 const {
   getSettings,
@@ -50,7 +51,42 @@ function clearPendingSessionRestore() {
   pendingSessionRestore = null;
 }
 
+function encryptPayload(payload, secretKey) {
+  const salt = crypto.randomBytes(16);
+  const key = crypto.scryptSync(secretKey, salt, 32);
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  let encrypted = cipher.update(JSON.stringify(payload), 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return {
+    salt: salt.toString('hex'),
+    iv: iv.toString('hex'),
+    data: encrypted,
+  };
+}
+
+function decryptPayload(encryptedObj, secretKey) {
+  const salt = Buffer.from(encryptedObj.salt, 'hex');
+  const iv = Buffer.from(encryptedObj.iv, 'hex');
+  const key = crypto.scryptSync(secretKey, salt, 32);
+  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+  let decrypted = decipher.update(encryptedObj.data, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return JSON.parse(decrypted);
+}
+
 async function fetchRemote() {
+  const settings = getSettings();
+  if (settings.syncMethod === 'secret-key' && settings.syncSecretKey) {
+    const hash = crypto.createHash('sha256').update(settings.syncSecretKey).digest('hex');
+    const res = await fetch(`https://kvdb.io/anonymous/${hash}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const encryptedObj = await res.json();
+    const decryptedPayload = decryptPayload(encryptedObj, settings.syncSecretKey);
+    return { payload: decryptedPayload, updated_at: decryptedPayload.updatedAt };
+  }
+
   const res = await auth.cloudFetch('/v1/user/browser-sync');
   if (res.status === 404) return null;
   if (!res.ok) {
@@ -61,6 +97,19 @@ async function fetchRemote() {
 }
 
 async function pushRemote(payload) {
+  const settings = getSettings();
+  if (settings.syncMethod === 'secret-key' && settings.syncSecretKey) {
+    const hash = crypto.createHash('sha256').update(settings.syncSecretKey).digest('hex');
+    const encryptedObj = encryptPayload(payload, settings.syncSecretKey);
+    const res = await fetch(`https://kvdb.io/anonymous/${hash}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(encryptedObj),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { updated_at: Date.now() };
+  }
+
   const res = await auth.cloudFetch('/v1/user/browser-sync', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -108,11 +157,12 @@ async function applyMergedAndMaybePush(merged, { pushAfter = true } = {}) {
 }
 
 async function fullSync() {
-  if (!auth.getAccessToken()) {
+  const settings = getSettings();
+  const isSecretKey = settings.syncMethod === 'secret-key' && settings.syncSecretKey;
+  if (!isSecretKey && !auth.getAccessToken()) {
     emitStatus({ state: 'offline', error: null });
     return getStatus();
   }
-  const settings = getSettings();
   if (settings.syncEnabled === false) {
     emitStatus({ state: 'disabled' });
     return getStatus();
@@ -150,11 +200,12 @@ async function fullSync() {
 }
 
 async function pullSync() {
-  if (!auth.getAccessToken()) {
+  const settings = getSettings();
+  const isSecretKey = settings.syncMethod === 'secret-key' && settings.syncSecretKey;
+  if (!isSecretKey && !auth.getAccessToken()) {
     emitStatus({ state: 'offline', error: null });
     return getStatus();
   }
-  const settings = getSettings();
   if (settings.syncEnabled === false) {
     emitStatus({ state: 'disabled' });
     return getStatus();
@@ -182,8 +233,9 @@ async function pullSync() {
 }
 
 async function pushSync() {
-  if (!auth.getAccessToken()) return getStatus();
   const settings = getSettings();
+  const isSecretKey = settings.syncMethod === 'secret-key' && settings.syncSecretKey;
+  if (!isSecretKey && !auth.getAccessToken()) return getStatus();
   if (settings.syncEnabled === false) return getStatus();
 
   emitStatus({ state: 'syncing', error: null });
@@ -202,8 +254,9 @@ async function pushSync() {
 }
 
 function schedulePush() {
-  if (!auth.getAccessToken()) return;
   const settings = getSettings();
+  const isSecretKey = settings.syncMethod === 'secret-key' && settings.syncSecretKey;
+  if (!isSecretKey && !auth.getAccessToken()) return;
   if (settings.syncEnabled === false) return;
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
@@ -214,21 +267,27 @@ function schedulePush() {
 
 function onTabsChanged(tabs) {
   const settings = getSettings();
-  if (settings.syncTabs === false) return;
   if (tabSessionTimer) clearTimeout(tabSessionTimer);
   tabSessionTimer = setTimeout(() => {
     tabSessionTimer = null;
     const snapshot = {
       tabs: (tabs || [])
-        .filter((t) => t.url && !t.isInternal)
+        .filter((t) => t.url && !t.isInternal && !t.isIncognito)
         .slice(0, 30)
-        .map((t) => ({ url: t.url, title: t.title || t.url, pinned: Boolean(t.pinned) })),
+        .map((t) => ({
+          url: t.url,
+          title: t.title || t.url,
+          pinned: Boolean(t.pinned),
+          groupId: t.groupId || null,
+        })),
       activeIndex: Math.max(0, (tabs || []).findIndex((t) => t.active)),
       deviceLabel: os.hostname(),
       updatedAt: Date.now(),
     };
     setLocalTabSession(snapshot);
-    schedulePush();
+    if (settings.syncEnabled !== false && settings.syncTabs !== false) {
+      schedulePush();
+    }
   }, 3000);
 }
 
@@ -257,7 +316,11 @@ function startPeriodicSync(getMainWindow) {
   const win = getMainWindow?.();
   if (win && !win._syncFocusHook) {
     win._syncFocusHook = true;
+    let lastFocusPull = 0;
     win.on('focus', () => {
+      const now = Date.now();
+      if (now - lastFocusPull < 60_000) return;
+      lastFocusPull = now;
       if (auth.getAccessToken()) pullSync().catch(() => {});
     });
   }

@@ -3,9 +3,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('nexusBrowser', {
   tabs: {
     list: () => ipcRenderer.invoke('tabs:list'),
-    create: (url) => ipcRenderer.invoke('tabs:create', url),
+    create: (url, isIncognito) => ipcRenderer.invoke('tabs:create', { url, isIncognito }),
     activate: (id) => ipcRenderer.invoke('tabs:activate', id),
     close: (id) => ipcRenderer.invoke('tabs:close', id),
+    reopenClosed: () => ipcRenderer.invoke('tabs:reopenClosed'),
     navigate: (tabId, input, options) => ipcRenderer.invoke('tabs:navigate', { tabId, input, options }),
     duplicate: (id) => ipcRenderer.invoke('tabs:duplicate', id),
     reorder: (tabId, toIndex) => ipcRenderer.invoke('tabs:reorder', { tabId, toIndex }),
@@ -19,7 +20,13 @@ contextBridge.exposeInMainWorld('nexusBrowser', {
     print: (id) => ipcRenderer.invoke('tabs:print', id),
     setZoom: (tabId, factor) => ipcRenderer.invoke('tabs:setZoom', { tabId, factor }),
     getZoom: (id) => ipcRenderer.invoke('tabs:getZoom', id),
-    toggleDevTools: (id) => ipcRenderer.invoke('tabs:toggleDevTools', id),
+    toggleDevTools: (id, panel) => ipcRenderer.invoke('tabs:toggleDevTools', { id, panel }),
+    setGroup: (tabId, groupId) => ipcRenderer.invoke('tabs:setGroup', { tabId, groupId }),
+    createGroup: (title, color) => ipcRenderer.invoke('tabs:createGroup', { title, color }),
+    updateGroup: (groupId, patch) => ipcRenderer.invoke('tabs:updateGroup', { groupId, patch }),
+    removeGroup: (groupId) => ipcRenderer.invoke('tabs:removeGroup', groupId),
+    toggleGroupCollapsed: (groupId) => ipcRenderer.invoke('tabs:toggleGroupCollapsed', groupId),
+    getGroups: () => ipcRenderer.invoke('tabs:getGroups'),
     findInPage: (tabId, text, options) => ipcRenderer.invoke('tabs:findInPage', { tabId, text, options }),
     stopFindInPage: (tabId, action) => ipcRenderer.invoke('tabs:stopFindInPage', { tabId, action }),
     onChanged: (cb) => {
@@ -73,6 +80,7 @@ contextBridge.exposeInMainWorld('nexusBrowser', {
     getBuildInfo: () => ipcRenderer.invoke('chrome:getBuildInfo'),
     setTitleBarTheme: (theme) => ipcRenderer.invoke('chrome:setTitleBarTheme', theme),
     setCompactMode: (compact) => ipcRenderer.invoke('chrome:setCompactMode', compact),
+    pickWallpaper: () => ipcRenderer.invoke('chrome:pickWallpaper'),
   },
   window: {
     toggleFullscreen: () => ipcRenderer.invoke('window:toggleFullscreen'),
@@ -175,6 +183,44 @@ contextBridge.exposeInMainWorld('nexusBrowser', {
           reject(e);
         });
       }),
+  },
+  passwords: {
+    list: () => ipcRenderer.invoke('passwords:list'),
+    save: (creds) => ipcRenderer.invoke('passwords:save', creds),
+    remove: (id) => ipcRenderer.invoke('passwords:remove', id),
+    onPrompt: (callback) => {
+      const listener = (_event, data) => callback(data);
+      ipcRenderer.on('password:prompt', listener);
+      return () => ipcRenderer.removeListener('password:prompt', listener);
+    },
+  },
+  extensions: {
+    pickAndLoad: () => ipcRenderer.invoke('extensions:pickAndLoad'),
+    list: () => ipcRenderer.invoke('extensions:list'),
+    remove: (id, path) => ipcRenderer.invoke('extensions:remove', { id, path }),
+    installFromStore: (extensionId) => ipcRenderer.invoke('extensions:installFromStore', extensionId),
+    openWebStore: () => ipcRenderer.invoke('extensions:openWebStore'),
+  },
+  media: {
+    getActive: () => ipcRenderer.invoke('media:getActive'),
+    action: (tabId, action) => ipcRenderer.invoke('media:action', { tabId, action }),
+    onActiveSession: (cb) => {
+      const handler = (_e, data) => cb(data);
+      ipcRenderer.on('media:activeSession', handler);
+      return () => ipcRenderer.removeListener('media:activeSession', handler);
+    },
+  },
+  shields: {
+    getStats: () => ipcRenderer.invoke('shields:getStats'),
+    resetStats: () => ipcRenderer.invoke('shields:resetStats'),
+    setSiteException: (hostname, exception) =>
+      ipcRenderer.invoke('shields:setSiteException', { hostname, exception }),
+    getSiteException: (hostname) => ipcRenderer.invoke('shields:getSiteException', hostname),
+    onBlocked: (cb) => {
+      const handler = (_e, data) => cb(data);
+      ipcRenderer.on('shields:blocked', handler);
+      return () => ipcRenderer.removeListener('shields:blocked', handler);
+    },
   },
   shell: {
     openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
