@@ -12,7 +12,7 @@ const OAUTH_ERROR_MESSAGES = {
   oauth_token:
     'Ошибка обмена кода с Google. Проверьте GOOGLE_CLIENT_SECRET и GOOGLE_REDIRECT_URI на Render (должны совпадать с Google Console).',
   oauth_redirect:
-    'Неверный redirect URI. В Google Cloud Console → OAuth client → Authorized redirect URIs добавьте точно: https://frontend-henna-tau-19.vercel.app/api/auth/google/callback (и при необходимости https://nexus-cloud-ee17.onrender.com/v1/auth/google/callback). На Render переменная GOOGLE_REDIRECT_URI должна совпадать с первым URL.',
+    'Неверный redirect URI. В Google Cloud Console → OAuth client → Authorized redirect URIs добавьте точно: https://nexus-zeta-ruby-12.vercel.app/api/auth/google/callback. На Render переменная GOOGLE_REDIRECT_URI должна совпадать с этим URL.',
   oauth_client:
     'Неверный Client ID или Client Secret на сервере. Обновите GOOGLE_CLIENT_ID и GOOGLE_CLIENT_SECRET на Render.',
   oauth_jwt: 'Не удалось проверить токен Google. Попробуйте снова через минуту.',

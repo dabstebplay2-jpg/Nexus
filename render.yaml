@@ -58,6 +58,14 @@ services:
         sync: false
       - key: NEXUS_CRON_SECRET
         generateValue: true
+      - key: NEXUS_FRONTEND_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
 
   - type: cron
     name: nexus-polza-balance

@@ -18,7 +18,12 @@ from push_render_env import (  # noqa: E402
     _put_env,
 )
 
-GOOGLE_KEYS = ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI")
+GOOGLE_KEYS = (
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "GOOGLE_REDIRECT_URI",
+    "NEXUS_FRONTEND_URL",
+)
 
 
 def main() -> int:

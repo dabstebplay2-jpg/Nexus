@@ -89,8 +89,14 @@ VITE_CLOUD_URL=https://ВАШ-RENDER.onrender.com
 
 ### OAuth / коннекторы
 
-Все redirect URI в Polza, Google, GitHub, Vercel Console нужно **пересоздать** под новые домены.  
-Чеклист: [`nexus-cloud-server/docs/CONNECTORS_SETUP_RU.md`](../nexus-cloud-server/docs/CONNECTORS_SETUP_RU.md)
+Все redirect URI в Polza, Google, GitHub, Vercel Console нужно **пересоздать** под новые домены.
+
+| Сценарий | Документ |
+|----------|----------|
+| Вход через Google на сайте | [`nexus-cloud-server/docs/GOOGLE_AUTH.md`](../nexus-cloud-server/docs/GOOGLE_AUTH.md) |
+| Gmail / GitHub / Vercel коннекторы | [`nexus-cloud-server/docs/CONNECTORS_SETUP_RU.md`](../nexus-cloud-server/docs/CONNECTORS_SETUP_RU.md) |
+
+Шаблон env для Google (прод): [`nexus-cloud-server/deploy/google-oauth-production.env.example`](../nexus-cloud-server/deploy/google-oauth-production.env.example)
 
 ---
 
