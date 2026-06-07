@@ -19,7 +19,7 @@ services:
       - key: POLZA_MCP_TOKEN
         sync: false
       - key: POLZA_OAUTH_CALLBACK_URL
-        value: https://nexus-cloud-ee17.onrender.com/v1/auth/polza/callback
+        sync: false
       - key: POLZA_APP_NAME
         value: Nexus
       - key: NEXUS_BILLING_TEST_MODE
@@ -31,7 +31,17 @@ services:
       - key: NEXUS_TESTING_MODE
         value: "false"
       - key: NEXUS_CORS_ORIGINS
-        value: https://frontend-henna-tau-19.vercel.app
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_HTTP_REFERER
+        sync: false
+      - key: OPENROUTER_APP_TITLE
+        value: Nexus
+      - key: NEXUS_FREE_OPENROUTER_DAILY_LIMIT
+        value: "100"
+      - key: NEXUS_FREE_OPENROUTER_RPM
+        value: "15"
       - key: NEXUS_REMOTE_ADMIN
         sync: false
       - key: NEXUS_ADMIN_PASSWORD
