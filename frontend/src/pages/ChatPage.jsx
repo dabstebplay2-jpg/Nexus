@@ -40,6 +40,7 @@ import { useArtifacts } from '../context/ArtifactContext';
 import { hydrateConversationImages } from '../lib/chatSyncAttachments';
 import SupportPanel from '../components/support/SupportPanel';
 import { readWebSearchEnabled, writeWebSearchEnabled } from '../lib/webSearchPreference';
+import { detectExplicitWebSearchIntent } from '../lib/webSearchIntent';
 import ConnectorChips from '../features/connectors/ConnectorChips';
 import { fetchConnectorsSummary } from '../features/connectors/connectorsApi';
 import ChatComposerBanners from '../components/chat/ChatComposerBanners';
@@ -70,6 +71,7 @@ export default function ChatPage() {
   const [attachToast, setAttachToast] = useState('');
   const [supportOpen, setSupportOpen] = useState(false);
   const [webSearch, setWebSearch] = useState(readWebSearchEnabled);
+  const [webSearchHighlight, setWebSearchHighlight] = useState(false);
   const handleWebSearchChange = useCallback((next) => {
     setWebSearch(next);
     writeWebSearchEnabled(next);
@@ -398,6 +400,11 @@ export default function ChatPage() {
       finalModelMeta = findModelByAnyId(allModels, finalModel);
     }
 
+    if (!webSearch && mode === 'chat' && detectExplicitWebSearchIntent(text)) {
+      setWebSearchHighlight(true);
+      window.setTimeout(() => setWebSearchHighlight(false), 2200);
+    }
+
     await sendMessage({
       text,
       attachments: sentAttachments,
@@ -585,6 +592,7 @@ export default function ChatPage() {
                 onOpenSupport={() => setSupportOpen(true)}
                 webSearch={webSearch}
                 onWebSearchChange={handleWebSearchChange}
+                webSearchHighlight={webSearchHighlight}
               />
               {attachToast && (
                 <p className="mt-2 text-xs text-amber-400/90 max-w-3xl mx-auto px-4 text-center">
@@ -695,6 +703,7 @@ export default function ChatPage() {
                     onOpenSupport={() => setSupportOpen(true)}
                     webSearch={webSearch}
                     onWebSearchChange={handleWebSearchChange}
+                    webSearchHighlight={webSearchHighlight}
                   />
                   </div>
                 </div>

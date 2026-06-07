@@ -470,10 +470,10 @@
       preSearchThinking: '',
       thinking: '',
       searchActivity: useWebSearch
-        ? { steps: [], status: 'Планирую поиск…', depth: webSearchDepth }
+        ? { steps: [], status: null, depth: webSearchDepth }
         : null,
     };
-    setStreamStatus(useWebSearch ? 'Планирую поиск…' : agentMode ? 'Агент…' : 'Генерирую ответ…');
+    setStreamStatus(useWebSearch ? 'Думаю…' : agentMode ? 'Агент…' : 'Генерирую ответ…');
     scrollToBottom(true);
   }
 

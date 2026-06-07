@@ -14,14 +14,14 @@ import {
   Microscope,
   Info,
 } from 'lucide-react';
-import { depthMeta, DEFAULT_WEB_SEARCH_DEPTH } from '../../lib/webSearchPreference';
 import { Link } from 'react-router-dom';
 import ModelPicker from '../chat/ModelPicker';
 import AttachmentBar from '../chat/AttachmentBar';
 import WebSearchDepthPicker from '../chat/WebSearchDepthPicker';
 import { useVisualViewportPadding } from '../../hooks/useVisualViewportPadding';
 
-const WEB_SEARCH_HINT = depthMeta(DEFAULT_WEB_SEARCH_DEPTH).hint;
+const WEB_SEARCH_HINT =
+  'Автопоиск: ищет в интернете только когда нужны свежие факты. «Привет», творческие задачи и общие вопросы — без поиска.';
 
 export default function NexusComposer({
   value,
@@ -51,6 +51,7 @@ export default function NexusComposer({
   onOpenSupport,
   webSearch = false,
   onWebSearchChange,
+  webSearchHighlight = false,
 }) {
   const [attachOpen, setAttachOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -277,6 +278,7 @@ export default function NexusComposer({
                   enabled={webSearch}
                   disabled={disabled || loading}
                   onEnabledChange={onWebSearchChange}
+                  highlight={webSearchHighlight}
                 />
               )}
             </div>

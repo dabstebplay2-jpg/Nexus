@@ -38,6 +38,7 @@ from app.services.web_search_context import (
     web_search_quick,
 )
 from app.services.web_search_agent import run_web_search_session
+from app.services.web_search_gate import resolve_web_search_need
 from app.services.message_builder import (
     build_router_payload,
     extract_message_images,
@@ -651,10 +652,28 @@ async def simple_chat_stream(
     model = await _resolve_simple_chat_model(payload, current_user)
     memory_text = get_enabled_memory_text(db, current_user.id)
     router_body = build_router_payload(model, payload, memory_content=memory_text)
-    use_web = bool(payload.use_web_search)
+    web_preference = bool(payload.use_web_search)
 
     api_key = _require_chat_api_key(current_user)
     stream_tokens = _stream_fn_for_user(current_user)
+
+    user_text = last_user_message_text(payload.messages)
+    search_decision = await resolve_web_search_need(
+        user_text,
+        preference_enabled=web_preference,
+        api_key=api_key,
+        subscription_tier=current_user.subscription_tier or "STANDARD",
+    )
+    use_web = search_decision.should_search
+    search_skipped = web_preference and not use_web
+    search_skip_reason = search_decision.reason if search_skipped else ""
+    if web_preference or use_web:
+        logger.info(
+            "web search gate: preference=%s use_web=%s reason=%s",
+            web_preference,
+            use_web,
+            search_decision.reason,
+        )
 
     user_id = current_user.id
 
@@ -666,6 +685,14 @@ async def simple_chat_stream(
         stream_sources: list[dict] = []
         stream_engine = ""
         body = dict(router_body)
+        if search_skipped:
+            yield _sse_event(
+                {
+                    "type": "status",
+                    "content": "search_skipped",
+                    "reason": search_skip_reason,
+                }
+            )
         if use_web:
             pre_search_reasoning = ""
             yield _sse_event({"type": "status", "content": "planning"})

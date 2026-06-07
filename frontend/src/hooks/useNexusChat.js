@@ -100,15 +100,15 @@ export function useNexusChat({
             ? history
             : augmentMessagesWithCodeContext(history, existingCodeFiles, trimmed);
 
+      const webSearchPreference = webSearchEnabled && mode === 'chat';
+
       const placeholder = isMediaModel
         ? ''
         : mode === 'research'
           ? '🔬 Глубокое исследование…'
-          : webSearchEnabled
-            ? '🔍 Поиск в сети…'
+          : webSearchPreference
+            ? 'Думаю…'
             : '';
-
-      const useWebInChat = webSearchEnabled && mode === 'chat';
 
       patchConv(convId, (c) => ({
         ...c,
@@ -117,13 +117,13 @@ export function useNexusChat({
           {
             id: assistantId,
             role: 'assistant',
-            content: useWebInChat ? '' : placeholder,
+            content: placeholder,
             thinking: '',
             searchActivity:
-              mode === 'chat'
+              mode === 'chat' && webSearchPreference
                 ? {
                     steps: [],
-                    status: useWebInChat ? 'Планирую поиск…' : null,
+                    status: null,
                     depth: webSearchDepth,
                     depthLabel: depthMeta(webSearchDepth).label,
                   }
@@ -161,7 +161,8 @@ export function useNexusChat({
           let streamed = '';
           let thinkingStream = '';
           let preSearchThinking = '';
-          let streamPhase = useWebInChat ? 'pre' : 'answer';
+          let streamPhase = 'answer';
+          let searchEngaged = false;
           const connectorTools = [];
           const conversationSources = collectConversationSources(conv.messages || [], {
             excludeMessageId: assistantId,
@@ -177,7 +178,7 @@ export function useNexusChat({
                 const hasThink = Boolean(thinkingStream || preSearchThinking);
                 let content = streamed;
                 if (!hasAnswer) {
-                  if (useWebInChat) content = '';
+                  if (searchEngaged && !streamed) content = '';
                   else if (hasThink) content = '';
                   else content = placeholder;
                 }
@@ -289,15 +290,25 @@ export function useNexusChat({
             messages: apiMessages,
             attachments: apiAttachments,
             agentId: selectedAgent,
-            useWebSearch: useWebInChat,
-            webSearchDepth: useWebInChat ? webSearchDepth : 'standard',
+            useWebSearch: webSearchPreference,
+            webSearchDepth: webSearchPreference ? webSearchDepth : 'standard',
             conversationSources:
               conversationSources.length > 0 ? conversationSources : undefined,
             enableThinking,
             signal,
             onStatus: (status) => {
-              if (!useWebInChat) return;
+              if (status === 'search_skipped') {
+                searchEngaged = false;
+                patchSearchActivity((prev) => ({
+                  ...prev,
+                  steps: [],
+                  status: null,
+                }));
+                return;
+              }
+              if (!webSearchPreference && !searchEngaged) return;
               if (status === 'planning') {
+                searchEngaged = true;
                 streamPhase = 'pre';
                 patchSearchActivity((prev) => ({
                   ...prev,
@@ -306,6 +317,7 @@ export function useNexusChat({
                 return;
               }
               if (status === 'searching') {
+                searchEngaged = true;
                 streamPhase = 'search';
                 ensureReasonStep();
                 patchSearchActivity((prev) => ({
@@ -328,15 +340,15 @@ export function useNexusChat({
               }
             },
             onPreSearchDone: () => {
-              if (!useWebInChat) return;
+              if (!searchEngaged) return;
               ensureReasonStep();
             },
             onSearchPlan: (evt) => {
-              if (!useWebInChat) return;
+              if (!searchEngaged) return;
               appendSearchPlan(evt);
             },
             onSearchRound: (evt) => {
-              if (!useWebInChat) return;
+              if (!searchEngaged) return;
               appendSearchStep(evt);
             },
             onToolStart: (evt) => {

@@ -25,6 +25,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePricingCatalog, tierHasAiFromList } from '../hooks/usePricingCatalog';
 import { useNexusChat } from '../hooks/useNexusChat';
 import { readWebSearchEnabled, writeWebSearchEnabled } from '../lib/webSearchPreference';
+import { detectExplicitWebSearchIntent } from '../lib/webSearchIntent';
 import { findModelByAnyId } from '../lib/modelSelection';
 import { isImageGenModel, detectImageGenIntent } from '../lib/attachments';
 
@@ -43,6 +44,7 @@ export default function SpacesPage() {
   const [mode, setMode] = useState('chat');
   const [search, setSearch] = useState('');
   const [webSearch, setWebSearch] = useState(readWebSearchEnabled);
+  const [webSearchHighlight, setWebSearchHighlight] = useState(false);
   const messagesEndRef = useRef(null);
 
   const allModels = useMemo(
@@ -158,6 +160,11 @@ export default function SpacesPage() {
         'flux-klein';
       finalModel = defaultMediaId;
       finalIsMediaModel = true;
+    }
+
+    if (!webSearch && mode === 'chat' && detectExplicitWebSearchIntent(text)) {
+      setWebSearchHighlight(true);
+      window.setTimeout(() => setWebSearchHighlight(false), 2200);
     }
 
     await sendMessage({
@@ -375,6 +382,7 @@ export default function SpacesPage() {
                   placeholder="Сообщение в пространстве…"
                   webSearch={webSearch}
                   onWebSearchChange={handleWebSearchChange}
+                  webSearchHighlight={webSearchHighlight}
                 />
               </div>
               {codePanel.open && codePanel.files.length > 0 && (
