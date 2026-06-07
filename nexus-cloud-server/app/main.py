@@ -219,6 +219,9 @@ app.include_router(polza_auth.router)
 app.include_router(billing.router)
 app.include_router(chats.router)
 app.include_router(memory.router)
+from app.routers import browser_sync
+
+app.include_router(browser_sync.router)
 app.include_router(artifacts.router)
 app.include_router(ai.router)
 app.include_router(telegram.router)

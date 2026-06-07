@@ -177,6 +177,16 @@ class SupportMessageDB(Base):
     ticket = relationship("SupportTicketDB", back_populates="messages")
 
 
+class BrowserSyncDB(Base):
+    """Синхронизация настроек Nexus Browser между устройствами."""
+
+    __tablename__ = "browser_sync"
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True, index=True)
+    payload_json = Column(Text, default="{}", nullable=False)
+    client_version = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class UserMemoryDB(Base):
     """Глобальная память пользователя для подстановки в чаты."""
 

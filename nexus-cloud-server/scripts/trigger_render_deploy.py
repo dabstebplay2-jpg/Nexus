@@ -46,9 +46,11 @@ def _api(method: str, path: str, token: str, body: dict | None = None) -> dict:
 
 def main() -> int:
     local = _parse_env(ENV_FILE)
-    token = (local.get("RENDER_API_KEY") or "").strip()
+    import os
+
+    token = (os.environ.get("RENDER_API_KEY") or local.get("RENDER_API_KEY") or "").strip()
     if not token:
-        print("RENDER_API_KEY missing in .env")
+        print("RENDER_API_KEY missing in .env or environment")
         return 1
     name = local.get("RENDER_SERVICE_NAME", SERVICE_NAME)
     data = _api("GET", f"/services?name={name}&limit=20", token)
