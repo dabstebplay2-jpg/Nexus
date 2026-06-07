@@ -46,6 +46,7 @@ import { fetchConnectorsSummary } from '../features/connectors/connectorsApi';
 import ChatComposerBanners from '../components/chat/ChatComposerBanners';
 import { warmApiHealthOnce } from '../lib/warmApiHealth';
 import HomeFeatures from '../components/home/HomeFeatures';
+import { BrowserDownloadHeroCta, BrowserDownloadPill, BrowserDownloadStrip } from '../components/BrowserDownloadCta';
 import { Code2 } from 'lucide-react';
 import ChatHeaderOverflow from '../components/chat/ChatHeaderOverflow';
 
@@ -467,6 +468,7 @@ export default function ChatPage() {
         headerLeft={
           <>
             <div className="hidden sm:flex items-center gap-2 overflow-x-auto custom-scrollbar flex-wrap min-w-0">
+              <BrowserDownloadPill />
               <Link
                 to="/ide/lite"
                 className="text-sm font-medium px-3 py-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 text-teal-300 hover:bg-teal-500/15 whitespace-nowrap inline-flex items-center gap-1.5"
@@ -543,9 +545,12 @@ export default function ChatPage() {
                   nexus
                 </h1>
                 <p className="text-sm sm:text-base text-[var(--nx-muted)] max-w-lg mx-auto px-2">
-                  ИИ-чат, Research с источниками и расширение для IDE в одном аккаунте
+                  ИИ-чат, Research с источниками, браузер и IDE в одном аккаунте
                 </p>
+                <BrowserDownloadHeroCta className="mt-5" />
               </motion.div>
+
+              <BrowserDownloadStrip className="w-full max-w-2xl mt-6 md:hidden" />
 
               <ChatComposerBanners
                 profile={authStatus.profile}
@@ -619,7 +624,8 @@ export default function ChatPage() {
                 </p>
               )}
 
-              <HomeFeatures className="hidden md:block mt-16 w-full" />
+              <BrowserDownloadStrip className="hidden md:block w-full mt-10" />
+              <HomeFeatures className="hidden md:block mt-10 w-full" />
               </div>
             </div>
           ) : (

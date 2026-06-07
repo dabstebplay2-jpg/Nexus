@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
 import LegalFooter from '../components/LegalFooter';
+import { BrowserDownloadStrip } from '../components/BrowserDownloadCta';
 import changelogData from '../data/changelog.json';
 
 const LABELS = {
@@ -165,6 +166,8 @@ export default function UpdatesPage() {
               </div>
             </div>
           </div>
+
+          <BrowserDownloadStrip className="mt-8" />
 
           {latest && (
             <div className="mt-9">

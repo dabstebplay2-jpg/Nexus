@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Puzzle, LogIn, Menu, X } from 'lucide-react';
+import { Puzzle, LogIn, Menu, X, Download } from 'lucide-react';
+import { BROWSER_SETUP_URL, BROWSER_VERSION } from '../lib/browserDownload';
 import { useAuth } from '../context/AuthContext';
 import BrandLogo from './brand/BrandLogo';
 import DiscordInviteLink from './DiscordInviteLink';
@@ -43,6 +44,15 @@ export default function SiteNav() {
             Возможности
           </a>
           <DiscordInviteLink className="text-sm text-indigo-300/90 hover:text-indigo-200" />
+          <a
+            href={BROWSER_SETUP_URL}
+            download
+            className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/35 bg-violet-500/10 px-3 py-1.5 text-sm font-semibold text-violet-200 hover:bg-violet-500/20 transition-colors"
+            title={`Nexus Browser v${BROWSER_VERSION}`}
+          >
+            <Download size={14} />
+            Browser
+          </a>
           <Link to="/ide/lite" className={linkClass('/ide/lite')}>
             IDE Web
           </Link>
@@ -109,6 +119,14 @@ export default function SiteNav() {
                 className={linkClass('/')}
                 onClick={() => setMobileOpen(false)}
               />
+              <a
+                href={BROWSER_SETUP_URL}
+                download
+                className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-violet-500/15 py-3 text-sm font-semibold text-violet-200 border border-violet-500/30"
+                onClick={() => setMobileOpen(false)}
+              >
+                <Download size={18} /> Скачать Browser
+              </a>
               <Link to="/ide/lite" className={linkClass('/ide/lite')} onClick={() => setMobileOpen(false)}>
                 IDE Web
               </Link>

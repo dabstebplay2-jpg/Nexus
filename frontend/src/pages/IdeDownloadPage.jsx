@@ -14,6 +14,7 @@ import {
   Copy,
   ExternalLink,
 } from 'lucide-react';
+import { BROWSER_SETUP_URL, BROWSER_VERSION } from '../lib/browserDownload';
 import { useState } from 'react';
 import AppShell from '../components/layout/AppShell';
 
@@ -101,7 +102,23 @@ export default function IdeDownloadPage() {
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4 mb-10">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
+            <a
+              href={BROWSER_SETUP_URL}
+              download
+              className="group rounded-2xl border-2 border-violet-500/40 bg-violet-500/10 p-6 text-left hover:border-violet-400/60 hover:bg-violet-500/15 transition-colors"
+            >
+              <div className="flex items-center gap-2 text-violet-200 font-semibold mb-2">
+                <Globe size={22} />
+                Скачать Nexus Browser
+              </div>
+              <p className="text-xs text-[var(--nx-muted)] leading-relaxed mb-4">
+                Десктоп-браузер с ИИ-панелью, Shields и расширениями — Windows v{BROWSER_VERSION}.
+              </p>
+              <span className="inline-flex items-center gap-1 text-sm font-semibold text-violet-100 group-hover:gap-2 transition-all">
+                Setup.exe <ArrowRight size={16} />
+              </span>
+            </a>
             <Link
               to="/ide/lite"
               className="group rounded-2xl border-2 border-teal-500/40 bg-teal-500/10 p-6 text-left hover:border-teal-400/60 hover:bg-teal-500/15 transition-colors"
@@ -119,7 +136,7 @@ export default function IdeDownloadPage() {
             </Link>
             <a
               href="#download-vsix"
-              className="group rounded-2xl border border-[var(--nx-border)] bg-[var(--nx-surface)] p-6 text-left hover:border-[var(--nx-border)] hover:bg-[var(--nx-surface-hover)] transition-colors"
+              className="group rounded-2xl border border-[var(--nx-border)] bg-[var(--nx-surface)] p-6 text-left hover:border-[var(--nx-border)] hover:bg-[var(--nx-surface-hover)] transition-colors sm:col-span-2 lg:col-span-1"
             >
               <div className="flex items-center gap-2 text-[var(--nx-text)] font-semibold mb-2">
                 <Download size={22} className="text-teal-400" />

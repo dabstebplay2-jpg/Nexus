@@ -1,19 +1,12 @@
 import { Download, Globe, Shield, Sparkles, ExternalLink } from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
 import DiscordInviteLink from '../components/DiscordInviteLink';
-
-const BROWSER_VERSION = import.meta.env.VITE_BROWSER_VERSION || '0.4.1';
-const RELEASES_PAGE =
-  import.meta.env.VITE_BROWSER_RELEASES_URL ||
-  'https://github.com/dabstebplay2-jpg/Nexus_browser/releases/latest';
-
-const SETUP_URL =
-  import.meta.env.VITE_BROWSER_SETUP_URL ||
-  `https://github.com/dabstebplay2-jpg/Nexus_browser/releases/latest/download/NexusBrowser-${BROWSER_VERSION}-Setup.exe`;
-
-const PORTABLE_URL =
-  import.meta.env.VITE_BROWSER_PORTABLE_URL ||
-  `https://github.com/dabstebplay2-jpg/Nexus_browser/releases/latest/download/NexusBrowser-${BROWSER_VERSION}-Portable.exe`;
+import {
+  BROWSER_VERSION,
+  BROWSER_RELEASES_URL,
+  BROWSER_SETUP_URL,
+  BROWSER_PORTABLE_URL,
+} from '../lib/browserDownload';
 
 const HIGHLIGHTS = [
   { icon: Sparkles, title: 'ИИ в браузере', text: 'Встроенная панель Nexus AI, поиск и чат по странице.' },
@@ -39,7 +32,7 @@ export default function BrowserDownloadPage() {
             <Download size={28} aria-hidden />
             <h2>Установщик (рекомендуется)</h2>
             <p>Ярлык в меню «Пуск», корректная иконка, автообновление папки установки.</p>
-            <a className="btn btn-primary btn-lg" href={SETUP_URL} download>
+            <a className="btn btn-primary btn-lg" href={BROWSER_SETUP_URL} download>
               Скачать Setup.exe
             </a>
             <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
@@ -51,7 +44,7 @@ export default function BrowserDownloadPage() {
             <Download size={28} aria-hidden />
             <h2>Portable</h2>
             <p>Один .exe без установки — удобно для флешки или теста.</p>
-            <a className="btn btn-lg" href={PORTABLE_URL} download>
+            <a className="btn btn-lg" href={BROWSER_PORTABLE_URL} download>
               Скачать Portable.exe
             </a>
           </article>
@@ -70,7 +63,7 @@ export default function BrowserDownloadPage() {
         </section>
 
         <section className="ide-download-footer-links">
-          <a className="btn btn-sm" href={RELEASES_PAGE} target="_blank" rel="noreferrer">
+          <a className="btn btn-sm" href={BROWSER_RELEASES_URL} target="_blank" rel="noreferrer">
             Все релизы на GitHub <ExternalLink size={14} />
           </a>
           <DiscordInviteLink className="btn btn-sm">Сообщество Discord</DiscordInviteLink>
