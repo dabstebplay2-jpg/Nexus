@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime
 from typing import Any
 
@@ -37,10 +38,25 @@ _SNAPSHOT_VERSION = 3
 _hook_installed = False
 
 
+_REDIS_IO_TIMEOUT_SEC = 45.0
+
+
 def _redis_client():
     from upstash_redis import Redis
 
     return Redis(url=UPSTASH_REDIS_REST_URL, token=UPSTASH_REDIS_REST_TOKEN)
+
+
+def _redis_get(key: str):
+    """Upstash REST без явного таймаута — ограничиваем ожидание."""
+    client = _redis_client()
+
+    def _call():
+        return client.get(key)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(_call)
+        return future.result(timeout=_REDIS_IO_TIMEOUT_SEC)
 
 
 def _serialize_dt(value: Any) -> Any:
@@ -449,17 +465,23 @@ def persist_snapshot_to_redis(db: Session | None = None) -> None:
 
 
 def hydrate_from_redis() -> int:
+    """Загрузить снимок в SQLite (in-memory на Render). PostgreSQL не трогаем."""
     if not redis_persistence_enabled():
         return 0
+    from app.config import database_backend
+
+    if database_backend() == "postgresql":
+        log_detail(logger, "UPSTASH: hydrate skipped — PostgreSQL is primary store")
+        return 0
     try:
-        client = _redis_client()
-        raw = client.get(_SNAPSHOT_KEY)
+        logger.info("UPSTASH: loading snapshot into %s…", database_backend())
+        raw = _redis_get(_SNAPSHOT_KEY)
         snapshot_key = _SNAPSHOT_KEY
         if not raw:
-            raw = client.get(_SNAPSHOT_KEY_V2)
+            raw = _redis_get(_SNAPSHOT_KEY_V2)
             snapshot_key = _SNAPSHOT_KEY_V2
         if not raw:
-            raw = client.get(_SNAPSHOT_KEY_V1)
+            raw = _redis_get(_SNAPSHOT_KEY_V1)
             snapshot_key = _SNAPSHOT_KEY_V1
         if not raw:
             log_detail(logger, "UPSTASH: snapshot пуст", action="старт с чистой БД")
@@ -483,6 +505,9 @@ def hydrate_from_redis() -> int:
             return n
         finally:
             db.close()
+    except FuturesTimeoutError:
+        logger.error("Upstash hydrate timed out after %.0fs", _REDIS_IO_TIMEOUT_SEC)
+        return 0
     except Exception as exc:
         logger.exception("Upstash hydrate failed: %s", exc)
         return 0
