@@ -25,7 +25,7 @@ export default function LegalFooter({ className = '' }) {
             Тарифы
           </Link>
           <Link to="/updates" className="hover:text-white transition-colors">
-            Что нового
+            Изменения
           </Link>
           <Link to="/requisites" className="hover:text-white transition-colors">
             Реквизиты

@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   LifeBuoy,
+  Radio,
 } from 'lucide-react';
 import ProfileMenu from './ProfileMenu';
 import BrandLogo from '../brand/BrandLogo';
@@ -29,6 +30,13 @@ const NAV = [
     title: 'Расширение для IDE',
     icon: Puzzle,
     match: (p) => p === '/ide' || p.startsWith('/ide/'),
+  },
+  {
+    path: '/updates',
+    label: 'Изменения',
+    title: 'Журнал релизов и что нового',
+    icon: Radio,
+    match: (p) => p === '/updates',
   },
   { action: 'support', label: 'Поддержка', icon: LifeBuoy },
 ];

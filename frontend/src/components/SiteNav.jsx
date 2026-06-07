@@ -46,6 +46,9 @@ export default function SiteNav() {
           <Link to="/pricing" className={linkClass('/pricing')}>
             Тарифы
           </Link>
+          <Link to="/updates" className={linkClass('/updates')}>
+            Изменения
+          </Link>
           <Link to="/requisites" className={linkClass('/requisites')}>
             Реквизиты
           </Link>
@@ -99,6 +102,9 @@ export default function SiteNav() {
               />
               <Link to="/pricing" className={linkClass('/pricing')} onClick={() => setMobileOpen(false)}>
                 Тарифы
+              </Link>
+              <Link to="/updates" className={linkClass('/updates')} onClick={() => setMobileOpen(false)}>
+                Изменения
               </Link>
               <Link to="/requisites" className={linkClass('/requisites')} onClick={() => setMobileOpen(false)}>
                 Реквизиты

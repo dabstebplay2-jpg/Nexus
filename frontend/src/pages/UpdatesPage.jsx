@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -11,7 +10,7 @@ import {
   TrendingUp,
   Wrench,
 } from 'lucide-react';
-import SiteNav from '../components/SiteNav';
+import AppShell from '../components/layout/AppShell';
 import LegalFooter from '../components/LegalFooter';
 import changelogData from '../data/changelog.json';
 
@@ -105,6 +104,7 @@ function ReleaseCard({ entry, compact = false }) {
 }
 
 export default function UpdatesPage() {
+  const navigate = useNavigate();
   const entries = changelogData.entries ?? [];
   const [activeFilter, setActiveFilter] = useState('all');
   const latest = entries[0];
@@ -129,22 +129,14 @@ export default function UpdatesPage() {
   }, [activeFilter, entries]);
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#07080a] text-zinc-200">
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,#07080a_0%,#0b1010_42%,#07080a_100%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:48px_48px] opacity-40" />
+    <AppShell hideHistory onOpenPricing={() => navigate('/pricing')}>
+      <div className="relative flex flex-1 min-h-0 flex-col overflow-hidden bg-[#07080a] text-zinc-200">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,#07080a_0%,#0b1010_42%,#07080a_100%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:48px_48px] opacity-40" />
 
-      <SiteNav />
-      <main className="relative z-10 flex-1">
+        <main className="relative z-10 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
         <section className="mx-auto max-w-6xl px-5 pb-12 pt-10 sm:px-6 lg:pt-14">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 text-sm text-zinc-500 transition-colors hover:text-teal-300"
-          >
-            <ArrowLeft size={16} />
-            На главную
-          </Link>
-
-          <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,0.88fr)_minmax(320px,0.42fr)] lg:items-end">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,0.88fr)_minmax(320px,0.42fr)] lg:items-end">
             <div>
               <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-[0.22em] text-teal-200/70">
                 <span className="h-px w-9 bg-teal-300/60" />
@@ -239,8 +231,9 @@ export default function UpdatesPage() {
             </div>
           )}
         </section>
-      </main>
-      <LegalFooter />
-    </div>
+        </main>
+        <LegalFooter />
+      </div>
+    </AppShell>
   );
 }

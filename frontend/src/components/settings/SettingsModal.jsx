@@ -58,7 +58,7 @@ const HELP_LINKS = [
   { label: 'IDE в браузере (Lite)', to: '/ide/lite' },
   { label: 'Расширение для IDE', to: '/ide' },
   { label: 'Реквизиты', to: '/requisites' },
-  { label: 'Что нового', to: '/updates' },
+  { label: 'Изменения', to: '/updates' },
   { label: 'Оферта', to: '/offer' },
   { label: 'Конфиденциальность', to: '/privacy' },
 ];
