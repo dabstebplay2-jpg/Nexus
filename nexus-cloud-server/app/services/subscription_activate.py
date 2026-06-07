@@ -16,7 +16,8 @@ from app.services.polza import (
 )
 from app.services.subscription_audit_log import log_tier_granted, subscription_state_snapshot
 from app.services.subscription_guard import admin_subscription_invoice_id, record_admin_subscription_invoice
-from app.tiers import normalize_tier, tier_monthly_cap, tier_requires_payment
+from app.services.openrouter_provision import delete_openrouter_key_for_user
+from app.tiers import normalize_tier, tier_monthly_cap, tier_requires_payment, tier_uses_openrouter_free
 
 logger = logging.getLogger("app.subscription")
 
@@ -52,6 +53,9 @@ async def activate_paid_tier(
     tier = normalize_tier(tier)
     prev = normalize_tier(previous_tier or user.subscription_tier)
     source = grant_source or "payment"
+
+    if tier_requires_payment(tier) and tier_uses_openrouter_free(prev):
+        await delete_openrouter_key_for_user(user, db)
 
     if not tier_requires_payment(tier):
         user.subscription_tier = tier

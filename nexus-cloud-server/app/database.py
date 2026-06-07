@@ -68,6 +68,9 @@ class UserDB(Base):
     polza_key_id = Column(String, nullable=True)  # id ключа в org Polza (MCP)
     polza_key_updated_at = Column(DateTime, nullable=True)
     polza_connect_required = Column(Integer, default=0)  # legacy, не используется
+    openrouter_api_key_encrypted = Column(Text, nullable=True)
+    openrouter_key_hash = Column(String, nullable=True)
+    openrouter_key_created_at = Column(DateTime, nullable=True)
     refresh_token = Column(String, nullable=True)
     subscription_period_start = Column(DateTime, nullable=True)
     subscription_period_end = Column(DateTime, nullable=True)
@@ -281,6 +284,9 @@ _USER_COLUMNS = {
     "polza_key_id": "TEXT",
     "polza_key_updated_at": "DATETIME",
     "polza_connect_required": "INTEGER",
+    "openrouter_api_key_encrypted": "TEXT",
+    "openrouter_key_hash": "TEXT",
+    "openrouter_key_created_at": "DATETIME",
     "subscription_period_start": "DATETIME",
     "subscription_period_end": "DATETIME",
     "google_sub": "TEXT",

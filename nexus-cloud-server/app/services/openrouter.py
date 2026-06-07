@@ -11,7 +11,9 @@ from app.config import (
     OPENROUTER_APP_TITLE,
     OPENROUTER_BASE_URL,
     OPENROUTER_HTTP_REFERER,
+    OPENROUTER_MANAGEMENT_API_KEY,
     openrouter_free_tier_enabled,
+    openrouter_management_enabled,
 )
 
 
@@ -60,6 +62,44 @@ class OpenRouterService:
         if response.status_code != 200:
             raise OpenRouterError(response.text[:300], response.status_code)
         return response.json()
+
+    def _management_headers(self) -> dict[str, str]:
+        key = (OPENROUTER_MANAGEMENT_API_KEY or "").strip()
+        if not key:
+            raise OpenRouterError("OPENROUTER_MANAGEMENT_API_KEY не задан.")
+        return {
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        }
+
+    async def create_api_key(self, body: dict[str, Any], *, timeout: float = 30.0) -> dict[str, Any]:
+        if not openrouter_management_enabled():
+            raise OpenRouterError("Management API OpenRouter не настроен.")
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{self.base_url}/keys",
+                headers=self._management_headers(),
+                json=body,
+            )
+        if response.status_code in (200, 201):
+            data = response.json()
+            return data if isinstance(data, dict) else {}
+        raise OpenRouterError(response.text[:300], response.status_code)
+
+    async def delete_api_key(self, key_hash: str, *, timeout: float = 30.0) -> None:
+        if not openrouter_management_enabled():
+            return
+        h = (key_hash or "").strip()
+        if not h:
+            return
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.delete(
+                f"{self.base_url}/keys/{h}",
+                headers=self._management_headers(),
+            )
+        if response.status_code in (200, 204, 404):
+            return
+        raise OpenRouterError(response.text[:300], response.status_code)
 
 
 def require_openrouter_api_key() -> str:

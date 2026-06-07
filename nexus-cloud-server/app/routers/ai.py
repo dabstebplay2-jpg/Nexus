@@ -53,7 +53,8 @@ from app.services.connector_agent_loop import run_connector_agent_phase
 from app.services.image_materialize import materialize_image_list, materialize_image_url
 from app.services.models_registry import tier_rank
 from app.config import is_testing_mode
-from app.services.openrouter import OpenRouterError, OpenRouterService, require_openrouter_api_key
+from app.services.openrouter import OpenRouterError, OpenRouterService
+from app.services.openrouter_provision import ensure_openrouter_key_for_user
 from app.tiers import tier_allows_ai, tier_requires_payment, tier_uses_openrouter_free
 
 router = APIRouter(prefix="/v1/ai", tags=["ai"])
@@ -219,10 +220,10 @@ async def _check_model_access(user: UserDB, model: str, *, allow_tools: bool = F
             )
 
 
-def _require_chat_api_key(user: UserDB) -> str:
+async def _require_chat_api_key(user: UserDB, db: Session) -> str:
     if _user_on_free_openrouter(user):
         try:
-            return require_openrouter_api_key()
+            return await ensure_openrouter_key_for_user(user, db)
         except OpenRouterError as e:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
@@ -233,14 +234,22 @@ def _require_chat_api_key(user: UserDB) -> str:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
 
 
-async def _call_openrouter(payload: dict, user: UserDB) -> dict:
-    del user
+def _with_openrouter_user(payload: dict, user: UserDB) -> dict:
+    if not _user_on_free_openrouter(user):
+        return payload
+    body = dict(payload)
+    body["user"] = str(user.id)
+    return body
+
+
+async def _call_openrouter(payload: dict, user: UserDB, db: Session) -> dict:
     try:
-        api_key = require_openrouter_api_key()
+        api_key = await _require_chat_api_key(user, db)
     except OpenRouterError as e:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+    body = _with_openrouter_user(payload, user)
     try:
-        response = await _openrouter.chat_completions(payload, timeout=120.0, api_key=api_key)
+        response = await _openrouter.chat_completions(body, timeout=120.0, api_key=api_key)
     except httpx.HTTPError as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -262,7 +271,12 @@ async def _call_openrouter(payload: dict, user: UserDB) -> dict:
 
 async def _call_inference(payload: dict, user: UserDB, db: Session | None = None) -> dict:
     if _user_on_free_openrouter(user):
-        return await _call_openrouter(payload, user)
+        if db is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="DB session required for OpenRouter inference.",
+            )
+        return await _call_openrouter(payload, user, db)
     return await _call_polza(payload, user, db)
 
 
@@ -651,7 +665,7 @@ async def simple_chat_stream(
     router_body = build_router_payload(model, payload, memory_content=memory_text)
     web_preference = bool(payload.use_web_search)
 
-    api_key = _require_chat_api_key(current_user)
+    api_key = await _require_chat_api_key(current_user, db)
     stream_tokens = _stream_fn_for_user(current_user)
 
     user_text = last_user_message_text(payload.messages)
@@ -773,7 +787,7 @@ async def simple_chat_stream(
                         user_for_conn,
                         model=model,
                         messages=body_messages,
-                        call_routerai=_call_inference,
+                        call_routerai=lambda p, u: _call_inference(p, u, db),
                     ):
                         yield _sse_event(conn_evt)
                     body["messages"] = body_messages
@@ -786,11 +800,14 @@ async def simple_chat_stream(
         stream_reply_text = ""
         had_thinking = False
         had_tokens = False
-        router_payload = {
-            **body,
-            "stream": True,
-            "stream_options": {"include_usage": True},
-        }
+        router_payload = _with_openrouter_user(
+            {
+                **body,
+                "stream": True,
+                "stream_options": {"include_usage": True},
+            },
+            current_user,
+        )
         try:
             async for item in stream_tokens(api_key, router_payload):
                 if isinstance(item, dict):
@@ -873,7 +890,7 @@ async def research_chat(
         )
     await _check_model_access(current_user, model)
 
-    api_key = _require_chat_api_key(current_user)
+    api_key = await _require_chat_api_key(current_user, db)
 
     if depth == "deep":
         from app.config import WEB_SEARCH_DEEP_MAX_SOURCES

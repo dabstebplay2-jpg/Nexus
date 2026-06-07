@@ -34,7 +34,7 @@ logger = get_logger("redis")
 _SNAPSHOT_KEY_V1 = "nexus:v1:db_snapshot"
 _SNAPSHOT_KEY_V2 = "nexus:v2:db_snapshot"
 _SNAPSHOT_KEY = "nexus:v3:db_snapshot"
-_SNAPSHOT_VERSION = 3
+_SNAPSHOT_VERSION = 4
 _hook_installed = False
 
 
@@ -94,6 +94,9 @@ def _user_to_dict(u: UserDB) -> dict:
         "polza_key_id": getattr(u, "polza_key_id", None),
         "polza_key_updated_at": _serialize_dt(getattr(u, "polza_key_updated_at", None)),
         "polza_connect_required": getattr(u, "polza_connect_required", None),
+        "openrouter_api_key_encrypted": getattr(u, "openrouter_api_key_encrypted", None),
+        "openrouter_key_hash": getattr(u, "openrouter_key_hash", None),
+        "openrouter_key_created_at": _serialize_dt(getattr(u, "openrouter_key_created_at", None)),
         "refresh_token": u.refresh_token,
         "subscription_period_start": _serialize_dt(u.subscription_period_start),
         "subscription_period_end": _serialize_dt(u.subscription_period_end),
@@ -120,6 +123,9 @@ def _user_from_dict(d: dict) -> UserDB:
         polza_key_id=d.get("polza_key_id"),
         polza_key_updated_at=_deserialize_dt(d.get("polza_key_updated_at")),
         polza_connect_required=d.get("polza_connect_required"),
+        openrouter_api_key_encrypted=d.get("openrouter_api_key_encrypted"),
+        openrouter_key_hash=d.get("openrouter_key_hash"),
+        openrouter_key_created_at=_deserialize_dt(d.get("openrouter_key_created_at")),
         refresh_token=d.get("refresh_token"),
         subscription_period_start=_deserialize_dt(d.get("subscription_period_start")),
         subscription_period_end=_deserialize_dt(d.get("subscription_period_end")),

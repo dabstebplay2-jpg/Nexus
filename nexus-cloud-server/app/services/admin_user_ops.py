@@ -28,6 +28,7 @@ from app.services.admin_audit import log_admin_action
 from app.services.detailed_log import get_logger, log_detail, mask_hash, mask_sk
 
 _ops_log = get_logger("admin")
+from app.services.openrouter_provision import delete_openrouter_key_for_user
 from app.services.polza import suspend_polza_for_user
 from app.services.polza_mcp import PolzaMcpError, mcp_delete_api_key
 from app.services.polza import user_has_polza_key
@@ -134,6 +135,11 @@ def purge_user_data(db: Session, user_id: int) -> None:
 async def admin_delete_user(db: Session, user: UserDB) -> None:
     email = user.email
     uid = user.id
+    try:
+        await delete_openrouter_key_for_user(user, db)
+    except Exception as exc:
+        _ops_log.warning("OpenRouter key delete failed for user_id=%s: %s", uid, exc)
+
     polza_key_id = getattr(user, "polza_key_id", None)
     if polza_key_id:
         try:

@@ -1,6 +1,23 @@
 {
   "entries": [
     {
+      "version": "0.1.46",
+      "date": "16 июня 2026 г.",
+      "dateISO": "2026-06-16",
+      "title": "Персональные OpenRouter-ключи (FREE)",
+      "summary": "Для тарифа Free каждому пользователю выдаётся отдельный ключ OpenRouter при первом запросе в чат.",
+      "changes": [
+        {
+          "label": "Новое",
+          "text": "FREE: lazy-provision OpenRouter API key через Management API, шифрование в БД."
+        },
+        {
+          "label": "Улучшено",
+          "text": "При апгрейде на Hobby ключ OpenRouter удаляется; при purge пользователя — revoke в OpenRouter."
+        }
+      ]
+    },
+    {
       "version": "0.1.45",
       "date": "15 июня 2026 г.",
       "dateISO": "2026-06-15",
