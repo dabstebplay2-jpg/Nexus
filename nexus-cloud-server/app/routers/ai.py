@@ -16,7 +16,7 @@ from app.config import (
     openrouter_free_tier_enabled,
 )
 from app.database import UserDB, get_db
-from app.schemas import CloudChatRequest, ResearchRequest, SimpleChatRequest
+from app.schemas import BrowserSearchRequest, CloudChatRequest, ResearchRequest, SimpleChatRequest
 from app.security import get_current_user
 from app.services.ai_billing import apply_usage_billing
 from app.services.quota_limits import QuotaLimitExceeded, assert_quota_budget
@@ -991,3 +991,91 @@ async def research_chat(
         "search_engine": engine,
         "billing": billing,
     }
+
+
+@router.post("/browser/search")
+async def browser_omnibox_search(
+    payload: BrowserSearchRequest,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Search-first omnibox: web search + short AI answer."""
+    await _check_tier_ai_access(current_user, db)
+    _check_quota_limit(db, current_user)
+    query = (payload.query or "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Пустой запрос")
+    depth = (payload.depth or "quick").strip().lower()
+    model = await models_catalog.get_default_model(
+        current_user.subscription_tier, prefer="cheap" if depth == "quick" else "premium"
+    )
+    await _check_model_access(current_user, model)
+    api_key = await _require_chat_api_key(current_user, db)
+    if depth == "deep":
+        results, prompt_sources, engine, meta = await run_web_search_session(
+            query,
+            api_key=api_key,
+            subscription_tier=current_user.subscription_tier,
+            depth="standard",
+        )
+        system = build_web_search_system_content(
+            prompt_sources,
+            engine or "none",
+            deep=False,
+            search_failed=not results,
+            meta=meta,
+        )
+    else:
+        results, engine = await web_search_quick(query, limit=5)
+        system = build_web_search_system_content(
+            results,
+            engine or "none",
+            deep=False,
+            search_failed=not results,
+        )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": query},
+    ]
+    data = await _call_inference({"model": model, "messages": messages}, current_user, db)
+    choice = data.get("choices", [{}])[0]
+    reply = choice.get("message", {}).get("content", "")
+    billing = await _apply_billing_for_user(db, current_user, model=model, usage=data.get("usage"))
+    return {
+        "reply": reply,
+        "model": model,
+        "sources": results,
+        "search_engine": engine,
+        "billing": billing,
+    }
+
+
+@router.post("/browser/context-chat")
+async def browser_context_chat(
+    payload: SimpleChatRequest,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Page-aware chat from Nexus Browser."""
+    return await simple_chat(payload, current_user, db)
+
+
+@router.post("/browser/context-chat/stream")
+async def browser_context_chat_stream(
+    payload: SimpleChatRequest,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Streaming page-aware chat from Nexus Browser."""
+    return await simple_chat_stream(payload, current_user, db)
+
+
+@router.post("/browser/agent/stream")
+async def browser_agent_stream(
+    payload: SimpleChatRequest,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Browser agent: client runs tools locally; LLM orchestration via stream."""
+    body = payload.model_copy(update={"browser_agent": True})
+    return await simple_chat_stream(body, current_user, db)

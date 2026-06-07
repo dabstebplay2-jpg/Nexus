@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, LifeBuoy, Loader2, RefreshCw, Paperclip, Send } from 'lucide-react';
 import { useSupport } from '../../hooks/useSupport';
+import { useVisualViewportPadding } from '../../hooks/useVisualViewportPadding';
 import { processAttachmentFiles } from '../../lib/attachments';
 import AttachmentBar from '../chat/AttachmentBar';
 
@@ -166,6 +167,8 @@ export default function SupportPanel({ open, onClose, onNeedAuth }) {
     }
   };
 
+  const keyboardPad = useVisualViewportPadding(open);
+
   if (!open) return null;
 
   return (
@@ -182,6 +185,7 @@ export default function SupportPanel({ open, onClose, onNeedAuth }) {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 16 }}
           className="w-full sm:max-w-2xl h-full sm:h-[min(90vh,720px)] flex flex-col bg-[var(--nx-bg)] border border-[var(--nx-border)] sm:rounded-2xl shadow-2xl overflow-hidden"
+          style={{ paddingBottom: keyboardPad ? `${keyboardPad}px` : undefined }}
           onClick={(e) => e.stopPropagation()}
         >
           <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--nx-border)]">

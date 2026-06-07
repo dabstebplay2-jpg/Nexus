@@ -21,6 +21,7 @@ from app.database import (
     UserConnectionDB,
     UserDB,
     UserMemoryDB,
+    BrowserSyncDB,
     hash_password,
 )
 from app.services.telegram_link import release_telegram_binding
@@ -117,6 +118,7 @@ def purge_user_data(db: Session, user_id: int) -> None:
     )
     db.query(UserArtifactDB).filter(UserArtifactDB.user_id == user_id).delete(synchronize_session=False)
     db.query(UserMemoryDB).filter(UserMemoryDB.user_id == user_id).delete(synchronize_session=False)
+    db.query(BrowserSyncDB).filter(BrowserSyncDB.user_id == user_id).delete(synchronize_session=False)
     db.query(UserConnectionDB).filter(UserConnectionDB.user_id == user_id).delete(synchronize_session=False)
     db.query(ConnectorOAuthStateDB).filter(ConnectorOAuthStateDB.user_id == user_id).delete(
         synchronize_session=False

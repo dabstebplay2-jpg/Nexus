@@ -151,6 +151,24 @@ class ConversationSourceItem(BaseModel):
     snippet: str = Field(default="", max_length=2000)
 
 
+class BrowserPageContext(BaseModel):
+    """Page snapshot from Nexus Browser (no HTML/cookies by default)."""
+
+    url: str = Field(default="", max_length=2000)
+    title: str = Field(default="", max_length=500)
+    excerpt: str = Field(default="", max_length=32_000)
+    selection: str | None = Field(default=None, max_length=8_000)
+    tab_id: str | None = Field(default=None, max_length=64)
+
+
+class BrowserAgentStep(BaseModel):
+    """Single browser agent tool result (client-side execution)."""
+
+    tool: str = Field(max_length=64)
+    args: dict = Field(default_factory=dict)
+    result: str = Field(default="", max_length=16_000)
+
+
 class SimpleChatRequest(BaseModel):
     model: str = Field(max_length=256)
     messages: list[ChatMessage]
@@ -161,6 +179,9 @@ class SimpleChatRequest(BaseModel):
     conversation_sources: list[ConversationSourceItem] = Field(default_factory=list, max_length=80)
     enable_thinking: bool = False
     use_connectors: bool = True
+    page_context: BrowserPageContext | None = None
+    browser_agent: bool = False
+    browser_agent_steps: list[BrowserAgentStep] = Field(default_factory=list, max_length=24)
 
     @field_validator("web_search_depth")
     @classmethod
@@ -174,6 +195,13 @@ class SimpleChatRequest(BaseModel):
     @classmethod
     def check_messages(cls, v: list[ChatMessage]) -> list[ChatMessage]:
         return _validate_messages(v)
+
+
+class BrowserSearchRequest(BaseModel):
+    """Omnibox search-first query from Nexus Browser."""
+
+    query: str = Field(max_length=2_000)
+    depth: str = Field(default="quick", max_length=16)
 
 
 class ResearchRequest(BaseModel):

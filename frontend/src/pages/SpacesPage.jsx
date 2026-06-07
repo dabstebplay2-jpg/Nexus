@@ -394,13 +394,26 @@ export default function SpacesPage() {
                 />
               </div>
               {codePanel.open && codePanel.files.length > 0 && (
-                <CodeArtifactPanel
-                  files={codePanel.files}
-                  activeFileId={codePanel.activeFileId}
-                  onSelectFile={selectFile}
-                  onClose={closePanel}
-                  streaming={loading}
-                />
+                <motion.div
+                  drag="y"
+                  dragConstraints={{ top: 0, bottom: 0 }}
+                  dragElastic={0.1}
+                  onDragEnd={(_, info) => {
+                    if (info.offset.y > 100 || info.velocity.y > 500) closePanel();
+                  }}
+                  className="fixed inset-0 z-[60] flex flex-col bg-[var(--nx-bg)] lg:static lg:z-auto lg:flex lg:flex-1 lg:min-w-0 lg:max-w-[min(480px,45%)] border-l border-[var(--nx-border)]"
+                >
+                  <div className="lg:hidden flex justify-center py-2 shrink-0">
+                    <div className="w-10 h-1 rounded-full bg-white/20" aria-hidden />
+                  </div>
+                  <CodeArtifactPanel
+                    files={codePanel.files}
+                    activeFileId={codePanel.activeFileId}
+                    onSelectFile={selectFile}
+                    onClose={closePanel}
+                    streaming={loading}
+                  />
+                </motion.div>
               )}
             </div>
           </main>

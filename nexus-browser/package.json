@@ -1,0 +1,67 @@
+{
+  "name": "nexus-browser",
+  "version": "0.3.0",
+  "description": "Nexus Browser — AI browser for Windows (standalone desktop app)",
+  "author": "Nexus",
+  "main": "main/index.js",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:5174 && electron .\"",
+    "build:renderer": "vite build",
+    "start": "electron .",
+    "start:packaged": "electron .",
+    "predist": "powershell -ExecutionPolicy Bypass -File scripts/clean-dist.ps1 -Phase before",
+    "postdist": "powershell -ExecutionPolicy Bypass -File scripts/clean-dist.ps1 -Phase after",
+    "dist": "npm run build:renderer && electron-builder --win",
+    "dist:portable": "npm run build:renderer && electron-builder --win portable",
+    "dist:setup": "npm run build:renderer && electron-builder --win nsis",
+    "dist:dir": "npm run build:renderer && electron-builder --win dir"
+  },
+  "build": {
+    "appId": "ai.nexus.browser",
+    "productName": "Nexus Browser",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main/**/*",
+      "preload/**/*",
+      "renderer-dist/**/*",
+      "product/**/*"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "signAndEditExecutable": false,
+      "artifactName": "NexusBrowser-${version}-${os}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "Nexus Browser",
+      "artifactName": "NexusBrowser-${version}-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "NexusBrowser-${version}-Portable.exe"
+    },
+    "extraMetadata": {
+      "main": "main/index.js"
+    }
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "vite": "^5.4.21",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "lucide-react": "^0.359.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-markdown": "^10.1.0"
+  }
+}

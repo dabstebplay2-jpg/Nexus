@@ -380,7 +380,7 @@
   transform: translateX(20px);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 767px) {
   .settings-backdrop {
     padding: 0;
     align-items: stretch;
@@ -391,6 +391,8 @@
     max-height: 100dvh;
     width: 100%;
     border-radius: 0;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .settings-body {

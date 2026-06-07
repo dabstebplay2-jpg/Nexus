@@ -1,0 +1,621 @@
+const path = require('path');
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  shell,
+  session,
+  Menu,
+  dialog,
+} = require('electron');
+const { TabManager, NEXUS_NEWTAB } = require('./tabs');
+const { getOmniboxSuggestions } = require('./omniboxSuggestions');
+const auth = require('./auth');
+const {
+  getBookmarks,
+  addBookmark,
+  removeBookmark,
+  importBookmarks,
+  getHistory,
+  clearHistory,
+  removeHistoryItem,
+  getSettings,
+  updateSettings,
+  getDownloads,
+  addDownloadRecord,
+  updateDownloadRecord,
+  getChatSession,
+  saveChatSession,
+  setChatSyncExporter,
+  readStore,
+  getRemoteTabSession,
+} = require('./storage');
+const { listSearchEngines } = require('./searchEngines');
+const { resolveNewTabUrl } = require('./navUtils');
+const { runBrowserTool } = require('./browserAgent');
+const sync = require('./sync');
+
+const isDev = !app.isPackaged;
+const RENDERER_URL = isDev
+  ? 'http://127.0.0.1:5174'
+  : `file://${path.join(__dirname, '..', 'renderer-dist', 'index.html')}`;
+
+let mainWindow = null;
+let tabManager = null;
+let pendingExchange = null;
+const activeDownloadItems = new Map();
+
+let chromeHeight = 88;
+
+function sidebarWidth() {
+  const s = getSettings();
+  return Number(s.sidebarWidth) || 380;
+}
+
+function chromeBounds() {
+  const [w, h] = mainWindow.getContentSize();
+  const compact = mainWindow._compactMode || w < 1024;
+  const sidebarOpen = !compact && mainWindow._sidebarOpen !== false;
+  const rightSidebarWidth = sidebarOpen ? sidebarWidth() : 0;
+  return {
+    x: 0,
+    y: chromeHeight,
+    width: Math.max(200, w - rightSidebarWidth),
+    height: Math.max(200, h - chromeHeight),
+  };
+}
+
+const TITLE_BAR_OVERLAY_HEIGHT = 40;
+
+function titleBarOverlayColors(theme) {
+  const dark = theme !== 'light';
+  return {
+    color: dark ? '#1a1a1a' : '#f3f4f6',
+    symbolColor: dark ? '#e5e7eb' : '#374151',
+  };
+}
+
+function applyTitleBarOverlay(theme) {
+  if (!mainWindow || process.platform !== 'win32') return;
+  const colors = titleBarOverlayColors(theme);
+  try {
+    mainWindow.setTitleBarOverlay({
+      ...colors,
+      height: TITLE_BAR_OVERLAY_HEIGHT,
+    });
+  } catch {
+    /* older Electron / non-Windows */
+  }
+}
+
+function createWindow() {
+  const settings = getSettings();
+  const overlayColors = titleBarOverlayColors(settings.theme);
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    minWidth: 360,
+    minHeight: 500,
+    title: '',
+    backgroundColor: '#0f0f0f',
+    autoHideMenuBar: true,
+    frame: process.platform === 'darwin',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    titleBarOverlay: process.platform === 'win32' ? {
+      ...overlayColors,
+      height: TITLE_BAR_OVERLAY_HEIGHT,
+    } : undefined,
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload', 'index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  mainWindow._sidebarOpen = settings.sidebarOpen !== false;
+  mainWindow.loadURL(RENDERER_URL);
+
+  tabManager = new TabManager(mainWindow, chromeBounds());
+  tabManager.onTabsChanged = (tabs) => {
+    mainWindow?.webContents.send('tabs:changed', tabs);
+    sync.onTabsChanged(tabs);
+  };
+  setChatSyncExporter(() => {
+    const store = readStore();
+    const sessions = { ...(store.chatSessionsByUrl || {}) };
+    tabManager.tabs.forEach((t) => {
+      const msgs = store.chatSessions?.[t.id];
+      if (msgs?.length && t.url && !t.url.startsWith('nexus://')) {
+        sessions[t.url] = msgs;
+      }
+    });
+    return sessions;
+  });
+  tabManager.onInternalNavigate = (url) => {
+    mainWindow?.webContents.send('tabs:internal', { url });
+  };
+  tabManager.createTab(resolveNewTabUrl(settings));
+
+  mainWindow.on('resize', () => tabManager.setChromeBounds(chromeBounds()));
+
+  if (isDev) {
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+}
+
+function registerProtocol() {
+  if (process.defaultApp) {
+    if (process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient('nexus-browser', process.execPath, [
+        path.resolve(process.argv[1]),
+      ]);
+    }
+  } else {
+    app.setAsDefaultProtocolClient('nexus-browser');
+  }
+}
+
+function handleProtocolUrl(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname === 'auth' || u.pathname.includes('auth')) {
+      const exchange = u.searchParams.get('exchange');
+      if (exchange) {
+        pendingExchange = exchange;
+        flushPendingExchange();
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function completeAuthExchange(code) {
+  return auth.completeGoogleExchange(code).then(async () => {
+    try {
+      await sync.fullSync();
+      const settings = getSettings();
+      mainWindow?.webContents.send('settings:changed', settings);
+    } catch {
+      /* sync optional */
+    }
+    mainWindow?.webContents.send('auth:changed', { authorized: true });
+  });
+}
+
+function flushPendingExchange() {
+  if (!pendingExchange || !mainWindow) return;
+  const code = pendingExchange;
+  pendingExchange = null;
+  completeAuthExchange(code).catch((e) => {
+    console.error('auth exchange failed', e);
+    mainWindow?.webContents.send('auth:changed', {
+      authorized: false,
+      error: e.message || 'Ошибка входа',
+    });
+  });
+}
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+}
+
+auth.setAuthExchangeHandler((exchange) => {
+  completeAuthExchange(exchange).catch((e) => {
+    console.error('auth exchange failed', e);
+    mainWindow?.webContents.send('auth:changed', {
+      authorized: false,
+      error: e.message || 'Ошибка входа',
+    });
+  });
+});
+
+app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
+
+  const suffix = auth.brand.userAgentSuffix || 'NexusBrowser/0.1';
+  session.defaultSession.setUserAgent(
+    `${session.defaultSession.getUserAgent()} ${suffix}`
+  );
+
+  session.defaultSession.on('will-download', (event, item) => {
+    const settings = getSettings();
+    const downloadsPath = settings.downloadPath || app.getPath('downloads');
+    const filename = item.getFilename();
+    const savePath = path.join(downloadsPath, filename);
+    item.setSavePath(savePath);
+
+    const downloadId = String(Date.now()) + Math.random().toString().slice(2, 6);
+    activeDownloadItems.set(downloadId, item);
+
+    const record = {
+      id: downloadId,
+      filename,
+      savePath,
+      totalBytes: item.getTotalBytes(),
+      receivedBytes: item.getReceivedBytes(),
+      state: 'progressing',
+    };
+    addDownloadRecord(record);
+
+    mainWindow?.webContents.send('download:started', record);
+
+    item.on('updated', (event, state) => {
+      const update = {
+        id: downloadId,
+        state: state === 'progressing' ? (item.isPaused() ? 'paused' : 'progressing') : state,
+        receivedBytes: item.getReceivedBytes(),
+        totalBytes: item.getTotalBytes(),
+      };
+      updateDownloadRecord(downloadId, update);
+      mainWindow?.webContents.send('download:updated', update);
+    });
+
+    item.once('done', (event, state) => {
+      activeDownloadItems.delete(downloadId);
+      const done = {
+        id: downloadId,
+        state: state === 'completed' ? 'completed' : 'failed',
+        receivedBytes: item.getReceivedBytes(),
+      };
+      updateDownloadRecord(downloadId, done);
+      mainWindow?.webContents.send('download:done', done);
+    });
+  });
+
+  registerProtocol();
+  createWindow();
+  setupIpc();
+  sync.setStatusNotify((status) => {
+    mainWindow?.webContents.send('sync:status', status);
+  });
+  sync.setDataChangedNotify(() => {
+    const settings = getSettings();
+    mainWindow?.webContents.send('settings:changed', settings);
+    mainWindow?.webContents.send('sync:dataChanged');
+  });
+  sync.startPeriodicSync(() => mainWindow);
+  if (auth.getAccessToken()) {
+    sync.fullSync().then(() => {
+      const settings = getSettings();
+      mainWindow?.webContents.send('settings:changed', settings);
+      mainWindow?.webContents.send('sync:status', sync.getStatus());
+    }).catch(() => {});
+  }
+  flushPendingExchange();
+
+  const winProto = process.argv.find((a) => a.startsWith('nexus-browser://'));
+  if (winProto) handleProtocolUrl(winProto);
+
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    handleProtocolUrl(url);
+  });
+
+  app.on('second-instance', (_event, argv) => {
+    const proto = argv.find((a) => a.startsWith('nexus-browser://'));
+    if (proto) handleProtocolUrl(proto);
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});
+
+function setupIpc() {
+  ipcMain.handle('tabs:list', () => tabManager.listTabs());
+  ipcMain.handle('tabs:create', (_e, url) => {
+    tabManager.createTab(url || undefined);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:activate', (_e, id) => {
+    tabManager.activateTab(id);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:close', (_e, id) => {
+    tabManager.closeTab(id);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:navigate', (_e, { tabId, input, options }) => {
+    let id = tabId || tabManager.activeId;
+    if (!id || !tabManager.tabs.find((t) => t.id === id)) {
+      id = tabManager.createTab();
+    }
+    return tabManager.navigate(id, input, options || {});
+  });
+  ipcMain.handle('tabs:duplicate', (_e, id) => {
+    tabManager.duplicateTab(id || tabManager.activeId);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:reorder', (_e, { tabId, toIndex }) => {
+    tabManager.reorderTab(tabId, toIndex);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:pin', (_e, { tabId, pinned }) => {
+    tabManager.pinTab(tabId || tabManager.activeId, pinned);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:mute', (_e, { tabId, muted }) => {
+    tabManager.muteTab(tabId || tabManager.activeId, muted);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:closeOthers', (_e, id) => {
+    tabManager.closeOtherTabs(id || tabManager.activeId);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:closeToRight', (_e, id) => {
+    tabManager.closeTabsToRight(id || tabManager.activeId);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:goBack', (_e, id) => {
+    tabManager.goBack(id || tabManager.activeId);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:goForward', (_e, id) => {
+    tabManager.goForward(id || tabManager.activeId);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:reload', (_e, id) => {
+    tabManager.reload(id || tabManager.activeId);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:print', (_e, id) => {
+    tabManager.print(id || tabManager.activeId);
+  });
+  ipcMain.handle('tabs:setZoom', (_e, { tabId, factor }) => {
+    tabManager.setZoom(tabId || tabManager.activeId, factor);
+    return tabManager.listTabs();
+  });
+  ipcMain.handle('tabs:getZoom', (_e, id) => tabManager.getZoom(id || tabManager.activeId));
+  ipcMain.handle('tabs:toggleDevTools', (_e, id) => {
+    tabManager.toggleDevTools(id || tabManager.activeId);
+  });
+  ipcMain.handle('tabs:findInPage', (_e, { tabId, text, options }) => {
+    tabManager.findInPage(tabId || tabManager.activeId, text, options);
+  });
+  ipcMain.handle('tabs:stopFindInPage', (_e, { tabId, action }) => {
+    tabManager.stopFindInPage(tabId || tabManager.activeId, action);
+  });
+  ipcMain.handle('page:context', () => tabManager.getActivePageContext());
+
+  ipcMain.handle('sidebar:setOpen', (_e, open) => {
+    mainWindow._sidebarOpen = open;
+    updateSettings({ sidebarOpen: open });
+    tabManager.setChromeBounds(chromeBounds());
+  });
+  ipcMain.handle('chrome:setHeight', (_e, height) => {
+    const measured = Math.max(64, Math.min(260, Math.round(Number(height) || 0)));
+    const next = measured + 12;
+    if (!measured) return;
+    if (next !== chromeHeight) {
+      chromeHeight = next;
+      tabManager?.setChromeBounds(chromeBounds());
+    }
+  });
+  ipcMain.handle('chrome:setTitleBarTheme', (_e, theme) => {
+    applyTitleBarOverlay(theme);
+  });
+  ipcMain.handle('chrome:getBuildInfo', () => ({
+    version: app.getVersion(),
+    productName: 'Nexus Browser',
+    buildStamp: process.env.BUILD_STAMP || '',
+  }));
+  ipcMain.handle('window:toggleFullscreen', () => {
+    if (!mainWindow) return false;
+    const next = !mainWindow.isFullScreen();
+    mainWindow.setFullScreen(next);
+    return next;
+  });
+  ipcMain.handle('window:create', () => {
+    createWindow();
+  });
+  ipcMain.handle('app:quit', () => app.quit());
+
+  ipcMain.handle('auth:session', async () => ({
+    authorized: Boolean(auth.getAccessToken()),
+    cloudUrl: auth.cloudBases()[0],
+    webAppUrl: auth.brand.webAppUrl,
+  }));
+  ipcMain.handle('auth:signInGoogle', () => auth.openGoogleSignIn(mainWindow));
+  ipcMain.handle('auth:signOut', () => {
+    auth.clearTokens();
+    mainWindow?.webContents.send('auth:changed', { authorized: false });
+    return { authorized: false };
+  });
+  ipcMain.handle('auth:profile', async () => {
+    if (!auth.getAccessToken()) return null;
+    return auth.fetchProfile();
+  });
+
+  ipcMain.handle('storage:settings', () => getSettings());
+  ipcMain.handle('storage:settingsUpdate', (_e, partial) => {
+    const next = updateSettings(partial);
+    mainWindow?.webContents.send('settings:changed', next);
+    if (partial.sidebarWidth) tabManager?.setChromeBounds(chromeBounds());
+    if (partial.theme) applyTitleBarOverlay(next.theme);
+    sync.onSettingsChanged();
+    return next;
+  });
+  ipcMain.handle('storage:searchEngines', () => listSearchEngines());
+  ipcMain.handle('storage:bookmarks', () => getBookmarks());
+  ipcMain.handle('storage:bookmarkAdd', (_e, entry) => {
+    const list = addBookmark(entry);
+    sync.onBookmarksChanged();
+    return list;
+  });
+  ipcMain.handle('storage:bookmarkRemove', (_e, url) => {
+    const list = removeBookmark(url);
+    sync.onBookmarksChanged();
+    return list;
+  });
+  ipcMain.handle('storage:bookmarkImport', (_e, html) => {
+    const list = importBookmarks(html);
+    sync.onBookmarksChanged();
+    return list;
+  });
+  ipcMain.handle('sync:getStatus', () => sync.getStatus());
+  ipcMain.handle('sync:pull', () => sync.pullSync().then((status) => {
+    const settings = getSettings();
+    mainWindow?.webContents.send('settings:changed', settings);
+    return status;
+  }));
+  ipcMain.handle('sync:forceSync', () => sync.fullSync().then((status) => {
+    const settings = getSettings();
+    mainWindow?.webContents.send('settings:changed', settings);
+    return status;
+  }));
+  ipcMain.handle('sync:getRemoteTabSession', () => getRemoteTabSession());
+  ipcMain.handle('sync:restoreSession', (_e, { tabs, activeIndex }) => {
+    tabManager?.restoreSession(tabs, activeIndex);
+    sync.clearPendingSessionRestore();
+    return sync.getStatus();
+  });
+  ipcMain.handle('sync:dismissRestore', () => {
+    sync.clearPendingSessionRestore();
+    return sync.getStatus();
+  });
+  ipcMain.handle('chrome:setCompactMode', (_e, compact) => {
+    if (mainWindow) {
+      mainWindow._compactMode = Boolean(compact);
+      tabManager?.setChromeBounds(chromeBounds());
+    }
+  });
+  ipcMain.handle('storage:suggest', (_e, query) => getOmniboxSuggestions(query));
+  ipcMain.handle('storage:history', () => getHistory());
+  ipcMain.handle('storage:historyRemove', (_e, id) => removeHistoryItem(id));
+  ipcMain.handle('storage:historyClear', () => clearHistory());
+  ipcMain.handle('storage:downloads', () => getDownloads());
+  ipcMain.handle('storage:chatGet', (_e, tabId) => {
+    const tab = tabManager?.tabs.find((t) => t.id === tabId);
+    return getChatSession(tabId, tab?.url);
+  });
+  ipcMain.handle('storage:chatSave', (_e, { tabId, messages }) => {
+    const tab = tabManager?.tabs.find((t) => t.id === tabId);
+    const list = saveChatSession(tabId, messages, tab?.url);
+    sync.onChatChanged();
+    return list;
+  });
+
+  ipcMain.handle('privacy:clearBrowsingData', async () => {
+    clearHistory();
+    await session.defaultSession.clearStorageData();
+    return { ok: true };
+  });
+
+  ipcMain.handle('downloads:pause', (_e, id) => {
+    const item = activeDownloadItems.get(id);
+    if (item) item.pause();
+  });
+  ipcMain.handle('downloads:resume', (_e, id) => {
+    const item = activeDownloadItems.get(id);
+    if (item) item.resume();
+  });
+  ipcMain.handle('downloads:cancel', (_e, id) => {
+    const item = activeDownloadItems.get(id);
+    if (item) item.cancel();
+    activeDownloadItems.delete(id);
+  });
+  ipcMain.handle('downloads:open', (_e, filePath) => shell.openPath(filePath));
+  ipcMain.handle('downloads:showInFolder', (_e, filePath) => shell.showItemInFolder(filePath));
+  ipcMain.handle('downloads:pickFolder', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle('agent:runTool', async (_e, { tool, args, autoConfirm }) =>
+    runBrowserTool(tabManager, tool, args, { autoConfirm: Boolean(autoConfirm) })
+  );
+
+  ipcMain.handle('api:fetch', async (_e, { path: apiPath, init }) => {
+    try {
+      const res = await auth.cloudFetch(apiPath, init || {});
+      const text = await res.text();
+      let json = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        /* plain */
+      }
+      return { ok: res.ok, status: res.status, json, text };
+    } catch (e) {
+      if (e.code === 'SESSION_EXPIRED') {
+        mainWindow?.webContents.send('auth:changed', { authorized: false, error: e.message });
+      }
+      throw e;
+    }
+  });
+
+  ipcMain.handle('api:stream', async (event, { path: apiPath, body }) => {
+    let access = auth.getAccessToken();
+    if (!access) throw new Error('Не выполнен вход');
+    const bases = auth.cloudBases();
+
+    async function doFetch(token) {
+      for (const base of bases) {
+        try {
+          const res = await fetch(`${base}${apiPath}`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          });
+          if (res.status === 401) return { unauthorized: true };
+          if (res.ok || res.status < 500) return { res };
+        } catch {
+          /* try next */
+        }
+      }
+      return { res: null };
+    }
+
+    let result = await doFetch(access);
+    if (result.unauthorized) {
+      const refreshed = await auth.refreshAccessToken();
+      if (!refreshed) {
+        mainWindow?.webContents.send('auth:changed', { authorized: false, error: 'Сессия истекла' });
+        event.sender.send('api:stream:error', 'Сессия истекла');
+        return;
+      }
+      access = auth.getAccessToken();
+      result = await doFetch(access);
+    }
+
+    const res = result.res;
+    if (!res || !res.ok) {
+      const detail = res ? await res.text() : 'network';
+      event.sender.send('api:stream:error', detail);
+      return;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop() || '';
+      for (const block of parts) {
+        const line = block.split('\n').find((l) => l.startsWith('data:'));
+        if (!line) continue;
+        event.sender.send('api:stream:chunk', line.slice(5).trim());
+      }
+    }
+    event.sender.send('api:stream:end');
+  });
+
+  ipcMain.handle('shell:openExternal', (_e, url) => shell.openExternal(url));
+}
+
+module.exports = { NEXUS_NEWTAB };

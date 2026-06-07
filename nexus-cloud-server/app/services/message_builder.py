@@ -182,8 +182,15 @@ def build_router_payload(
     *,
     memory_content: str | None = None,
 ) -> dict[str, Any]:
+    from app.services.browser_context import inject_page_context_messages
+
     assert_model_accepts_images(model_id, payload.attachments)
     messages = build_router_messages(payload.messages, payload.attachments)
+    messages = inject_page_context_messages(messages, payload.page_context)
+    if payload.browser_agent:
+        from app.services.browser_agent_prompt import inject_browser_agent_prompt
+
+        messages = inject_browser_agent_prompt(messages, payload.browser_agent_steps)
     messages = inject_user_memory_messages(messages, memory_content)
     body: dict[str, Any] = {"model": model_id, "messages": messages}
     modalities = router_modalities_for_model(model_id)

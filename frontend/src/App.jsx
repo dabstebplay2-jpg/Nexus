@@ -16,6 +16,7 @@ import IdeDownloadPage from './pages/IdeDownloadPage';
 import IdeExtensionDownloadPage from './pages/IdeExtensionDownloadPage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import IdeAuthBridgePage from './pages/IdeAuthBridgePage';
+import BrowserAuthBridgePage from './pages/BrowserAuthBridgePage';
 import UpdatesPage from './pages/UpdatesPage';
 
 const ArtifactsPage = lazy(() => import('./pages/ArtifactsPage'));
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="/ide/lite" element={<IdeLitePage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/auth/ide-login" element={<IdeAuthBridgePage />} />
+          <Route path="/auth/browser-login" element={<BrowserAuthBridgePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>

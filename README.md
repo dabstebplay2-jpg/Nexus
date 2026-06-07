@@ -6,6 +6,7 @@
 |-------|------------|--------|
 | [`frontend/`](frontend/) | React/Vite — чат, тарифы, настройки | [Vercel](https://frontend-henna-tau-19.vercel.app) |
 | [`nexus-cloud-server/`](nexus-cloud-server/) | FastAPI — auth, billing, Polza, админка | [Render](https://nexus-cloud-ee17.onrender.com) |
+| [`nexus-browser/`](nexus-browser/) | AI-браузер (Electron + Chromium) | локальная сборка |
 | [`backend/`](backend/) | Локальный прокси для IDE (не в проде) | — |
 
 **Прод:** настраивается после деплоя (см. [`docs/SOLO_HOSTING_RU.md`](docs/SOLO_HOSTING_RU.md))

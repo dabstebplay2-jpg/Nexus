@@ -33,6 +33,23 @@ test.describe('mobile viewport smoke', () => {
     await expect(page.getByRole('heading', { name: /выберите свой план/i })).toBeVisible();
   });
 
+  test('settings modal is full-screen on narrow viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/?settings=search');
+    await expect(page.locator('.settings-dialog')).toBeVisible();
+    const dialogBox = await page.locator('.settings-dialog').boundingBox();
+    const viewport = page.viewportSize();
+    expect(dialogBox.width).toBeGreaterThanOrEqual(viewport.width - 4);
+  });
+
+  test('spaces route loads on mobile viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/spaces');
+    await expect(page.locator('body')).toBeVisible();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
+    expect(overflow).toBe(false);
+  });
+
   test('ide lite loads and mobile dock visible', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('nexus_ide_lite_tour_done', '1');

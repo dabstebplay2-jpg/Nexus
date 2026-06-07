@@ -10,7 +10,7 @@
   backdrop-filter: blur(8px);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 767px) {
   .auth-modal-backdrop {
     padding: 0;
     align-items: stretch;

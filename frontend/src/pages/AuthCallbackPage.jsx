@@ -59,6 +59,14 @@ export default function AuthCallbackPage() {
       setError('Нет кода авторизации.');
       return;
     }
+    const forBrowser = sessionStorage.getItem('nexus_oauth_for_browser') === '1';
+    if (forBrowser) {
+      sessionStorage.removeItem('nexus_oauth_for_browser');
+      const browserUri = `nexus-browser://auth?exchange=${encodeURIComponent(exchange)}`;
+      setDesktopUri(browserUri);
+      window.location.href = browserUri;
+      return;
+    }
     const forDesktop = sessionStorage.getItem('nexus_oauth_for_desktop') === '1';
     if (forDesktop) {
       sessionStorage.removeItem('nexus_oauth_for_desktop');
