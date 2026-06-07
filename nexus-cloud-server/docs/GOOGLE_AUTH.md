@@ -36,7 +36,7 @@ sequenceDiagram
 |------------|-----------------|
 | `GOOGLE_CLIENT_ID` | OAuth 2.0 Client ID из Google Cloud |
 | `GOOGLE_CLIENT_SECRET` | секрет клиента |
-| `GOOGLE_REDIRECT_URI` | `https://nexus-zeta-ruby-12.vercel.app/api/auth/google/callback` |
+| `GOOGLE_REDIRECT_URI` | `https://nexus-zeta-ruby-12.vercel.app/api/auth/google/callback` *(если Vercel `/api` отвечает 404 — используйте Render: `https://nexus-cloud-bxcc.onrender.com/v1/auth/google/callback`)* |
 | `NEXUS_FRONTEND_URL` | `https://nexus-zeta-ruby-12.vercel.app` |
 | `NEXUS_CLOUD_SECRET_KEY` | стабильный ключ (JWT state + exchange codes) |
 

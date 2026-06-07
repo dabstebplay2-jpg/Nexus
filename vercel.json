@@ -6,9 +6,14 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rootDirectory": "frontend",
+  "env": {
+    "NEXUS_CLOUD_SERVER_URL": "https://nexus-cloud-bxcc.onrender.com",
+    "VITE_CLOUD_FALLBACK_URL": "https://nexus-cloud-bxcc.onrender.com",
+    "VITE_GOOGLE_AUTH_ENABLED": "true"
+  },
   "functions": {
     "api/index.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     }
   },
   "rewrites": [

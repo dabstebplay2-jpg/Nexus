@@ -14,7 +14,7 @@
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://nexus-cloud-bxcc.onrender.com/v1/$1" },
+    { "source": "/api/(.*)", "destination": "/api/index?__subpath=$1" },
     { "source": "/((?!api/|extensions/).*)", "destination": "/index.html" }
   ],
   "headers": [
