@@ -395,6 +395,27 @@ def migrate_schema() -> None:
 
         conn.commit()
 
+    ensure_support_tables()
+
+
+def ensure_support_tables() -> None:
+    """Создать таблицы поддержки, если их ещё нет (после деплоя без полного migrate)."""
+    from sqlalchemy import inspect
+
+    insp = inspect(engine)
+    missing = [
+        name
+        for name in ("support_tickets", "support_messages")
+        if not insp.has_table(name)
+    ]
+    if not missing:
+        return
+    logger.warning("DB migrate: creating support tables: %s", ", ".join(missing))
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[SupportTicketDB.__table__, SupportMessageDB.__table__],
+    )
+
 
 def get_db():
     db = SessionLocal()

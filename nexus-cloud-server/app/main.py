@@ -55,6 +55,11 @@ async def _ensure_db_schema(request, call_next):
 def health(verbose: bool = False):
     payload: dict = {"status": "ok", "service": "nexus-cloud"}
     if verbose:
+        from sqlalchemy import inspect
+
+        from app.database import engine
+
+        insp = inspect(engine)
         payload.update(
             {
                 "testing_mode": is_testing_mode(),
@@ -62,6 +67,7 @@ def health(verbose: bool = False):
                 "database": database_backend(),
                 "database_persistent": not database_is_ephemeral(),
                 "redis_persistence": redis_persistence_enabled(),
+                "support_ready": insp.has_table("support_tickets") and insp.has_table("support_messages"),
             }
         )
     return payload
