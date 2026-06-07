@@ -19,8 +19,27 @@ import TierPicker from './components/TierPicker';
 import DailyLimitBar from './components/DailyLimitBar';
 import AmbientBackground from './components/AmbientBackground';
 import IdeCopilotPanel from './components/ide/IdeCopilotPanel';
+import IdeVercelBanner from './components/ide/IdeVercelBanner';
+import IdeWelcome from './components/ide/IdeWelcome';
+import IdeOnboardingTour, { shouldShowIdeTour } from './components/ide/IdeOnboardingTour';
+import IdeStatusBar from './components/ide/IdeStatusBar';
+import IdeMobileDock from './components/ide/IdeMobileDock';
 import { fetchModels, pickDefaultModel } from './lib/chatApi';
 import { normalizeBalance, formatBalanceUsd } from './lib/formatBalance';
+import { resolveWorkspaceMode } from './lib/workspaceMode';
+import {
+  initDemoWorkspace,
+  getDemoTree,
+  getDemoRootPath,
+  demoReadFile,
+  demoWriteFile,
+  demoCreateFile,
+  demoCreateFolder,
+  demoDelete,
+  demoSearch,
+  buildDemoContextForAI,
+} from './lib/demoWorkspace';
+import { runDemoIdeAgent } from './lib/ideDemoAgent';
 
 import { API_BASE, IS_VERCEL_HOST } from './lib/api';
 import { apiFetch } from './lib/apiClient';
@@ -52,8 +71,10 @@ function formatTreeForAI(node, depth = 0) {
   return result;
 }
 
-function IdeApp() {
-  const [activeTab, setActiveTab] = useState('explorer');
+function IdeApp({ embedded = false }) {
+  const [activeTab, setActiveTab] = useState(IS_VERCEL_HOST ? 'ai' : 'explorer');
+  const [demoMode, setDemoMode] = useState(IS_VERCEL_HOST);
+  const [showTour, setShowTour] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [bottomPanel, setBottomPanel] = useState('terminal');
   const [enabledViews, setEnabledViews] = useState(() => getEnabledViews());
@@ -73,7 +94,9 @@ function IdeApp() {
 
   // Сворачивание и скрытие панелей интерфейса
   const [isTerminalCollapsed, setIsTerminalCollapsed] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 768
+  );
 
   // Глобальный поиск
   const [searchQuery, setSearchQuery] = useState('');
@@ -178,6 +201,10 @@ function IdeApp() {
   const loadWorkspaceWithPath = async (path) => {
     try {
       setError(null);
+      if (demoMode) {
+        setFileTree(await getDemoTree());
+        return;
+      }
       const res = await fetch(`${API_BASE}/files/tree?path=${encodeURIComponent(path)}`);
       if (!res.ok) throw new Error('Workspace not found');
       const data = await res.json();
@@ -209,10 +236,16 @@ function IdeApp() {
     if (!searchQuery.trim()) return;
     setSearchLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/search?query=${encodeURIComponent(searchQuery)}&path=${encodeURIComponent(workspacePath)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSearchResults(data);
+      if (demoMode) {
+        setSearchResults(await demoSearch(searchQuery));
+      } else {
+        const res = await fetch(
+          `${API_BASE}/search?query=${encodeURIComponent(searchQuery)}&path=${encodeURIComponent(workspacePath)}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -222,7 +255,35 @@ function IdeApp() {
   };
 
   useEffect(() => {
-    loadWorkspace();
+    (async () => {
+      const mode = await resolveWorkspaceMode();
+      const isDemo = mode === 'demo';
+      setDemoMode(isDemo);
+      if (isDemo) {
+        await initDemoWorkspace();
+        setFileTree(await getDemoTree());
+        setWorkspacePath(getDemoRootPath());
+        if (shouldShowIdeTour()) setShowTour(true);
+        const readmePath = `${getDemoRootPath()}/README.md`;
+        try {
+          const data = await demoReadFile(readmePath);
+          setOpenFiles({
+            [readmePath]: {
+              path: readmePath,
+              name: 'README.md',
+              originalContent: data.content,
+              currentContent: data.content,
+              isDirty: false,
+            },
+          });
+          setActiveFilePath(readmePath);
+        } catch {
+          /* optional */
+        }
+      } else {
+        loadWorkspace();
+      }
+    })();
   }, []);
 
   const handleFileSelect = async (path) => {
@@ -232,9 +293,13 @@ function IdeApp() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/files/read?path=${encodeURIComponent(path)}`);
-      if (!res.ok) throw new Error('Could not read file');
-      const data = await res.json();
+      const data = demoMode
+        ? await demoReadFile(path)
+        : await (async () => {
+            const res = await fetch(`${API_BASE}/files/read?path=${encodeURIComponent(path)}`);
+            if (!res.ok) throw new Error('Could not read file');
+            return res.json();
+          })();
       const name = path.split(/[/\\]/).pop();
 
       setOpenFiles((prev) => ({
@@ -292,12 +357,16 @@ function IdeApp() {
     if (!file.isDirty) return;
 
     try {
-      const res = await fetch(`${API_BASE}/files/write`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: file.path, content: file.currentContent }),
-      });
-      if (!res.ok) throw new Error('Failed to write');
+      if (demoMode) {
+        await demoWriteFile(file.path, file.currentContent);
+      } else {
+        const res = await fetch(`${API_BASE}/files/write`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: file.path, content: file.currentContent }),
+        });
+        if (!res.ok) throw new Error('Failed to write');
+      }
 
       setOpenFiles((prev) => ({
         ...prev,
@@ -319,18 +388,23 @@ function IdeApp() {
     const updated = { ...openFiles };
     for (const path of paths) {
       try {
-        const res = await fetch(`${API_BASE}/files/read?path=${encodeURIComponent(path)}`);
-        if (res.ok) {
-          const data = await res.json();
+        const data = demoMode
+          ? await demoReadFile(path)
+          : await (async () => {
+              const res = await fetch(`${API_BASE}/files/read?path=${encodeURIComponent(path)}`);
+              if (!res.ok) return null;
+              return res.json();
+            })();
+        if (data?.content != null) {
           updated[path] = {
             ...updated[path],
             originalContent: data.content,
             currentContent: data.content,
-            isDirty: false
+            isDirty: false,
           };
         }
       } catch (e) {
-        console.error("Failed to sync file content:", e);
+        console.error('Failed to sync file content:', e);
       }
     }
     setOpenFiles(updated);
@@ -343,20 +417,26 @@ function IdeApp() {
 
     let parentPath = workspacePath;
     if (activeFilePath) {
-      parentPath = activeFilePath.substring(0, activeFilePath.lastIndexOf('\\'));
+      const sep = activeFilePath.includes('/') ? '/' : '\\';
+      parentPath = activeFilePath.substring(0, activeFilePath.lastIndexOf(sep));
     }
 
     try {
-      const res = await fetch(`${API_BASE}/files/create_file`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parent_path: parentPath, name: fileName })
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "Failed to create file");
+      let data;
+      if (demoMode) {
+        data = await demoCreateFile(parentPath, fileName);
+      } else {
+        const res = await fetch(`${API_BASE}/files/create_file`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parent_path: parentPath, name: fileName }),
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.detail || 'Failed to create file');
+        }
+        data = await res.json();
       }
-      const data = await res.json();
       loadWorkspace();
       handleFileSelect(data.path);
     } catch (err) {
@@ -371,10 +451,16 @@ function IdeApp() {
 
     let parentPath = workspacePath;
     if (activeFilePath) {
-      parentPath = activeFilePath.substring(0, activeFilePath.lastIndexOf('\\'));
+      const sep = activeFilePath.includes('/') ? '/' : '\\';
+      parentPath = activeFilePath.substring(0, activeFilePath.lastIndexOf(sep));
     }
 
     try {
+      if (demoMode) {
+        await demoCreateFolder(parentPath, folderName);
+        loadWorkspace();
+        return;
+      }
       const res = await fetch(`${API_BASE}/files/create_folder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -401,16 +487,20 @@ function IdeApp() {
     if (!confirmed) return;
 
     try {
-      const res = await fetch(`${API_BASE}/files/delete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: activeFilePath })
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "Failed to delete item");
+      if (demoMode) {
+        await demoDelete(activeFilePath);
+      } else {
+        const res = await fetch(`${API_BASE}/files/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: activeFilePath }),
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.detail || 'Failed to delete item');
+        }
       }
-      
+
       const updated = { ...openFiles };
       delete updated[activeFilePath];
       setOpenFiles(updated);
@@ -584,53 +674,86 @@ function IdeApp() {
       ? openFiles[activeFilePath].currentContent 
       : "";
 
-    const directoryContext = fileTree ? formatTreeForAI(fileTree) : "";
+    const directoryContext = demoMode
+      ? await buildDemoContextForAI(fileTree, formatTreeForAI)
+      : fileTree
+        ? formatTreeForAI(fileTree)
+        : '';
 
     try {
-      const res = await fetch(`${API_BASE}/ai/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: userMessage.content,
-          workspace_path: workspacePath,
-          file_context: activeFileContext,
-          directory_context: directoryContext,
-          chat_history: chatHistory,
-          model: selectedModel
-        })
-      });
+      let data;
+      if (demoMode) {
+        data = await runDemoIdeAgent({
+          model: selectedModel,
+          workspacePath,
+          directoryContext,
+          fileContext: activeFileContext,
+          chatHistory,
+          userPrompt: userMessage.content,
+        });
+        if (data.status === 'quota') {
+          setChatHistory((prev) => [
+            ...prev,
+            {
+              role: 'assistant',
+              content:
+                'Пул ИИ исчерпан. Пополните баланс или продлите подписку в разделе «Тарифы» (Account → тарифы).',
+            },
+          ]);
+          return;
+        }
+        data = { status: 'success', reply: data.reply, actions: data.actions, billing: data.billing };
+      } else {
+        const res = await fetch(`${API_BASE}/ai/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: userMessage.content,
+            workspace_path: workspacePath,
+            file_context: activeFileContext,
+            directory_context: directoryContext,
+            chat_history: chatHistory,
+            model: selectedModel,
+          }),
+        });
 
-      if (res.status === 402) {
-        setChatHistory((prev) => [...prev, { role: 'assistant', content: "Пул ИИ исчерпан. Пополните баланс или продлите подписку в разделе «Тарифы» (Account → тарифы)." }]);
-        return;
+        if (res.status === 402) {
+          setChatHistory((prev) => [
+            ...prev,
+            {
+              role: 'assistant',
+              content:
+                'Пул ИИ исчерпан. Пополните баланс или продлите подписку в разделе «Тарифы» (Account → тарифы).',
+            },
+          ]);
+          return;
+        }
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.detail || 'AI Agent request failed');
+        }
+        data = await res.json();
       }
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "AI Agent request failed");
-      }
-      
-      const data = await res.json();
 
       if (data.status === 'success') {
         setChatHistory((prev) => [...prev, { role: 'assistant', content: data.reply }]);
-        
+
         if (data.billing) {
-          const rem = data.billing.daily?.remaining_usd;
+          const rem = data.billing.daily?.remaining_usd ?? data.billing.remaining_usd;
           if (rem != null) setQuotaRemainingUsd(normalizeBalance(rem));
           setLastPromptCost(data.billing.deducted_usd);
         }
-        
-        if (data.actions && data.actions.length > 0) {
+
+        if (data.actions?.length) {
           for (const action of data.actions) {
             if (action.type === 'open_file') {
               handleFileSelect(action.path);
             }
           }
         }
-        
+
         await refreshOpenFiles();
         loadWorkspaceWithPath(workspacePath);
-        
       } else {
         setChatHistory((prev) => [...prev, { role: 'assistant', content: `Error: ${data.message}` }]);
       }
@@ -778,7 +901,11 @@ function IdeApp() {
   );
 
   return (
-    <div className="ide-shell flex flex-col h-screen overflow-hidden font-sans antialiased relative">
+    <div
+      className={`ide-shell flex flex-col overflow-hidden font-sans antialiased relative ${
+        embedded ? 'h-full min-h-0 flex-1' : 'h-screen'
+      }`}
+    >
       <AmbientBackground focus="composer" />
       <CommandPalette
         open={commandPaletteOpen}
@@ -794,31 +921,28 @@ function IdeApp() {
         />
       )}
 
-      <div className="shrink-0 px-3 py-1.5 text-[11px] bg-amber-500/10 border-b border-amber-500/20 text-amber-100/90 flex flex-wrap items-center justify-center gap-2 z-50">
-        <span>
-          Web Lite — демо-редактор без LSP/OpenVSX/отладчика. Основной IDE — десктоп.
-        </span>
-        <Link to="/ide" className="underline font-semibold hover:text-white">
-          Скачать Nexus IDE Desktop
-        </Link>
-        {IS_VERCEL_HOST && (
-          <span className="text-amber-200/70">· терминал и файлы — только с локальным backend</span>
-        )}
-      </div>
+      <IdeVercelBanner demoMode={demoMode} />
+      {showTour && (
+        <IdeOnboardingTour onGoToTab={setActiveTab} onClose={() => setShowTour(false)} />
+      )}
 
       {/* Top Header & Professional Application Menubar */}
       <header className="ide-titlebar flex items-center justify-between px-2 h-[36px] select-none shrink-0 relative z-50 text-[var(--ide-fg)]">
         <div className="flex items-center gap-2">
-          <Link to="/" className="flex items-center gap-1.5 px-2 hover:bg-[var(--ide-hover)] rounded-lg h-[26px] text-[11px]" title="Чат">
-            <Home size={14} />
-            <span className="hidden sm:inline">Чат</span>
-          </Link>
-          <Link to="/spaces" className="px-2 hover:bg-[var(--ide-hover)] rounded-lg h-[26px] text-[11px] hidden md:inline" title="Пространства">
-            Пространства
-          </Link>
-          <Link to="/profile" className="px-2 hover:bg-[var(--ide-hover)] rounded-lg h-[26px] text-[11px]" title="Профиль">
-            Профиль
-          </Link>
+          {!embedded && (
+            <>
+              <Link to="/" className="flex items-center gap-1.5 px-2 hover:bg-[var(--ide-hover)] rounded-lg h-[26px] text-[11px]" title="Чат">
+                <Home size={14} />
+                <span className="hidden sm:inline">Чат</span>
+              </Link>
+              <Link to="/spaces" className="px-2 hover:bg-[var(--ide-hover)] rounded-lg h-[26px] text-[11px] hidden md:inline" title="Пространства">
+                Пространства
+              </Link>
+              <Link to="/profile" className="px-2 hover:bg-[var(--ide-hover)] rounded-lg h-[26px] text-[11px]" title="Профиль">
+                Профиль
+              </Link>
+            </>
+          )}
           <div className="flex items-center gap-1.5 px-2 border-l border-[var(--ide-border)]">
             <span className="text-[10px] font-black text-teal-400">NX</span>
             <span className="text-[12px] font-medium">IDE</span>
@@ -1148,7 +1272,7 @@ function IdeApp() {
               disabled={!activeFile.isDirty}
               className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-all ${
                 activeFile.isDirty 
-                  ? 'bg-[#007acc] hover:bg-[#0062a3] text-white shadow-lg' 
+                  ? 'bg-[var(--ide-accent)] hover:bg-teal-500 text-white shadow-lg' 
                   : 'bg-[#2d2d30] text-[#71717a] cursor-not-allowed'
               }`}
             >
@@ -1163,7 +1287,7 @@ function IdeApp() {
       <div className="flex-1 flex overflow-hidden">
         
         {/* Activity Bar — как VS Code / Cursor */}
-        <div className="ide-activity-bar w-12 flex flex-col shrink-0 select-none relative z-20">
+        <div className="ide-activity-bar hidden md:flex w-14 flex-col shrink-0 select-none relative z-20">
           <ActivityBtn tab="explorer" title="Explorer (Ctrl+Shift+E)" icon={FolderTree} />
           <ActivityBtn tab="search" title="Search (Ctrl+Shift+F)" icon={Search} />
           <ActivityBtn
@@ -1172,7 +1296,7 @@ function IdeApp() {
             icon={GitBranch}
             badge={
               gitInfo.files.length > 0 ? (
-                <span className="absolute top-1 right-1 min-w-[14px] h-[14px] text-[9px] bg-[#0078d4] text-white rounded-full flex items-center justify-center px-0.5">
+                <span className="absolute top-1 right-1 min-w-[14px] h-[14px] text-[9px] bg-teal-600 text-white rounded-full flex items-center justify-center px-0.5">
                   {gitInfo.files.length}
                 </span>
               ) : null
@@ -1289,7 +1413,7 @@ function IdeApp() {
                 <button
                   type="submit"
                   disabled={searchLoading}
-                  className="px-2.5 bg-[#007acc] hover:bg-[#0062a3] text-white text-xs rounded font-medium"
+                  className="px-2.5 bg-[var(--ide-accent)] hover:bg-teal-500 text-white text-xs rounded font-medium"
                 >
                   Find
                 </button>
@@ -1307,7 +1431,7 @@ function IdeApp() {
                       onClick={() => handleFileSelect(result.file_path)}
                       className="p-1.5 rounded bg-[#18181c] border border-[#2d2d30] cursor-pointer hover:border-[#3e3e42] transition-colors"
                     >
-                      <div className="text-[11px] font-bold text-[#007acc] truncate">{result.relative_path}</div>
+                      <div className="text-[11px] font-bold text-teal-400 truncate">{result.relative_path}</div>
                       <div className="text-[10px] text-[#71717a] font-mono mt-0.5">Line {result.line_num}:</div>
                       <div className="text-xs text-[#d4d4d8] font-mono bg-[#141416] p-1 rounded mt-1 truncate">
                         {result.text}
@@ -1325,7 +1449,15 @@ function IdeApp() {
           {activeTab === 'git' && (
             <div className="flex flex-col h-full overflow-hidden p-3 text-xs">
               <span className="text-[11px] font-bold uppercase tracking-wider text-[#71717a] mb-2 shrink-0">Source Control</span>
-              {gitInfo.is_git ? (
+              {demoMode ? (
+                <div className="rounded-lg border border-[var(--ide-border)] bg-[var(--ide-input)] p-4 text-[var(--ide-muted)] leading-relaxed">
+                  <p className="text-[var(--ide-fg)] font-medium mb-2">Демо-режим</p>
+                  <p>Git доступен с локальным backend или в Nexus IDE Desktop. Здесь можно редактировать файлы демо-проекта и пользоваться Agent.</p>
+                  <Link to="/ide" className="inline-block mt-3 text-teal-400 hover:underline text-sm">
+                    Скачать Desktop IDE
+                  </Link>
+                </div>
+              ) : gitInfo.is_git ? (
                 <div className="flex flex-col h-full overflow-hidden">
                   <div className="flex items-center gap-1.5 text-xs text-[#a1a1aa] bg-[#18181c] p-2 rounded border border-[#2d2d30] mb-3 shrink-0">
                     <GitBranch size={14} className="text-blue-400" />
@@ -1335,7 +1467,7 @@ function IdeApp() {
                   <button
                     onClick={handleGitPush}
                     disabled={gitLoading}
-                    className="w-full py-1.5 mb-3 bg-[#2d2d30] hover:bg-[#3e3e42] hover:text-[#007acc] text-white rounded text-xs font-semibold shrink-0 transition-colors"
+                    className="w-full py-1.5 mb-3 bg-[#2d2d30] hover:bg-[#3e3e42] hover:text-teal-400 text-white rounded text-xs font-semibold shrink-0 transition-colors"
                   >
                     {gitLoading ? "Pushing..." : "Push to Remote (Origin)"}
                   </button>
@@ -1377,7 +1509,7 @@ function IdeApp() {
                       <button
                         type="submit"
                         disabled={gitLoading}
-                        className="w-full py-1.5 bg-[#007acc] hover:bg-[#0062a3] text-white text-xs font-semibold rounded"
+                        className="w-full py-1.5 bg-[var(--ide-accent)] hover:bg-teal-500 text-white text-xs font-semibold rounded"
                       >
                         {gitLoading ? "Staging & Committing..." : "Commit All"}
                       </button>
@@ -1411,6 +1543,7 @@ function IdeApp() {
               onUseFileContextChange={setUseFileContext}
               activeFile={activeFile}
               hasWorkspace={Boolean(fileTree)}
+              demoMode={demoMode}
               lastPromptCost={lastPromptCost}
               quotaRemainingUsd={quotaRemainingUsd}
               profile={authStatus.profile}
@@ -1446,7 +1579,7 @@ function IdeApp() {
                   <button
                     type="submit"
                     disabled={apiLoading}
-                    className="px-3 bg-[#007acc] hover:bg-[#0062a3] text-white text-xs rounded font-bold transition-all shrink-0"
+                    className="px-3 bg-[var(--ide-accent)] hover:bg-teal-500 text-white text-xs rounded font-bold transition-all shrink-0"
                   >
                     {apiLoading ? "..." : "Send"}
                   </button>
@@ -1458,7 +1591,7 @@ function IdeApp() {
                     <button
                       type="button"
                       onClick={handleAddHeaderRow}
-                      className="text-[10px] text-[#007acc] hover:underline"
+                      className="text-[10px] text-teal-400 hover:underline"
                     >
                       + Add Header
                     </button>
@@ -1578,7 +1711,7 @@ function IdeApp() {
                         onClick={() => {
                           setDbQuery(`SELECT * FROM ${table} LIMIT 10;`);
                         }}
-                        className="text-[10px] bg-neutral-800 hover:bg-[#007acc]/20 text-neutral-300 hover:text-white px-1.5 py-0.5 rounded cursor-pointer border border-[#2d2d30] transition-colors"
+                        className="text-[10px] bg-neutral-800 hover:bg-[var(--ide-accent)]/20 text-neutral-300 hover:text-white px-1.5 py-0.5 rounded cursor-pointer border border-[#2d2d30] transition-colors"
                         title="Click to generate SELECT query"
                       >
                         📊 {table}
@@ -1600,7 +1733,7 @@ function IdeApp() {
                   <button
                     type="submit"
                     disabled={dbLoading}
-                    className="w-full py-1.5 bg-[#007acc] hover:bg-[#0062a3] text-white text-xs font-semibold rounded"
+                    className="w-full py-1.5 bg-[var(--ide-accent)] hover:bg-teal-500 text-white text-xs font-semibold rounded"
                   >
                     {dbLoading ? "Executing..." : "Execute Query"}
                   </button>
@@ -1763,7 +1896,7 @@ function IdeApp() {
                     max="24" 
                     value={editorFontSize} 
                     onChange={(e) => setEditorFontSize(parseInt(e.target.value))}
-                    className="w-full accent-[#007acc] cursor-pointer bg-[#18181c] h-1.5 rounded"
+                    className="w-full accent-teal-400 cursor-pointer bg-[#18181c] h-1.5 rounded"
                   />
                 </div>
 
@@ -1773,7 +1906,7 @@ function IdeApp() {
                     type="checkbox" 
                     checked={showMinimap} 
                     onChange={(e) => setShowMinimap(e.target.checked)}
-                    className="w-4 h-4 rounded accent-[#007acc] cursor-pointer"
+                    className="w-4 h-4 rounded accent-teal-400 cursor-pointer"
                   />
                 </div>
               </div>
@@ -1822,7 +1955,7 @@ function IdeApp() {
                     onClick={() => setIsDiffMode(!isDiffMode)}
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium transition-all ${
                       isDiffMode 
-                        ? 'bg-[#007acc] text-white shadow-md' 
+                        ? 'bg-[var(--ide-accent)] text-white shadow-md' 
                         : 'bg-[#2d2d30] text-[#a1a1aa] hover:text-[#d4d4d8]'
                     }`}
                     title="Toggle Split Diff View"
@@ -1870,40 +2003,11 @@ function IdeApp() {
                   />
                 )
               ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center select-none ide-empty-editor px-6">
-                  <div className="ide-welcome-card rounded-2xl p-8 max-w-lg w-full">
-                  <div className="ide-copilot-glow w-16 h-16 rounded-2xl flex items-center justify-center mb-5 mx-auto">
-                    <Sparkles size={28} className="text-teal-400" />
-                  </div>
-                  <span className="text-xl font-semibold text-[var(--ide-fg)]">Nexus Web IDE</span>
-                  <p className="text-sm text-[var(--ide-muted)] mt-2 mb-6 leading-relaxed">
-                    Откройте папку проекта, затем Agent — ИИ правит файлы, запускает команды в терминале и открывает вкладки.
-                    На Vercel доступен демо-режим; полный IDE — в десктопе.
-                  </p>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    <button
-                      type="button"
-                      onClick={handleOpenFolderDialog}
-                      className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold rounded-xl"
-                    >
-                      Открыть папку
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('ai')}
-                      className="px-4 py-2 border border-[var(--ide-border)] hover:border-teal-500/40 text-sm rounded-xl"
-                    >
-                      Agent
-                    </button>
-                    <Link
-                      to="/ide"
-                      className="px-4 py-2 border border-violet-500/30 text-violet-300 hover:border-violet-400/50 text-sm rounded-xl"
-                    >
-                      Desktop IDE
-                    </Link>
-                  </div>
-                  </div>
-                </div>
+                <IdeWelcome
+                  demoMode={demoMode}
+                  onOpenFolder={handleOpenFolderDialog}
+                  onOpenAgent={() => setActiveTab('ai')}
+                />
               )}
             </div>
           </div>
@@ -1945,7 +2049,9 @@ function IdeApp() {
             </div>
             {!isTerminalCollapsed && (
               <div className="flex-1 min-h-0 overflow-hidden">
-                {bottomPanel === 'terminal' && <TerminalArea workspacePath={workspacePath} />}
+                {bottomPanel === 'terminal' && (
+                  <TerminalArea workspacePath={workspacePath} demoMode={demoMode} />
+                )}
                 {bottomPanel === 'output' && (
                   <pre className="h-full overflow-auto p-3 text-[12px] font-mono text-[#cccccc] custom-scrollbar whitespace-pre-wrap">
                     {outputLog}
@@ -1964,38 +2070,18 @@ function IdeApp() {
         </div>
       </div>
 
-      {/* Windows Style Status Bar */}
-      <footer className="ide-statusbar h-[24px] text-white flex items-center justify-between px-3 text-[11px] shrink-0 select-none z-30 relative">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <Terminal size={12} />
-            <span>Терминал · PowerShell</span>
-          </div>
-          {gitInfo.is_git && (
-            <div className="flex items-center gap-1">
-              <GitBranch size={12} />
-              <span>git: <b>{gitInfo.branch}</b></span>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-4">
-          {authStatus.authorized &&
-            (authStatus.profile?.monthly_cap_rub > 0 || authStatus.profile?.daily_cap_rub > 0) && (
-            <span className="bg-black/20 px-2 py-0.5 rounded select-none font-mono" title="Пул ИИ на месяц">
-              {Math.round(
-                authStatus.profile.monthly_remaining_rub ??
-                  authStatus.profile.daily_remaining_rub ??
-                  0
-              ).toLocaleString('ru-RU')}{' '}
-              ₽
-            </span>
-          )}
-          <span>Encoding: <b>UTF-8</b></span>
-          {activeFile && (
-            <span>Language: <b>{getLanguageFromPath(activeFile.path).toUpperCase()}</b></span>
-          )}
-        </div>
-      </footer>
+      <IdeMobileDock
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        onOpenMenu={() => setCommandPaletteOpen(true)}
+      />
+      <IdeStatusBar
+        demoMode={demoMode}
+        gitInfo={gitInfo}
+        authStatus={authStatus}
+        activeFile={activeFile}
+        getLanguageFromPath={getLanguageFromPath}
+      />
 
       {/* ABOUT MODAL (Help -> About) */}
       {showAboutModal && (
@@ -2008,7 +2094,7 @@ function IdeApp() {
               <X size={16} />
             </button>
             
-            <div className="w-16 h-16 bg-[#007acc]/10 border border-[#007acc]/20 text-[#007acc] rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-black tracking-widest shadow-inner select-none">
+            <div className="w-16 h-16 bg-[var(--ide-accent)]/10 border border-teal-500/20 text-teal-400 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-black tracking-widest shadow-inner select-none">
               NX
             </div>
 
@@ -2038,7 +2124,7 @@ function IdeApp() {
 
             <button
               onClick={() => setShowAboutModal(false)}
-              className="w-full py-2 bg-[#007acc] hover:bg-[#0062a3] text-white font-semibold rounded-lg text-xs transition-colors"
+              className="w-full py-2 bg-[var(--ide-accent)] hover:bg-teal-500 text-white font-semibold rounded-lg text-xs transition-colors"
             >
               Close Info
             </button>

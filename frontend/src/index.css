@@ -597,6 +597,15 @@
   border-right: 1px solid var(--ide-border);
 }
 
+.ide-mobile-dock {
+  padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
+}
+
+.ide-activity-btn:focus-visible {
+  outline: 2px solid var(--ide-accent);
+  outline-offset: -2px;
+}
+
 .ide-shell .ide-activity-btn--active {
   color: var(--ide-accent) !important;
   background: var(--ide-accent-dim);
@@ -717,7 +726,7 @@
   --vscode-editor: #1e1e1e;
   --vscode-panel: #1e1e1e;
   --vscode-border: #3c3c3c;
-  --vscode-accent: #0078d4;
+  --vscode-accent: #2dd4bf;
   --vscode-accent-hover: #026ec1;
   --vscode-fg: #cccccc;
   --vscode-muted: #858585;
@@ -726,7 +735,7 @@
   --vscode-titlebar: #3c3c3c;
   --vscode-tab-active: #1e1e1e;
   --vscode-tab-inactive: #2d2d2d;
-  --vscode-statusbar: #007acc;
+  --vscode-statusbar: #14b8a6;
 }
 
 html,

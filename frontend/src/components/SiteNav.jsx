@@ -43,6 +43,9 @@ export default function SiteNav() {
             Возможности
           </a>
           <DiscordInviteLink className="text-sm text-indigo-300/90 hover:text-indigo-200" />
+          <Link to="/ide/lite" className={linkClass('/ide/lite')}>
+            IDE Web
+          </Link>
           <Link to="/pricing" className={linkClass('/pricing')}>
             Тарифы
           </Link>
@@ -100,6 +103,9 @@ export default function SiteNav() {
                 className={linkClass('/')}
                 onClick={() => setMobileOpen(false)}
               />
+              <Link to="/ide/lite" className={linkClass('/ide/lite')} onClick={() => setMobileOpen(false)}>
+                IDE Web
+              </Link>
               <Link to="/pricing" className={linkClass('/pricing')} onClick={() => setMobileOpen(false)}>
                 Тарифы
               </Link>

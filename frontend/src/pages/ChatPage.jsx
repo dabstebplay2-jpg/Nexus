@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { RefreshCw } from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
@@ -45,6 +45,7 @@ import { fetchConnectorsSummary } from '../features/connectors/connectorsApi';
 import ChatComposerBanners from '../components/chat/ChatComposerBanners';
 import { warmApiHealthOnce } from '../lib/warmApiHealth';
 import HomeFeatures from '../components/home/HomeFeatures';
+import { Code2 } from 'lucide-react';
 
 const TOPICS = ['Финансы', 'Код', 'Research', 'Учёба'];
 
@@ -457,6 +458,13 @@ export default function ChatPage() {
         }}
         headerLeft={
           <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar flex-wrap">
+            <Link
+              to="/ide/lite"
+              className="text-sm font-medium px-3 py-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 text-teal-300 hover:bg-teal-500/15 whitespace-nowrap inline-flex items-center gap-1.5"
+            >
+              <Code2 size={14} />
+              IDE Web
+            </Link>
             <span className="text-sm text-[var(--nx-muted)] whitespace-nowrap">
               {tier.name} тариф
             </span>

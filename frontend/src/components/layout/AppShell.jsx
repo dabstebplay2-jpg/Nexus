@@ -14,22 +14,33 @@ import {
   X,
   LifeBuoy,
   Radio,
+  Code2,
 } from 'lucide-react';
 import ProfileMenu from './ProfileMenu';
 import BrandLogo from '../brand/BrandLogo';
 import DiscordInviteLink from '../DiscordInviteLink';
 import AmbientBackground from '../AmbientBackground';
 
+const IDE_WEB_NAV_BADGE_KEY = 'nexus_seen_ide_web_nav';
+
 const NAV = [
   { path: '/', label: 'Чат', icon: MessageSquare, match: (p) => p === '/' },
+  {
+    path: '/ide/lite',
+    label: 'IDE Web',
+    title: 'Редактор и Agent в браузере',
+    icon: Code2,
+    match: (p) => p === '/ide/lite',
+    badge: 'new',
+  },
   { path: '/spaces', label: 'Пространства', icon: Boxes, match: (p) => p === '/spaces' },
   { path: '/artifacts', label: 'Артефакты', icon: LayoutGrid, match: (p) => p === '/artifacts' },
   {
     path: '/ide',
-    label: 'Для IDE',
-    title: 'Расширение для IDE',
+    label: 'Скачать IDE',
+    title: 'Desktop и расширение VSIX',
     icon: Puzzle,
-    match: (p) => p === '/ide' || p.startsWith('/ide/'),
+    match: (p) => p === '/ide',
   },
   {
     path: '/updates',
@@ -138,12 +149,26 @@ function SidebarContent({
             );
           }
           const active = item.match(pathname);
+          const showNewBadge =
+            item.badge === 'new' &&
+            expanded &&
+            typeof localStorage !== 'undefined' &&
+            !localStorage.getItem(IDE_WEB_NAV_BADGE_KEY);
           return (
             <Link
               key={item.path}
               to={item.path}
               title={navTitle || label}
-              onClick={() => setMobileOpen(false)}
+              onClick={() => {
+                if (item.badge === 'new') {
+                  try {
+                    localStorage.setItem(IDE_WEB_NAV_BADGE_KEY, '1');
+                  } catch {
+                    /* ignore */
+                  }
+                }
+                setMobileOpen(false);
+              }}
               className={`relative flex items-center gap-3 px-3 py-3 min-h-[52px] rounded-2xl text-base transition-colors ${
                 active
                   ? 'bg-[var(--nx-surface-hover)] text-[var(--nx-text)] font-medium'
@@ -151,7 +176,16 @@ function SidebarContent({
               }`}
             >
               <Icon size={22} className="shrink-0" />
-              {expanded && <span>{label}</span>}
+              {expanded && (
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="truncate">{label}</span>
+                  {showNewBadge && (
+                    <span className="shrink-0 rounded-md bg-teal-500/20 border border-teal-500/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-teal-300">
+                      New
+                    </span>
+                  )}
+                </span>
+              )}
             </Link>
           );
         })}

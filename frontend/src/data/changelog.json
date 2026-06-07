@@ -1,6 +1,31 @@
 {
   "entries": [
     {
+      "version": "0.1.37",
+      "date": "8 июня 2026 г.",
+      "dateISO": "2026-06-08",
+      "title": "IDE Web: навигация, дизайн и демо-режим",
+      "summary": "Web IDE заметен в меню сайта, обновлён UX /ide/lite, на Vercel — демо-проект в браузере с Agent и виртуальными файлами.",
+      "changes": [
+        {
+          "label": "Новое",
+          "text": "Пункт «IDE Web» в боковом меню (позиция 2); «Для IDE» переименован в «Скачать IDE»."
+        },
+        {
+          "label": "Новое",
+          "text": "Демо-workspace на Vercel: IndexedDB, стартовый проект, mock-терминал, Agent с patch_file на клиенте."
+        },
+        {
+          "label": "Улучшено",
+          "text": "Хаб /ide: две CTA-карточки (IDE Web и Desktop). Точки входа с чата и главной."
+        },
+        {
+          "label": "Улучшено",
+          "text": "IDE Web в AppShell, onboarding-тур, mobile dock, teal-акценты, вкладка Agent по умолчанию на проде."
+        }
+      ]
+    },
+    {
       "version": "0.1.36",
       "date": "7 июня 2026 г.",
       "dateISO": "2026-06-07",

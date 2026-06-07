@@ -61,6 +61,7 @@ export default function IdeCopilotPanel({
   onUseFileContextChange,
   activeFile,
   hasWorkspace,
+  demoMode = false,
   lastPromptCost,
   quotaRemainingUsd,
   profile,
@@ -122,8 +123,10 @@ export default function IdeCopilotPanel({
         {chatHistory.length === 0 && (
           <div className="space-y-3">
             <p className="text-xs text-[var(--ide-muted)] leading-relaxed px-1">
-              Агент может читать и менять файлы, выполнять команды в терминале и открывать вкладки.
-              Опишите задачу свободно — или выберите быстрый сценарий:
+              {demoMode
+                ? 'Agent работает через облако Nexus. Файлы — из демо-проекта в браузере (сохраняются на этом устройстве).'
+                : 'Агент может читать и менять файлы, выполнять команды в терминале и открывать вкладки.'}
+              {' '}Опишите задачу — или выберите сценарий:
             </p>
             <div className="grid grid-cols-2 gap-2">
               {QUICK_ACTIONS.map(({ id, icon: Icon, label, prompt }, i) => (
