@@ -439,10 +439,10 @@ export default function AppShell({
         )}
         {!hideMobileHeader && (
           <header
-            className="md:hidden h-[var(--nx-header-h)] shrink-0 flex items-center justify-between gap-2 px-3 border-b border-[var(--nx-border)] bg-[color-mix(in_srgb,var(--nx-sidebar)_90%,transparent)] backdrop-blur-xl z-20"
+            className="md:hidden h-[var(--nx-header-h)] shrink-0 flex items-center justify-between gap-2 px-3 border-b border-[var(--nx-border)] bg-[color-mix(in_srgb,var(--nx-sidebar)_90%,transparent)] backdrop-blur-xl z-20 overflow-x-clip"
             style={{ paddingTop: 'var(--nx-safe-top)' }}
           >
-            <div className="flex items-center gap-1 min-w-0 flex-1">
+            <div className="flex items-center gap-1 min-w-0 flex-1 overflow-x-clip">
               <button
                 type="button"
                 onClick={() => setMobileOpen(true)}
@@ -457,7 +457,7 @@ export default function AppShell({
               {!headerLeft && (
                 <span className="text-sm font-medium text-[var(--nx-text)] truncate ml-1">{pageTitle}</span>
               )}
-              <div className="min-w-0 overflow-x-auto custom-scrollbar flex-1">{headerLeft}</div>
+              <div className="shrink-0 overflow-x-clip">{headerLeft}</div>
             </div>
             <div className="flex items-center gap-1 shrink-0">{headerRight}</div>
           </header>

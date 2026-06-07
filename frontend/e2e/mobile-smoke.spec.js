@@ -6,6 +6,12 @@ test.describe('mobile viewport smoke', () => {
     await expect(page.locator('body')).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
     expect(overflow).toBe(false);
+    const hero = page.locator('h1.nx-wordmark');
+    await expect(hero).toBeVisible();
+    const heroBox = await hero.boundingBox();
+    const viewport = page.viewportSize();
+    expect(heroBox).not.toBeNull();
+    expect(heroBox.width).toBeLessThanOrEqual(viewport.width);
   });
 
   test('pricing loads', async ({ page }) => {

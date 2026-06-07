@@ -497,18 +497,6 @@ export default function ChatPage() {
                 </button>
               ))}
             </div>
-            <div className="sm:hidden flex items-center gap-1 min-w-0 overflow-x-auto custom-scrollbar nx-topic-scroll">
-              {TOPICS.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setInput((v) => (v ? v : `Тема: ${t}. `))}
-                  className="text-xs px-3 py-1.5 rounded-full text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] whitespace-nowrap shrink-0 border border-[var(--nx-border)]"
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
             <ChatHeaderOverflow
               tier={tier}
               topics={TOPICS}
@@ -543,18 +531,18 @@ export default function ChatPage() {
               Загрузка истории чатов…
             </div>
           ) : !hasMessages ? (
-            <div className="flex-1 min-h-0 w-full grid place-items-center px-4 pb-8">
-              <div className="w-full max-w-[var(--nx-content-max)]">
+            <div className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-clip">
+              <div className="w-full max-w-[var(--nx-content-max)] mx-auto flex flex-col items-center px-4 pt-4 pb-[calc(var(--nx-dock-h)+var(--nx-safe-bottom)+1rem)]">
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
-                className="text-center mb-12 w-full"
+                className="text-center mb-6 md:mb-12 w-full"
               >
-                <h1 className="nx-wordmark nx-wordmark-gradient text-6xl sm:text-7xl md:text-8xl font-normal mb-4 tracking-tight">
+                <h1 className="nx-wordmark nx-wordmark-gradient nx-wordmark-hero md:text-7xl lg:text-8xl font-normal mb-3 md:mb-4 tracking-tight">
                   nexus
                 </h1>
-                <p className="text-base sm:text-lg text-[var(--nx-muted)] max-w-lg mx-auto">
+                <p className="text-sm sm:text-base text-[var(--nx-muted)] max-w-lg mx-auto px-2">
                   ИИ-чат, Research с источниками и расширение для IDE в одном аккаунте
                 </p>
               </motion.div>
@@ -600,7 +588,7 @@ export default function ChatPage() {
                 </p>
               )}
 
-              <div className="flex sm:grid flex-row overflow-x-auto gap-2.5 px-4 pb-2 -mx-4 scrollbar-none snap-x snap-mandatory sm:grid-cols-2 sm:px-0 sm:mx-0 sm:pb-0 mt-10">
+              <div className="flex flex-col sm:grid gap-2.5 w-full max-w-full mt-6 sm:mt-10 sm:grid-cols-2">
                 {suggested.map((prompt, i) => (
                   <motion.button
                     key={prompt}
@@ -611,7 +599,7 @@ export default function ChatPage() {
                     whileTap={{ scale: 0.99 }}
                     type="button"
                     onClick={() => setInput(prompt)}
-                    className="nx-suggestion-card text-left text-sm px-4 py-3 rounded-xl text-[var(--nx-muted)] leading-snug shrink-0 w-[240px] snap-start sm:w-auto sm:text-base sm:px-5 sm:py-4 sm:rounded-2xl"
+                    className="nx-suggestion-card text-left text-sm px-4 py-3 rounded-xl text-[var(--nx-muted)] leading-snug w-full sm:text-base sm:px-5 sm:py-4 sm:rounded-2xl"
                   >
                     {prompt}
                   </motion.button>
@@ -631,7 +619,7 @@ export default function ChatPage() {
                 </p>
               )}
 
-              <HomeFeatures className="mt-16 w-full" />
+              <HomeFeatures className="hidden md:block mt-16 w-full" />
               </div>
             </div>
           ) : (

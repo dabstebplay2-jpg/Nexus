@@ -94,7 +94,7 @@ export default function NexusComposer({
       className={`w-full max-w-[var(--nx-content-max)] mx-auto ${centered ? 'px-0' : 'px-4 sm:px-6'}`}
       style={{
         paddingBottom: centered
-          ? undefined
+          ? `max(0.5rem, calc(env(safe-area-inset-bottom) + ${keyboardPad}px))`
           : `max(1.25rem, calc(env(safe-area-inset-bottom) + ${keyboardPad}px))`,
       }}
     >
@@ -123,7 +123,7 @@ export default function NexusComposer({
             rows={centered ? 3 : 2}
             disabled={disabled}
             placeholder={placeholder || defaultPlaceholder}
-            className="w-full resize-none bg-transparent px-6 pt-5 pb-3 text-[var(--nx-text)] placeholder:text-[var(--nx-muted)] outline-none min-h-[64px] md:min-h-[72px]"
+            className="w-full resize-none bg-transparent px-4 pt-4 pb-3 md:px-6 md:pt-5 text-[var(--nx-text)] placeholder:text-[var(--nx-muted)] outline-none min-h-[64px] md:min-h-[72px]"
           />
         </div>
 
@@ -139,7 +139,7 @@ export default function NexusComposer({
                   <button
                     type="button"
                     onClick={() => setAttachOpen((o) => !o)}
-                    className="p-3 min-h-[52px] min-w-[52px] flex items-center justify-center rounded-2xl hover:bg-[var(--nx-surface-hover)] text-[var(--nx-muted)]"
+                    className="p-2 md:p-3 min-h-[44px] min-w-[44px] md:min-h-[52px] md:min-w-[52px] flex items-center justify-center rounded-2xl hover:bg-[var(--nx-surface-hover)] text-[var(--nx-muted)]"
                     title="Вложения"
                   >
                     <Plus size={22} />
@@ -215,7 +215,7 @@ export default function NexusComposer({
                 <button
                   type="button"
                   onClick={() => setSearchOpen((o) => !o)}
-                  className="flex items-center gap-2 px-4 py-3 min-h-[52px] rounded-full bg-[var(--nx-surface-hover)] text-base font-medium"
+                  className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-3 min-h-[44px] md:min-h-[52px] rounded-full bg-[var(--nx-surface-hover)] text-sm md:text-base font-medium"
                 >
                   {mode === 'research' ? (
                     <>
@@ -283,7 +283,7 @@ export default function NexusComposer({
               )}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-between sm:justify-end">
+            <div className="flex items-center flex-wrap gap-1.5 md:gap-2 shrink-0 w-full sm:w-auto justify-between sm:justify-end">
               {onOpenSupport && (
                 <button
                   type="button"
@@ -307,7 +307,7 @@ export default function NexusComposer({
                 dropUp
                 unlockAll={unlockAll}
                 visionGuide={visionGuide}
-                className="shrink min-w-0 max-w-[10rem] sm:max-w-[14rem]"
+                className="shrink min-w-0 max-w-[min(10rem,38vw)] sm:max-w-[14rem]"
               />
               <motion.button
                 type="button"

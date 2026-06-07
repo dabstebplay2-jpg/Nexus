@@ -839,8 +839,22 @@ select.nexus-select option {
 }
 
 @media (max-width: 768px) {
+  html,
+  body {
+    overflow-x: clip;
+  }
+
   .nx-shell {
     overflow-x: hidden;
+  }
+
+  .nx-wordmark-hero {
+    font-size: clamp(2.25rem, 11vw, 3.5rem);
+    line-height: 1.1;
+  }
+
+  .nx-composer {
+    overflow-x: clip;
   }
 
   .nx-composer textarea {
