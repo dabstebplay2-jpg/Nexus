@@ -28,14 +28,19 @@ from app.services.admin_audit import log_admin_action
 from app.services.detailed_log import get_logger, log_detail, mask_hash, mask_sk
 
 _ops_log = get_logger("admin")
-from app.services.openrouter_provision import delete_openrouter_key_for_user
+from app.config import openrouter_management_enabled
+from app.services.openrouter_provision import (
+    delete_openrouter_key_for_user,
+    provision_openrouter_for_user,
+    user_has_openrouter_key,
+)
 from app.services.polza import suspend_polza_for_user
 from app.services.polza_mcp import PolzaMcpError, mcp_delete_api_key
 from app.services.polza import user_has_polza_key
 from app.services.subscription_activate import activate_paid_tier
 from app.services.subscription_audit_log import log_tier_revoked_by_admin
 from app.services.subscription_guard import revoke_admin_subscription_invoices
-from app.tiers import normalize_tier, tier_monthly_cap, tier_requires_payment
+from app.tiers import normalize_tier, tier_monthly_cap, tier_requires_payment, tier_uses_openrouter_free
 
 
 async def admin_grant_tier(db: Session, user: UserDB, tier: str) -> dict:
@@ -196,6 +201,22 @@ async def admin_refresh_routerai(db: Session, user: UserDB) -> bool:
     return await admin_refresh_polza(db, user)
 
 
+async def admin_refresh_openrouter(db: Session, user: UserDB) -> bool:
+    """Автовыдача / пересоздание ключа OpenRouter для FREE-пользователя."""
+    tier = normalize_tier(user.subscription_tier)
+    if not tier_uses_openrouter_free(tier):
+        return False
+    if not openrouter_management_enabled():
+        raise ValueError(
+            "OPENROUTER_MANAGEMENT_API_KEY не настроен на сервере"
+        )
+    ok = await provision_openrouter_for_user(user, db, force=True)
+    if ok:
+        db.refresh(user)
+        log_admin_action("refresh_openrouter", user.email, user_id=user.id, tier=tier)
+    return ok
+
+
 async def admin_save_user(
     db: Session,
     user: UserDB,
@@ -206,6 +227,7 @@ async def admin_save_user(
     new_password: str | None = None,
     refresh_polza: bool = False,
     refresh_routerai: bool = False,
+    refresh_openrouter: bool = False,
 ) -> dict[str, Any]:
     """Единое сохранение настроек пользователя из админки."""
     changes: list[str] = []
@@ -221,6 +243,7 @@ async def admin_save_user(
         requested_tier=subscription_tier,
         requested_balance=balance_usd,
         refresh_polza=refresh_polza or refresh_routerai,
+        refresh_openrouter=refresh_openrouter,
         new_password=bool(new_password),
     )
 
@@ -258,6 +281,10 @@ async def admin_save_user(
                 warnings.append(
                     "Тариф сохранён, но ключ Polza ещё не выдан — нажмите «Обновить ключ Polza»."
                 )
+            if tier_uses_openrouter_free(new_tier) and not user_has_openrouter_key(user):
+                warnings.append(
+                    "Тариф FREE: персональный ключ OpenRouter ещё не выдан — нажмите «Обновить ключ OpenRouter»."
+                )
 
     if refresh_polza or refresh_routerai:
         polza_err: str | None = None
@@ -275,6 +302,24 @@ async def admin_save_user(
             else:
                 raise ValueError(polza_err)
 
+    if refresh_openrouter:
+        openrouter_err: str | None = None
+        try:
+            ok = await admin_refresh_openrouter(db, user)
+            if not ok:
+                openrouter_err = (
+                    "Не удалось выдать ключ OpenRouter (тариф не FREE или Management API не настроен)."
+                )
+            else:
+                changes.append("openrouter")
+        except ValueError as exc:
+            openrouter_err = str(exc)
+        if openrouter_err:
+            if changes:
+                warnings.append(openrouter_err)
+            else:
+                raise ValueError(openrouter_err)
+
     if any(c in ("email", "balance", "password") for c in changes):
         db.commit()
         db.refresh(user)
@@ -291,5 +336,6 @@ async def admin_save_user(
         warnings=warnings,
         polza_key_id=mask_hash(getattr(user, "polza_key_id", None)),
         has_polza=user_has_polza_key(user),
+        has_openrouter=user_has_openrouter_key(user),
     )
     return {"changes": changes, "user_id": user.id, "warnings": warnings}

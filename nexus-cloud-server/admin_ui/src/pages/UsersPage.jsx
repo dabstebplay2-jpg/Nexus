@@ -155,6 +155,8 @@ export default function UsersPage({ openUserId, onOpenUser }) {
             <th>TG</th>
             <th>Тариф</th>
             <th>Polza</th>
+            <th>OpenRouter</th>
+            <th>Квота</th>
             <th>Баланс</th>
             <th>Создан</th>
           </tr>
@@ -196,6 +198,26 @@ export default function UsersPage({ openUserId, onOpenUser }) {
                 ) : (
                   '—'
                 )}
+              </td>
+              <td>
+                {u.openrouter_ready ? (
+                  <span className="badge badge-paid" title={u.openrouter_key_hash_preview || ''}>
+                    активен
+                  </span>
+                ) : u.has_openrouter_key ? (
+                  <span className="badge" title={u.openrouter_key_hash_preview || ''}>
+                    есть
+                  </span>
+                ) : u.openrouter_uses_shared_key ? (
+                  <span className="badge badge-free">общий</span>
+                ) : (
+                  '—'
+                )}
+              </td>
+              <td className="muted" style={{ fontSize: '0.8rem' }}>
+                {u.quota_enabled
+                  ? `${Number(u.monthly_spent_usd || 0).toFixed(1)}/${Number(u.monthly_cap_usd || 0).toFixed(0)}`
+                  : '—'}
               </td>
               <td>${Number(u.balance_usd || 0).toFixed(2)}</td>
               <td>{(u.created_at || '').slice(0, 10)}</td>

@@ -86,6 +86,20 @@ class OpenRouterService:
             return data if isinstance(data, dict) else {}
         raise OpenRouterError(response.text[:300], response.status_code)
 
+    async def verify_management_key(self, *, timeout: float = 30.0) -> dict[str, Any]:
+        """Проверка Management API: GET /keys."""
+        if not openrouter_management_enabled():
+            raise OpenRouterError("OPENROUTER_MANAGEMENT_API_KEY не задан.")
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(
+                f"{self.base_url}/keys",
+                headers=self._management_headers(),
+            )
+        if response.status_code != 200:
+            raise OpenRouterError(response.text[:300], response.status_code)
+        data = response.json()
+        return {"ok": True, "message": "Management API OpenRouter работает", "raw": data}
+
     async def delete_api_key(self, key_hash: str, *, timeout: float = 30.0) -> None:
         if not openrouter_management_enabled():
             return
