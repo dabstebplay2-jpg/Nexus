@@ -1,6 +1,6 @@
 import { Download, Globe, Shield, Sparkles, ExternalLink } from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
-import DiscordInviteLink from '../DiscordInviteLink';
+import DiscordInviteLink from '../components/DiscordInviteLink';
 
 const BROWSER_VERSION = import.meta.env.VITE_BROWSER_VERSION || '0.4.1';
 const RELEASES_PAGE =
