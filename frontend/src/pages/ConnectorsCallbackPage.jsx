@@ -26,7 +26,7 @@ export default function ConnectorsCallbackPage() {
   }, [params]);
 
   return (
-    <div className="min-h-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center">
+    <div className="nx-dvh-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center">
       <p className="text-zinc-300 max-w-md">{msg}</p>
       <Link
         to="/?settings=connectors"

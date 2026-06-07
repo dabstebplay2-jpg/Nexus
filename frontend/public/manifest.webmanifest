@@ -6,7 +6,27 @@
   "display": "standalone",
   "background_color": "#08080a",
   "theme_color": "#08080a",
-  "orientation": "portrait-primary",
+  "orientation": "any",
+  "shortcuts": [
+    {
+      "name": "Чат",
+      "short_name": "Чат",
+      "url": "/",
+      "icons": [{ "src": "/brand/image/logo/brand.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "IDE Web",
+      "short_name": "IDE",
+      "url": "/ide/lite",
+      "icons": [{ "src": "/brand/image/logo/brand.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Тарифы",
+      "short_name": "Тарифы",
+      "url": "/pricing",
+      "icons": [{ "src": "/brand/image/logo/brand.png", "sizes": "192x192" }]
+    }
+  ],
   "icons": [
     {
       "src": "/brand/image/logo/brand.png",

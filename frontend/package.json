@@ -1,7 +1,7 @@
 {
   "name": "nexus-ide-client",
   "private": true,
-  "version": "0.1.38",
+  "version": "0.1.39",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,8 @@
     "discord:bootstrap": "node scripts/discord-sync-vercel-env.mjs && node scripts/github-sync-discord-secret.mjs",
     "discord:sync-invite": "node scripts/discord-sync-invite-env.mjs",
     "deploy:vercel": "vercel deploy --prod --yes",
-    "deploy:prod": "npm run build && npm run deploy:vercel && npm run changelog:notify"
+    "deploy:prod": "npm run build && npm run deploy:vercel && npm run changelog:notify",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
@@ -28,6 +29,7 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "@vitejs/plugin-react": "^4.2.1",

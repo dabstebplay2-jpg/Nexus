@@ -207,11 +207,11 @@ export default function UpdatesPage() {
         <section className="mx-auto max-w-6xl px-5 py-10 sm:px-6">
           {filteredEntries.length > 0 ? (
             <div className="relative">
-              <div className="absolute bottom-8 left-[18px] top-8 hidden w-px bg-white/10 sm:block" />
+              <div className="absolute bottom-8 left-[11px] top-8 w-px bg-white/10 sm:left-[18px]" />
               <div className="space-y-5">
                 {filteredEntries.map((entry) => (
-                  <div key={`${entry.version}-${entry.dateISO}-${activeFilter}`} className="relative sm:pl-12">
-                    <span className="absolute left-3 top-7 hidden h-3 w-3 rounded-full border border-teal-200/70 bg-[#07080a] ring-4 ring-teal-300/10 sm:block" />
+                  <div key={`${entry.version}-${entry.dateISO}-${activeFilter}`} className="relative pl-8 sm:pl-12">
+                    <span className="absolute left-2 top-7 h-2.5 w-2.5 sm:left-3 sm:h-3 sm:w-3 rounded-full border border-teal-200/70 bg-[#07080a] ring-4 ring-teal-300/10" />
                     <ReleaseCard entry={entry} compact />
                   </div>
                 ))}

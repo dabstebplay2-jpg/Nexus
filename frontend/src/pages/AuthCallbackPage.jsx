@@ -162,7 +162,7 @@ export default function AuthCallbackPage() {
 
   if (desktopUri) {
     return (
-      <div className="min-h-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg">
+      <div className="nx-dvh-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg">
         <p className="text-zinc-300 text-sm leading-relaxed">
           Вход через Google выполнен. Если VSCodium не открылся сам, нажмите кнопку ниже и подтвердите открытие
           приложения.
@@ -180,7 +180,7 @@ export default function AuthCallbackPage() {
 
   if (mergeOffer) {
     return (
-      <div className="min-h-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg">
+      <div className="nx-dvh-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg">
         <h1 className="text-lg text-zinc-100 font-medium">Привязать Telegram?</h1>
         <p className="text-zinc-400 text-sm leading-relaxed">
           Вы уже вошли как <span className="text-zinc-200">{mergeOffer.emailLabel}</span>. Ссылка из бота ведёт на
@@ -210,7 +210,7 @@ export default function AuthCallbackPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg">
+      <div className="nx-dvh-screen bg-[#07070a] flex flex-col items-center justify-center gap-4 px-6 text-center max-w-lg">
         <p className="text-red-400 text-sm leading-relaxed">{error}</p>
         <Link to="/?panel=auth" className="text-cyan-400 hover:underline">
           Вернуться к входу
@@ -220,7 +220,7 @@ export default function AuthCallbackPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#07070a] flex items-center justify-center text-cyan-400">
+    <div className="nx-dvh-screen bg-[#07070a] flex items-center justify-center text-cyan-400">
       <RefreshCw className="animate-spin mr-2" size={24} />
       <span>Завершаем вход…</span>
     </div>

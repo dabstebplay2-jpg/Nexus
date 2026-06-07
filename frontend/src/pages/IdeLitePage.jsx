@@ -5,7 +5,13 @@ import IdeApp from '../IdeApp';
 export default function IdeLitePage() {
   const navigate = useNavigate();
   return (
-    <AppShell hideHistory ambientFocus="center" onOpenPricing={() => navigate('/pricing')}>
+    <AppShell
+      hideHistory
+      ambientFocus="center"
+      compactChrome
+      showMobileTabBar={false}
+      onOpenPricing={() => navigate('/pricing')}
+    >
       <IdeApp embedded />
     </AppShell>
   );

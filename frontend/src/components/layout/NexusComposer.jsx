@@ -19,6 +19,7 @@ import { Link } from 'react-router-dom';
 import ModelPicker from '../chat/ModelPicker';
 import AttachmentBar from '../chat/AttachmentBar';
 import WebSearchDepthPicker from '../chat/WebSearchDepthPicker';
+import { useVisualViewportPadding } from '../../hooks/useVisualViewportPadding';
 
 const WEB_SEARCH_HINT = depthMeta(DEFAULT_WEB_SEARCH_DEPTH).hint;
 
@@ -53,6 +54,7 @@ export default function NexusComposer({
 }) {
   const [attachOpen, setAttachOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const keyboardPad = useVisualViewportPadding();
   const attachRef = useRef(null);
   const inputRef = useRef(null);
   const imageInputRef = useRef(null);
@@ -88,7 +90,12 @@ export default function NexusComposer({
   return (
     <motion.div
       layout
-      className={`w-full max-w-[var(--nx-content-max)] mx-auto ${centered ? 'px-0' : 'px-4 sm:px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]'}`}
+      className={`w-full max-w-[var(--nx-content-max)] mx-auto ${centered ? 'px-0' : 'px-4 sm:px-6'}`}
+      style={{
+        paddingBottom: centered
+          ? undefined
+          : `max(1.25rem, calc(env(safe-area-inset-bottom) + ${keyboardPad}px))`,
+      }}
     >
       <div
         className={`nx-composer rounded-3xl overflow-x-clip overflow-y-visible ${
@@ -124,8 +131,8 @@ export default function NexusComposer({
             webSearchActive ? 'pb-3.5 pt-1' : 'pb-4 pt-1'
           }`}
         >
-          <div className="flex items-center justify-between gap-2 w-full min-w-0">
-            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between w-full min-w-0">
+            <div className="flex items-center gap-2 min-w-0 flex-wrap w-full sm:w-auto">
               {showAttachMenu && (
                 <div ref={attachRef} className="relative shrink-0">
                   <button
@@ -212,12 +219,13 @@ export default function NexusComposer({
                   {mode === 'research' ? (
                     <>
                       <Microscope size={20} />
-                      Глубокое исследование
+                      <span className="hidden sm:inline">Глубокое исследование</span>
+                      <span className="sm:hidden">Research</span>
                     </>
                   ) : (
                     <>
                       <MessageCircle size={20} />
-                      Чат
+                      <span className="hidden sm:inline">Чат</span>
                     </>
                   )}
                   <ChevronDown size={18} className={searchOpen ? 'rotate-180' : ''} />
@@ -273,7 +281,7 @@ export default function NexusComposer({
               )}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-between sm:justify-end">
               {onOpenSupport && (
                 <button
                   type="button"

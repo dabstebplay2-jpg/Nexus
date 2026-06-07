@@ -86,6 +86,38 @@
   --nx-sidebar-w: 300px;
   --nx-sidebar-collapsed-w: 60px;
   --nx-content-max: 44rem;
+  --nx-header-h: 56px;
+  --nx-dock-h: 56px;
+  --nx-safe-top: env(safe-area-inset-top, 0px);
+  --nx-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --nx-touch-min: 44px;
+}
+
+.nx-dvh-screen {
+  min-height: 100dvh;
+  min-height: 100vh;
+}
+
+.nx-h-dvh {
+  height: 100dvh;
+  height: 100vh;
+}
+
+.nx-safe-pb {
+  padding-bottom: max(0.5rem, var(--nx-safe-bottom));
+}
+
+.nx-safe-pt {
+  padding-top: max(0px, var(--nx-safe-top));
+}
+
+.nx-mobile-tabbar-h {
+  padding-bottom: calc(var(--nx-dock-h) + var(--nx-safe-bottom));
+}
+
+.nx-topic-scroll {
+  mask-image: linear-gradient(to right, black 85%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
 }
 
 @media (min-width: 1024px) {

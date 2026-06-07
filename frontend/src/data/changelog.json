@@ -1,6 +1,35 @@
 {
   "entries": [
     {
+      "version": "0.1.39",
+      "date": "9 июня 2026 г.",
+      "dateISO": "2026-06-09",
+      "title": "Mobile-first: shell, чат, IDE Web и PWA",
+      "summary": "Полноценная мобильная версия с 100dvh/safe-area, группировкой навигации, двухрядным composer, overlay-панелями IDE, bottom sheet терминалом и installable PWA.",
+      "changes": [
+        {
+          "label": "Новое",
+          "text": "Фундамент: токены --nx-header-h/safe-area, useBreakpoint, nx-dvh-screen по всему приложению."
+        },
+        {
+          "label": "Новое",
+          "text": "AppShell: группы NAV, bottom tabs, compactChrome для /ide/lite, удаление истории на touch."
+        },
+        {
+          "label": "Новое",
+          "text": "Чат: overflow-меню header, двухрядный NexusComposer, swipe-dismiss code panel, visualViewport для клавиатуры."
+        },
+        {
+          "label": "Новое",
+          "text": "IDE Web: overlay side panels, IdeMobileTitlebar, dock Explorer/Agent/Terminal/More, terminal bottom sheet."
+        },
+        {
+          "label": "Улучшено",
+          "text": "Страницы тарифов/настроек/обновлений, PWA (orientation any, shortcuts, SW), Playwright mobile smoke."
+        }
+      ]
+    },
+    {
       "version": "0.1.38",
       "date": "8 июня 2026 г.",
       "dateISO": "2026-06-08",

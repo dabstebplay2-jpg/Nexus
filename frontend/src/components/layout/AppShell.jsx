@@ -20,36 +20,61 @@ import ProfileMenu from './ProfileMenu';
 import BrandLogo from '../brand/BrandLogo';
 import DiscordInviteLink from '../DiscordInviteLink';
 import AmbientBackground from '../AmbientBackground';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const IDE_WEB_NAV_BADGE_KEY = 'nexus_seen_ide_web_nav';
 
-const NAV = [
+const NAV_GROUPS = [
+  {
+    title: 'Работа',
+    items: [
+      { path: '/', label: 'Чат', icon: MessageSquare, match: (p) => p === '/' },
+      {
+        path: '/ide/lite',
+        label: 'IDE Web',
+        title: 'Редактор и Agent в браузере',
+        icon: Code2,
+        match: (p) => p === '/ide/lite',
+        badge: 'new',
+      },
+      { path: '/spaces', label: 'Пространства', icon: Boxes, match: (p) => p === '/spaces' },
+    ],
+  },
+  {
+    title: 'Файлы',
+    items: [{ path: '/artifacts', label: 'Артефакты', icon: LayoutGrid, match: (p) => p === '/artifacts' }],
+  },
+  {
+    title: 'IDE',
+    items: [
+      {
+        path: '/ide',
+        label: 'Скачать IDE',
+        title: 'Desktop и расширение VSIX',
+        icon: Puzzle,
+        match: (p) => p === '/ide',
+      },
+    ],
+  },
+  {
+    title: 'Сервис',
+    items: [
+      {
+        path: '/updates',
+        label: 'Изменения',
+        title: 'Журнал релизов и что нового',
+        icon: Radio,
+        match: (p) => p === '/updates',
+      },
+      { action: 'support', label: 'Поддержка', icon: LifeBuoy },
+    ],
+  },
+];
+
+const MOBILE_TABS = [
   { path: '/', label: 'Чат', icon: MessageSquare, match: (p) => p === '/' },
-  {
-    path: '/ide/lite',
-    label: 'IDE Web',
-    title: 'Редактор и Agent в браузере',
-    icon: Code2,
-    match: (p) => p === '/ide/lite',
-    badge: 'new',
-  },
-  { path: '/spaces', label: 'Пространства', icon: Boxes, match: (p) => p === '/spaces' },
-  { path: '/artifacts', label: 'Артефакты', icon: LayoutGrid, match: (p) => p === '/artifacts' },
-  {
-    path: '/ide',
-    label: 'Скачать IDE',
-    title: 'Desktop и расширение VSIX',
-    icon: Puzzle,
-    match: (p) => p === '/ide',
-  },
-  {
-    path: '/updates',
-    label: 'Изменения',
-    title: 'Журнал релизов и что нового',
-    icon: Radio,
-    match: (p) => p === '/updates',
-  },
-  { action: 'support', label: 'Поддержка', icon: LifeBuoy },
+  { path: '/ide/lite', label: 'IDE', icon: Code2, match: (p) => p === '/ide/lite' },
+  { path: '/pricing', label: 'Тарифы', icon: ArrowUpCircle, match: (p) => p === '/pricing' },
 ];
 
 function SidebarContent({
@@ -128,67 +153,78 @@ function SidebarContent({
         </button>
       </div>
 
-      <nav className="px-2 space-y-0.5">
-        {NAV.map((item) => {
-          const { label, icon: Icon, title: navTitle } = item;
-          if (item.action === 'support') {
-            return (
-              <button
-                key="support"
-                type="button"
-                title={label}
-                onClick={() => {
-                  setMobileOpen(false);
-                  onOpenSupport?.();
-                }}
-                className="relative w-full flex items-center gap-3 px-3 py-3 min-h-[52px] rounded-2xl text-base transition-colors text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] hover:text-[var(--nx-text)]"
-              >
-                <Icon size={22} className="shrink-0 text-teal-500/90" />
-                {expanded && <span>{label}</span>}
-              </button>
-            );
-          }
-          const active = item.match(pathname);
-          const showNewBadge =
-            item.badge === 'new' &&
-            expanded &&
-            typeof localStorage !== 'undefined' &&
-            !localStorage.getItem(IDE_WEB_NAV_BADGE_KEY);
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              title={navTitle || label}
-              onClick={() => {
-                if (item.badge === 'new') {
-                  try {
-                    localStorage.setItem(IDE_WEB_NAV_BADGE_KEY, '1');
-                  } catch {
-                    /* ignore */
-                  }
+      <nav className="px-2 space-y-3">
+        {NAV_GROUPS.map((group) => (
+          <div key={group.title}>
+            {expanded && (
+              <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--nx-muted)]">
+                {group.title}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const { label, icon: Icon, title: navTitle } = item;
+                if (item.action === 'support') {
+                  return (
+                    <button
+                      key="support"
+                      type="button"
+                      title={label}
+                      onClick={() => {
+                        setMobileOpen(false);
+                        onOpenSupport?.();
+                      }}
+                      className="relative w-full flex items-center gap-3 px-3 py-3 min-h-[52px] rounded-2xl text-base transition-colors text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] hover:text-[var(--nx-text)]"
+                    >
+                      <Icon size={22} className="shrink-0 text-teal-500/90" />
+                      {expanded && <span>{label}</span>}
+                    </button>
+                  );
                 }
-                setMobileOpen(false);
-              }}
-              className={`relative flex items-center gap-3 px-3 py-3 min-h-[52px] rounded-2xl text-base transition-colors ${
-                active
-                  ? 'bg-[var(--nx-surface-hover)] text-[var(--nx-text)] font-medium'
-                  : 'text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] hover:text-[var(--nx-text)]'
-              }`}
-            >
-              <Icon size={22} className="shrink-0" />
-              {expanded && (
-                <span className="flex items-center gap-2 min-w-0">
-                  <span className="truncate">{label}</span>
-                  {showNewBadge && (
-                    <span className="shrink-0 rounded-md bg-teal-500/20 border border-teal-500/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-teal-300">
-                      New
-                    </span>
-                  )}
-                </span>
-              )}
-            </Link>
-          );
-        })}
+                const active = item.match(pathname);
+                const showNewBadge =
+                  item.badge === 'new' &&
+                  expanded &&
+                  typeof localStorage !== 'undefined' &&
+                  !localStorage.getItem(IDE_WEB_NAV_BADGE_KEY);
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    title={navTitle || label}
+                    onClick={() => {
+                      if (item.badge === 'new') {
+                        try {
+                          localStorage.setItem(IDE_WEB_NAV_BADGE_KEY, '1');
+                        } catch {
+                          /* ignore */
+                        }
+                      }
+                      setMobileOpen(false);
+                    }}
+                    className={`relative flex items-center gap-3 px-3 py-3 min-h-[52px] rounded-2xl text-base transition-colors ${
+                      active
+                        ? 'bg-[var(--nx-surface-hover)] text-[var(--nx-text)] font-medium'
+                        : 'text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] hover:text-[var(--nx-text)]'
+                    }`}
+                  >
+                    <Icon size={22} className="shrink-0" />
+                    {expanded && (
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className="truncate">{label}</span>
+                        {showNewBadge && (
+                          <span className="shrink-0 rounded-md bg-teal-500/20 border border-teal-500/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-teal-300">
+                            New
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {!hideHistory && expanded && historyItems.length > 0 && (
@@ -221,7 +257,8 @@ function SidebarContent({
                   <button
                     type="button"
                     onClick={() => onDeleteHistory(item.id)}
-                    className="opacity-0 group-hover:opacity-100 px-2 text-[10px] text-red-400/80 min-w-[44px] min-h-[44px]"
+                    className="opacity-100 md:opacity-0 md:group-hover:opacity-100 px-2 text-lg text-red-400/80 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                    aria-label="Удалить чат"
                   >
                     ×
                   </button>
@@ -279,16 +316,26 @@ export default function AppShell({
   onOpenPricing,
   hideHistory = false,
   ambientFocus = 'center',
+  compactChrome = false,
+  showMobileTabBar = true,
 }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const pageTitle = usePageTitle();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const shellRef = useRef(null);
+  const hideMobileHeader = compactChrome;
 
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const openDrawer = () => setMobileOpen(true);
+    window.addEventListener('nexus-open-drawer', openDrawer);
+    return () => window.removeEventListener('nexus-open-drawer', openDrawer);
+  }, []);
 
   const handleNew = () => {
     if (onNewChat) onNewChat();
@@ -377,24 +424,77 @@ export default function AppShell({
         data-nx-main
         className="flex flex-col min-w-0 min-h-0 max-md:flex-1 relative z-10 w-full md:h-full md:overflow-hidden"
       >
-        <header
-          className="h-14 shrink-0 flex items-center justify-between gap-3 px-4 sm:px-5 border-b border-[var(--nx-border)] bg-[color-mix(in_srgb,var(--nx-sidebar)_90%,transparent)] backdrop-blur-xl z-20"
-          style={{ paddingTop: 'max(0px, env(safe-area-inset-top))' }}
+        {!hideMobileHeader && (
+          <header
+            className="h-[var(--nx-header-h)] shrink-0 flex items-center justify-between gap-3 px-4 sm:px-5 border-b border-[var(--nx-border)] bg-[color-mix(in_srgb,var(--nx-sidebar)_90%,transparent)] backdrop-blur-xl z-20 max-md:hidden md:flex"
+            style={{ paddingTop: 'var(--nx-safe-top)' }}
+          >
+            <div className="flex items-center gap-2 min-w-0">{headerLeft}</div>
+            <div className="flex items-center gap-2 shrink-0">{headerRight}</div>
+          </header>
+        )}
+        {!hideMobileHeader && (
+          <header
+            className="md:hidden h-[var(--nx-header-h)] shrink-0 flex items-center justify-between gap-2 px-3 border-b border-[var(--nx-border)] bg-[color-mix(in_srgb,var(--nx-sidebar)_90%,transparent)] backdrop-blur-xl z-20"
+            style={{ paddingTop: 'var(--nx-safe-top)' }}
+          >
+            <div className="flex items-center gap-1 min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={() => setMobileOpen(true)}
+                className="p-2 rounded-lg hover:bg-[var(--nx-surface-hover)] text-[var(--nx-muted)] min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0"
+                aria-label="Открыть меню"
+              >
+                <Menu size={20} />
+              </button>
+              <Link to="/" className="shrink-0" aria-label="Nexus">
+                <BrandLogo variant="icon" className="h-8 w-8" imgClassName="h-8 w-8 object-contain" alt="" />
+              </Link>
+              {!headerLeft && (
+                <span className="text-sm font-medium text-[var(--nx-text)] truncate ml-1">{pageTitle}</span>
+              )}
+              <div className="min-w-0 overflow-x-auto custom-scrollbar flex-1">{headerLeft}</div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">{headerRight}</div>
+          </header>
+        )}
+        <div
+          className={`flex-1 flex min-h-0 overflow-hidden ${
+            showMobileTabBar && !compactChrome ? 'max-md:pb-[calc(var(--nx-dock-h)+var(--nx-safe-bottom))]' : ''
+          }`}
         >
-          <div className="flex items-center gap-2 min-w-0">
+          {children}
+        </div>
+        {showMobileTabBar && !compactChrome && (
+          <nav
+            className="md:hidden fixed bottom-0 inset-x-0 z-30 flex items-stretch justify-around border-t border-[var(--nx-border)] bg-[color-mix(in_srgb,var(--nx-sidebar)_95%,transparent)] backdrop-blur-xl"
+            style={{ paddingBottom: 'var(--nx-safe-bottom)', height: 'calc(var(--nx-dock-h) + var(--nx-safe-bottom))' }}
+          >
+            {MOBILE_TABS.map(({ path, label, icon: Icon, match }) => {
+              const active = match(pathname);
+              return (
+                <Link
+                  key={path}
+                  to={path}
+                  className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] min-h-[var(--nx-touch-min)] ${
+                    active ? 'text-teal-400' : 'text-[var(--nx-muted)]'
+                  }`}
+                >
+                  <Icon size={20} />
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
-              className="md:hidden p-2 -ml-1 rounded-lg hover:bg-[var(--nx-surface-hover)] text-[var(--nx-muted)] min-w-[44px] min-h-[44px] flex items-center justify-center"
-              aria-label="Открыть меню"
+              className="flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] text-[var(--nx-muted)] min-h-[var(--nx-touch-min)]"
             >
               <Menu size={20} />
+              <span>Меню</span>
             </button>
-            {headerLeft}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">{headerRight}</div>
-        </header>
-        <div className="flex-1 flex min-h-0 overflow-hidden">{children}</div>
+          </nav>
+        )}
       </div>
     </div>
   );

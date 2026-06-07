@@ -38,7 +38,7 @@ export default function ChatMessage({
           />
         </div>
       )}
-      <div className="nx-message-body flex-1 min-w-0 max-w-[var(--nx-content-max)] select-text">
+      <div className="nx-message-body flex-1 min-w-0 max-w-[95%] sm:max-w-[var(--nx-content-max)] select-text">
         <p className="text-sm font-semibold text-zinc-500 mb-1.5">
           {isUser ? 'Вы' : assistantLabel}
         </p>

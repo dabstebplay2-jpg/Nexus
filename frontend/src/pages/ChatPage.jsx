@@ -46,6 +46,7 @@ import ChatComposerBanners from '../components/chat/ChatComposerBanners';
 import { warmApiHealthOnce } from '../lib/warmApiHealth';
 import HomeFeatures from '../components/home/HomeFeatures';
 import { Code2 } from 'lucide-react';
+import ChatHeaderOverflow from '../components/chat/ChatHeaderOverflow';
 
 const TOPICS = ['Финансы', 'Код', 'Research', 'Учёба'];
 
@@ -457,37 +458,57 @@ export default function ChatPage() {
           else openSettingsModal(tab);
         }}
         headerLeft={
-          <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar flex-wrap">
-            <Link
-              to="/ide/lite"
-              className="text-sm font-medium px-3 py-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 text-teal-300 hover:bg-teal-500/15 whitespace-nowrap inline-flex items-center gap-1.5"
-            >
-              <Code2 size={14} />
-              IDE Web
-            </Link>
-            <span className="text-sm text-[var(--nx-muted)] whitespace-nowrap">
-              {tier.name} тариф
-            </span>
-            {tier.id === 'FREE' || !tier.aiAccess ? (
-              <button
-                type="button"
-                onClick={openPricing}
-                className="text-sm font-semibold px-4 py-1.5 rounded-full bg-[var(--nx-surface)] border border-[var(--nx-border)] hover:bg-[var(--nx-surface-hover)] whitespace-nowrap"
+          <>
+            <div className="hidden sm:flex items-center gap-2 overflow-x-auto custom-scrollbar flex-wrap min-w-0">
+              <Link
+                to="/ide/lite"
+                className="text-sm font-medium px-3 py-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 text-teal-300 hover:bg-teal-500/15 whitespace-nowrap inline-flex items-center gap-1.5"
               >
-                Улучшить
-              </button>
-            ) : null}
-            {TOPICS.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setInput((v) => (v ? v : `Тема: ${t}. `))}
-                className="text-sm px-4 py-1.5 rounded-full text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] whitespace-nowrap hidden sm:inline"
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+                <Code2 size={14} />
+                IDE Web
+              </Link>
+              <span className="text-sm text-[var(--nx-muted)] whitespace-nowrap">
+                {tier.name} тариф
+              </span>
+              {tier.id === 'FREE' || !tier.aiAccess ? (
+                <button
+                  type="button"
+                  onClick={openPricing}
+                  className="text-sm font-semibold px-4 py-1.5 rounded-full bg-[var(--nx-surface)] border border-[var(--nx-border)] hover:bg-[var(--nx-surface-hover)] whitespace-nowrap"
+                >
+                  Улучшить
+                </button>
+              ) : null}
+              {TOPICS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setInput((v) => (v ? v : `Тема: ${t}. `))}
+                  className="text-sm px-4 py-1.5 rounded-full text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] whitespace-nowrap"
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            <div className="sm:hidden flex items-center gap-1 min-w-0 overflow-x-auto custom-scrollbar nx-topic-scroll">
+              {TOPICS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setInput((v) => (v ? v : `Тема: ${t}. `))}
+                  className="text-xs px-3 py-1.5 rounded-full text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] whitespace-nowrap shrink-0 border border-[var(--nx-border)]"
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            <ChatHeaderOverflow
+              tier={tier}
+              topics={TOPICS}
+              onPickTopic={(t) => setInput((v) => (v ? v : `Тема: ${t}. `))}
+              onUpgrade={tier.id === 'FREE' || !tier.aiAccess ? openPricing : null}
+            />
+          </>
         }
         headerRight={
           <div className="flex items-center gap-3">
@@ -682,7 +703,18 @@ export default function ChatPage() {
                 )}
               </div>
               {codePanel.open && codePanel.files.length > 0 && (
-                <div className="fixed inset-0 z-40 flex flex-col bg-[var(--nx-bg)] lg:static lg:z-auto lg:flex lg:flex-1 lg:min-w-0 lg:max-w-[min(480px,45%)] border-l border-[var(--nx-border)]">
+                <motion.div
+                  drag="y"
+                  dragConstraints={{ top: 0, bottom: 0 }}
+                  dragElastic={0.1}
+                  onDragEnd={(_, info) => {
+                    if (info.offset.y > 100 || info.velocity.y > 500) closePanel();
+                  }}
+                  className="fixed inset-0 z-[60] flex flex-col bg-[var(--nx-bg)] lg:static lg:z-auto lg:flex lg:flex-1 lg:min-w-0 lg:max-w-[min(480px,45%)] border-l border-[var(--nx-border)]"
+                >
+                  <div className="lg:hidden flex justify-center py-2 shrink-0">
+                    <div className="w-10 h-1 rounded-full bg-white/20" aria-hidden />
+                  </div>
                   <CodeArtifactPanel
                     files={codePanel.files}
                     activeFileId={codePanel.activeFileId}
@@ -690,7 +722,7 @@ export default function ChatPage() {
                     onClose={closePanel}
                     streaming={loading && codePanel.messageId === streamingId}
                   />
-                </div>
+                </motion.div>
               )}
             </div>
           )}

@@ -18,7 +18,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#07070a] flex items-center justify-center text-cyan-400">
+      <div className="nx-dvh-screen bg-[#07070a] flex items-center justify-center text-cyan-400">
         <RefreshCw className="animate-spin" />
       </div>
     );

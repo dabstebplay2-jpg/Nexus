@@ -24,6 +24,10 @@ import IdeWelcome from './components/ide/IdeWelcome';
 import IdeOnboardingTour, { shouldShowIdeTour } from './components/ide/IdeOnboardingTour';
 import IdeStatusBar from './components/ide/IdeStatusBar';
 import IdeMobileDock from './components/ide/IdeMobileDock';
+import IdeMobileTitlebar from './components/ide/mobile/IdeMobileTitlebar';
+import IdeMobileMoreSheet from './components/ide/mobile/IdeMobileMoreSheet';
+import IdeMobileBottomSheet from './components/ide/mobile/IdeMobileBottomSheet';
+import { useBreakpoint } from './hooks/useBreakpoint';
 import { fetchModels, pickDefaultModel } from './lib/chatApi';
 import { normalizeBalance, formatBalanceUsd } from './lib/formatBalance';
 import { resolveWorkspaceMode } from './lib/workspaceMode';
@@ -72,7 +76,10 @@ function formatTreeForAI(node, depth = 0) {
 }
 
 function IdeApp({ embedded = false }) {
+  const { isMobile } = useBreakpoint();
   const [activeTab, setActiveTab] = useState(IS_VERCEL_HOST ? 'ai' : 'explorer');
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [mobileTerminalOpen, setMobileTerminalOpen] = useState(false);
   const [demoMode, setDemoMode] = useState(IS_VERCEL_HOST);
   const [showTour, setShowTour] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -93,10 +100,31 @@ function IdeApp({ embedded = false }) {
   const editorRef = useRef(null);
 
   // Сворачивание и скрытие панелей интерфейса
-  const [isTerminalCollapsed, setIsTerminalCollapsed] = useState(false);
+  const [isTerminalCollapsed, setIsTerminalCollapsed] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 768
+  );
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
     () => typeof window !== 'undefined' && window.innerWidth < 768
   );
+
+  const selectIdeTab = useCallback(
+    (tab) => {
+      setActiveTab(tab);
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        setIsSidebarCollapsed(false);
+        setMobileTerminalOpen(false);
+      }
+    },
+    []
+  );
+
+  const closeMobileSidePanel = useCallback(() => {
+    setIsSidebarCollapsed(true);
+  }, []);
+
+  const openNexusDrawer = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('nexus-open-drawer'));
+  }, []);
 
   // Глобальный поиск
   const [searchQuery, setSearchQuery] = useState('');
@@ -901,7 +929,7 @@ function IdeApp({ embedded = false }) {
   return (
     <div
       className={`ide-shell flex flex-col overflow-hidden font-sans antialiased relative ${
-        embedded ? 'h-full min-h-0 flex-1' : 'h-screen'
+        embedded ? 'h-full min-h-0 flex-1' : 'nx-h-dvh'
       }`}
     >
       <AmbientBackground focus="composer" />
@@ -924,8 +952,14 @@ function IdeApp({ embedded = false }) {
         <IdeOnboardingTour onGoToTab={setActiveTab} onClose={() => setShowTour(false)} />
       )}
 
-      {/* Top Header & Professional Application Menubar */}
-      <header className="ide-titlebar flex items-center justify-between px-2 h-[36px] select-none shrink-0 relative z-50 text-[var(--ide-fg)]">
+      <IdeMobileTitlebar
+        onOpenNav={openNexusDrawer}
+        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+        onOpenAccount={() => selectIdeTab('profile')}
+      />
+
+      {/* Top Header & Professional Application Menubar — desktop */}
+      <header className="hidden md:flex ide-titlebar items-center justify-between px-2 h-[36px] select-none shrink-0 relative z-50 text-[var(--ide-fg)]">
         <div className="flex items-center gap-2">
           {!embedded && (
             <>
@@ -1282,8 +1316,16 @@ function IdeApp({ embedded = false }) {
       </header>
 
       {/* Main Container */}
-      <div className="flex-1 flex overflow-hidden">
-        
+      <div className="flex-1 flex overflow-hidden relative">
+        {isMobile && !isSidebarCollapsed && (
+          <button
+            type="button"
+            className="fixed inset-0 z-[40] bg-black/50 md:hidden"
+            aria-label="Закрыть панель"
+            onClick={closeMobileSidePanel}
+          />
+        )}
+
         {/* Activity Bar — как VS Code / Cursor */}
         <div className="ide-activity-bar hidden md:flex w-14 flex-col shrink-0 select-none relative z-20">
           <ActivityBtn tab="explorer" title="Explorer (Ctrl+Shift+E)" icon={FolderTree} />
@@ -1315,9 +1357,25 @@ function IdeApp({ embedded = false }) {
         </div>
 
         {/* 2. Side Panel Container */}
-        <aside className={`ide-side-panel w-[min(340px,32vw)] flex flex-col shrink-0 min-w-0 transition-all duration-150 relative z-20 ${
-          isSidebarCollapsed ? 'hidden' : 'flex'
-        }`}>
+        <aside
+          className={`ide-side-panel flex flex-col shrink-0 min-w-0 transition-all duration-150 z-[45] ${
+            isSidebarCollapsed ? 'hidden' : 'flex'
+          } ${
+            isMobile
+              ? 'fixed inset-y-0 left-0 w-[min(100vw,360px)] max-w-full shadow-2xl'
+              : 'relative w-[min(340px,32vw)] z-20'
+          }`}
+        >
+          {isMobile && !isSidebarCollapsed && (
+            <button
+              type="button"
+              onClick={closeMobileSidePanel}
+              className="absolute top-2 right-2 z-10 p-2 rounded-lg bg-[var(--ide-hover)] min-w-[44px] min-h-[44px] flex items-center justify-center md:hidden"
+              aria-label="Закрыть"
+            >
+              <X size={18} />
+            </button>
+          )}
           
           {activeTab === 'extensions' && (
             <div className="flex flex-col h-full overflow-hidden">
@@ -1976,10 +2034,10 @@ function IdeApp({ embedded = false }) {
                     modified={activeFile.currentContent}
                     language={getLanguageFromPath(activeFile.path)}
                     options={{
-                      fontSize: editorFontSize,
+                      fontSize: isMobile ? 14 : editorFontSize,
                       fontFamily: 'Consolas, monospace',
-                      minimap: { enabled: showMinimap },
-                      lineHeight: 20
+                      minimap: { enabled: isMobile ? false : showMinimap },
+                      lineHeight: 20,
                     }}
                   />
                 ) : (
@@ -1992,9 +2050,9 @@ function IdeApp({ embedded = false }) {
                     onMount={handleEditorDidMount}
                     options={{
                       automaticLayout: true,
-                      fontSize: editorFontSize,
+                      fontSize: isMobile ? 14 : editorFontSize,
                       fontFamily: 'Consolas, monospace',
-                      minimap: { enabled: showMinimap },
+                      minimap: { enabled: isMobile ? false : showMinimap },
                       cursorBlinking: "smooth",
                       lineHeight: 20
                     }}
@@ -2010,8 +2068,8 @@ function IdeApp({ embedded = false }) {
             </div>
           </div>
 
-          {/* Panel — Problems / Output / Terminal (VS Code) */}
-          <div className={`transition-all duration-200 border-t border-[#3c3c3c] flex flex-col bg-[#1e1e1e] ${
+          {/* Panel — Problems / Output / Terminal (VS Code) — desktop */}
+          <div className={`hidden md:flex transition-all duration-200 border-t border-[#3c3c3c] flex-col bg-[#1e1e1e] ${
             isTerminalCollapsed ? 'h-[22px]' : 'h-[220px]'
           }`}>
             <div className="h-[22px] bg-[#252526] flex items-center justify-between shrink-0 select-none text-[11px] uppercase">
@@ -2070,9 +2128,28 @@ function IdeApp({ embedded = false }) {
 
       <IdeMobileDock
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
-        onOpenMenu={() => setCommandPaletteOpen(true)}
+        onSelectTab={selectIdeTab}
+        onToggleTerminal={() => {
+          setMobileTerminalOpen((o) => !o);
+          setBottomPanel('terminal');
+          setIsSidebarCollapsed(true);
+        }}
+        onOpenMore={() => setMobileMoreOpen(true)}
+        terminalOpen={mobileTerminalOpen}
       />
+      <IdeMobileMoreSheet
+        open={mobileMoreOpen}
+        onClose={() => setMobileMoreOpen(false)}
+        onSelectTab={selectIdeTab}
+        enabledViews={enabledViews}
+      />
+      <IdeMobileBottomSheet
+        open={mobileTerminalOpen}
+        title="Terminal"
+        onClose={() => setMobileTerminalOpen(false)}
+      >
+        <TerminalArea workspacePath={workspacePath} demoMode={demoMode} />
+      </IdeMobileBottomSheet>
       <IdeStatusBar
         demoMode={demoMode}
         gitInfo={gitInfo}
