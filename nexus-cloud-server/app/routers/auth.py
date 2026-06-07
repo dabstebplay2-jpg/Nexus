@@ -13,6 +13,7 @@ from app.config import (
     AUTH_OTP_REQUEST_PER_EMAIL,
     NEXUS_FRONTEND_URL,
     TELEGRAM_BOT_USERNAME,
+    email_auth_enabled,
     google_oauth_configured,
     telegram_bot_enabled,
     telegram_login_domain,
@@ -204,10 +205,14 @@ async def login(payload: UserLogin, request: Request, db: Session = Depends(get_
 def auth_config():
     from app.config import GOOGLE_REDIRECT_URI, oauth_allowed_redirect_bases, redis_persistence_enabled
 
+    email_on = email_auth_enabled()
     return AuthConfigResponse(
         google_oauth_enabled=google_oauth_configured(),
-        telegram_auth_enabled=telegram_bot_enabled(),
-        telegram_bot_username=(TELEGRAM_BOT_USERNAME or None) if telegram_bot_enabled() else None,
+        email_auth_enabled=email_on,
+        telegram_auth_enabled=telegram_bot_enabled() and email_on,
+        telegram_bot_username=(TELEGRAM_BOT_USERNAME or None)
+        if telegram_bot_enabled() and email_on
+        else None,
         telegram_login_domain=telegram_login_domain() if telegram_bot_enabled() else None,
         otp_resend_cooldown_sec=60,
         otp_email_window_sec=AUTH_OTP_REQUEST_EMAIL_WINDOW_SEC,
@@ -224,6 +229,11 @@ async def email_request_code(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    if not email_auth_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="Вход по email отключён. Используйте «Продолжить с Google».",
+        )
     try:
         return await request_login_code(db, str(payload.email), _client_ip(request))
     except RateLimitExceeded as e:
@@ -240,6 +250,11 @@ async def email_request_code(
 
 @router.post("/email/verify-code", response_model=TokenResponse)
 async def email_verify_code(payload: EmailVerifyCode, db: Session = Depends(get_db)):
+    if not email_auth_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="Вход по email отключён. Используйте «Продолжить с Google».",
+        )
     try:
         return await verify_login_code(db, str(payload.email), payload.code)
     except ValueError as e:

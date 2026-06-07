@@ -274,6 +274,16 @@ def google_oauth_configured() -> bool:
     return bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and GOOGLE_REDIRECT_URI)
 
 
+def email_auth_enabled() -> bool:
+    """OTP на email. По умолчанию выкл., если настроен Google OAuth (прод без Resend-домена)."""
+    raw = (os.environ.get("NEXUS_EMAIL_AUTH_ENABLED") or "").strip().lower()
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return not google_oauth_configured()
+
+
 # Connector OAuth (отдельно от входа Google)
 GOOGLE_CONNECTOR_CLIENT_ID = (os.environ.get("GOOGLE_CONNECTOR_CLIENT_ID") or GOOGLE_CLIENT_ID).strip()
 GOOGLE_CONNECTOR_CLIENT_SECRET = (

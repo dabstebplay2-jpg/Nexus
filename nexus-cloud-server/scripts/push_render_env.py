@@ -27,6 +27,7 @@ RENDER_KEYS = [
     "NEXUS_CLOUD_SECRET_KEY",
     "NEXUS_CLOUD_DATABASE_URL",
     "NEXUS_CORS_ORIGINS",
+    "NEXUS_EMAIL_AUTH_ENABLED",
     "NEXUS_BILLING_TEST_MODE",
     "NEXUS_TESTING_MODE",
     "NEXUS_REMOTE_ADMIN",
@@ -62,6 +63,7 @@ DEFAULTS = {
     "NEXUS_CORS_ORIGINS": "https://nexus-zeta-ruby-12.vercel.app,https://nexus-ide.vercel.app",
     "NEXUS_FRONTEND_URL": "https://nexus-zeta-ruby-12.vercel.app",
     "GOOGLE_REDIRECT_URI": "https://nexus-cloud-bxcc.onrender.com/v1/auth/google/callback",
+    "NEXUS_EMAIL_AUTH_ENABLED": "false",
     "NEXUS_BILLING_TEST_MODE": "false",
     "NEXUS_PROMO_CODES_ENABLED": "false",
     "NEXUS_TESTING_MODE": "false",
@@ -72,6 +74,7 @@ DEFAULTS = {
     "OPENROUTER_APP_TITLE": "Nexus",
     "NEXUS_FREE_OPENROUTER_DAILY_LIMIT": "100",
     "NEXUS_FREE_OPENROUTER_RPM": "15",
+    "YOOKASSA_RETURN_PATH": "/pricing",
 }
 
 _WEAK_SECRET_MARKERS = (

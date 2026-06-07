@@ -1735,12 +1735,12 @@ function IdeApp() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-[#a1a1aa] text-xs leading-relaxed">
-                    Войдите через Google или код на email — чаты и тариф синхронизируются с сайтом.
+                    Войдите через Google — чаты и тариф синхронизируются с сайтом.
                   </p>
                   <button
                     type="button"
                     onClick={() => openAuthModal()}
-                    className="w-full py-2 bg-[#007acc] hover:bg-[#0062a3] text-white font-semibold rounded text-xs transition-colors"
+                    className="w-full py-2 bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-lg text-xs transition-colors"
                   >
                     Войти в Nexus
                   </button>
@@ -1799,11 +1799,11 @@ function IdeApp() {
                     }}
                     className={`flex items-center gap-2 px-3 py-1.5 text-xs border-r border-[#2d2d30] cursor-pointer transition-colors shrink-0 ${
                       isActive 
-                        ? 'bg-[#1e1e1e] text-[#f4f4f5] border-t-2 border-[#007acc] font-medium' 
+                        ? 'bg-[#1e1e1e] text-[#f4f4f5] border-t-2 border-teal-500 font-medium' 
                         : 'bg-[#18181c] text-[#71717a] hover:bg-[#1e1e24] hover:text-[#d4d4d8]'
                     }`}
                   >
-                    <FileCode2 size={13} className={isActive ? "text-[#007acc]" : "text-[#71717a]"} />
+                    <FileCode2 size={13} className={isActive ? "text-teal-400" : "text-[#71717a]"} />
                     <span className="truncate max-w-[120px]">{file.name}</span>
                     {file.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />}
                     <button
@@ -1871,12 +1871,14 @@ function IdeApp() {
                 )
               ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center select-none ide-empty-editor px-6">
-                  <div className="ide-copilot-glow w-16 h-16 rounded-2xl flex items-center justify-center mb-5">
+                  <div className="ide-welcome-card rounded-2xl p-8 max-w-lg w-full">
+                  <div className="ide-copilot-glow w-16 h-16 rounded-2xl flex items-center justify-center mb-5 mx-auto">
                     <Sparkles size={28} className="text-teal-400" />
                   </div>
-                  <span className="text-lg font-medium text-[var(--ide-fg)]">Nexus IDE</span>
-                  <p className="text-sm text-[var(--ide-muted)] mt-2 mb-6 max-w-md">
-                    Откройте папку и вкладку Agent — ИИ правит файлы, запускает команды и открывает код.
+                  <span className="text-xl font-semibold text-[var(--ide-fg)]">Nexus Web IDE</span>
+                  <p className="text-sm text-[var(--ide-muted)] mt-2 mb-6 leading-relaxed">
+                    Откройте папку проекта, затем Agent — ИИ правит файлы, запускает команды в терминале и открывает вкладки.
+                    На Vercel доступен демо-режим; полный IDE — в десктопе.
                   </p>
                   <div className="flex flex-wrap gap-2 justify-center">
                     <button
@@ -1893,6 +1895,13 @@ function IdeApp() {
                     >
                       Agent
                     </button>
+                    <Link
+                      to="/ide"
+                      className="px-4 py-2 border border-violet-500/30 text-violet-300 hover:border-violet-400/50 text-sm rounded-xl"
+                    >
+                      Desktop IDE
+                    </Link>
+                  </div>
                   </div>
                 </div>
               )}

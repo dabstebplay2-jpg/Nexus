@@ -61,6 +61,7 @@ git push origin main
 | `POLZA_OAUTH_CALLBACK_URL` | `https://ВАШ-RENDER.onrender.com/v1/auth/polza/callback` |
 | `OPENROUTER_API_KEY` | для FREE tier (openrouter.ai) |
 | `OPENROUTER_HTTP_REFERER` | URL фронта Vercel |
+| `YOOKASSA_SHOP_ID` + `YOOKASSA_SECRET_KEY` | оплата подписок ([`docs/YOOKASSA_RU.md`](../nexus-cloud-server/docs/YOOKASSA_RU.md)) |
 | `UPSTASH_REDIS_REST_URL` + `TOKEN` | *или* Postgres выше |
 
 Полный список: [`nexus-cloud-server/.env.example`](../nexus-cloud-server/.env.example)

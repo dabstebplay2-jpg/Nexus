@@ -47,3 +47,4 @@ ai_nexus/
 nexus-backend/
 nexus-frontend/
 portal/
+.vercel

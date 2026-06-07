@@ -80,6 +80,7 @@ export default function AuthModal() {
     startGoogleLogin,
     completeTelegramLogin,
     googleOAuthAvailable,
+    emailAuthEnabled,
     telegramAuthEnabled,
     telegramBotUsername,
     telegramLoginDomain,
@@ -205,6 +206,7 @@ export default function AuthModal() {
 
   if (!authModalOpen) return null;
 
+  const googleOnly = authConfigLoaded && googleOAuthAvailable && !emailAuthEnabled;
   const emailSubmitDisabled = busy || emailCooldown > 0;
 
   return (
@@ -239,13 +241,44 @@ export default function AuthModal() {
 
           {step === 'email' ? (
             <>
-              <h2 id="auth-modal-title">Войти или создать аккаунт</h2>
+              <h2 id="auth-modal-title">
+                {googleOnly ? 'Войти через Google' : 'Войти или создать аккаунт'}
+              </h2>
               <p className="auth-modal-sub">
-                Чаты, тариф и баланс сохраняются на всех устройствах под одним email.
+                {googleOnly
+                  ? 'Один аккаунт Google — чаты, тариф и баланс на сайте и в IDE.'
+                  : 'Чаты, тариф и баланс сохраняются на всех устройствах под одним email.'}
               </p>
 
               {!authConfigLoaded ? (
                 <p className="auth-google-hint auth-google-hint--muted">Проверяем доступность входа…</p>
+              ) : googleOnly ? (
+                googleOAuthAvailable ? (
+                  <>
+                    <button
+                      type="button"
+                      className="auth-google-btn auth-google-btn--solo"
+                      disabled={busy}
+                      onClick={() => {
+                        try {
+                          startGoogleLogin();
+                        } catch (e) {
+                          setErr(e.message);
+                        }
+                      }}
+                    >
+                      <GoogleIcon />
+                      Продолжить с Google
+                    </button>
+                    <p className="auth-google-hint">
+                      Вход по email временно отключён — используйте Google-аккаунт.
+                    </p>
+                  </>
+                ) : (
+                  <p className="auth-google-hint auth-google-hint--muted">
+                    Вход через Google временно недоступен. Попробуйте позже.
+                  </p>
+                )
               ) : (
                 <>
                   {telegramAuthEnabled && telegramBotUsername ? (
@@ -320,30 +353,34 @@ export default function AuthModal() {
                 </>
               )}
 
-              {gmailAddress && googleOAuthAvailable && (
-                <p className="auth-gmail-tip">
-                  У вас Gmail — быстрее войти через кнопку Google выше, без ожидания письма с кодом.
-                </p>
-              )}
+              {!googleOnly && (
+                <>
+                  {gmailAddress && googleOAuthAvailable && (
+                    <p className="auth-gmail-tip">
+                      У вас Gmail — быстрее войти через кнопку Google выше, без ожидания письма с кодом.
+                    </p>
+                  )}
 
-              <form onSubmit={handleEmailSubmit}>
-                <input
-                  type="email"
-                  required
-                  autoComplete="email"
-                  placeholder="email@example.com"
-                  className="auth-email-input"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                <button type="submit" className="auth-primary-btn" disabled={emailSubmitDisabled}>
-                  {busy
-                    ? 'Отправка…'
-                    : emailCooldown > 0
-                      ? `Повтор через ${formatRetryCountdown(emailCooldown)}`
-                      : 'Продолжить с email'}
-                </button>
-              </form>
+                  <form onSubmit={handleEmailSubmit}>
+                    <input
+                      type="email"
+                      required
+                      autoComplete="email"
+                      placeholder="email@example.com"
+                      className="auth-email-input"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                    <button type="submit" className="auth-primary-btn" disabled={emailSubmitDisabled}>
+                      {busy
+                        ? 'Отправка…'
+                        : emailCooldown > 0
+                          ? `Повтор через ${formatRetryCountdown(emailCooldown)}`
+                          : 'Продолжить с email'}
+                    </button>
+                  </form>
+                </>
+              )}
             </>
           ) : step === 'otp' ? (
             <>

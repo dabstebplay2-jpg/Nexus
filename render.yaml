@@ -22,6 +22,8 @@ services:
         sync: false
       - key: POLZA_APP_NAME
         value: Nexus
+      - key: NEXUS_EMAIL_AUTH_ENABLED
+        value: "false"
       - key: NEXUS_BILLING_TEST_MODE
         value: "false"
       - key: NEXUS_TIER_POOL_FRACTION
@@ -66,6 +68,12 @@ services:
         sync: false
       - key: GOOGLE_REDIRECT_URI
         sync: false
+      - key: YOOKASSA_SHOP_ID
+        sync: false
+      - key: YOOKASSA_SECRET_KEY
+        sync: false
+      - key: YOOKASSA_RETURN_PATH
+        value: "/pricing"
 
   - type: cron
     name: nexus-polza-balance

@@ -1,6 +1,31 @@
 {
   "entries": [
     {
+      "version": "0.1.35",
+      "date": "7 июня 2026 г.",
+      "dateISO": "2026-06-07",
+      "title": "Google-only вход, Web IDE и расширения v1.8",
+      "summary": "Вход только через Google (без email-кодов). Обновлены Web IDE Lite, Nexus AI v1.8 и расширения IDE с актуальными URL продакшена.",
+      "changes": [
+        {
+          "label": "Новое",
+          "text": "Вход только через Google на сайте и в IDE — email-коды отключены, пока нет своего домена для писем."
+        },
+        {
+          "label": "Улучшено",
+          "text": "Web IDE Lite (/ide/lite): обновлённый welcome-экран, teal-акценты, ссылка на Desktop IDE."
+        },
+        {
+          "label": "Улучшено",
+          "text": "Расширения IDE: Nexus AI v1.8, Nexus Account v1.3 — прод URL (nexus-zeta-ruby-12), вход через Google в панели аккаунта."
+        },
+        {
+          "label": "Исправлено",
+          "text": "VSIX nexus-ai.vsix на сайте — скачивание с /extensions/ после сборки."
+        }
+      ]
+    },
+    {
       "version": "0.1.34",
       "date": "7 июня 2026 г.",
       "dateISO": "2026-06-07",

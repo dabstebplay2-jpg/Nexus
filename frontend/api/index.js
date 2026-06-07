@@ -72,22 +72,6 @@ async function pipeUpstreamStream(upstream, res) {
 export default async function handler(req, res) {
   const sub = resolveSubPath(req);
 
-  // #region agent log
-  fetch('http://127.0.0.1:7848/ingest/d87ee998-2838-4039-a489-138c4d6e5179', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '24bf68' },
-    body: JSON.stringify({
-      sessionId: '24bf68',
-      runId: 'pre-fix',
-      hypothesisId: 'A',
-      location: 'frontend/api/index.js:handler',
-      message: 'vercel_api_proxy_hit',
-      data: { sub, method: req.method, url: (req.url || '').split('?')[0] },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-
   if (IDE_ONLY_PREFIXES.some((p) => sub === p || sub.startsWith(`${p}/`))) {
     res.status(503).json({
       detail:

@@ -24,7 +24,7 @@ const DESKTOP_URL =
 const RELEASES_PAGE = 'https://github.com/nexus-ide/nexus-ide/releases/latest';
 
 const NEXUS_AI_ID = 'nexus.nexus-ai';
-const NEXUS_AI_VERSION = import.meta.env.VITE_NEXUS_AI_VERSION || '1.7.0';
+const NEXUS_AI_VERSION = import.meta.env.VITE_NEXUS_AI_VERSION || '1.8.0';
 
 /** Прямая ссылка на VSIX (стабильный URL на том же домене, что и сайт). */
 const NEXUS_AI_VSIX_URL =
@@ -33,7 +33,7 @@ const NEXUS_AI_VSIX_URL =
 const NEXUS_AI_PAGE_URL = '/ide/extension/nexus-ai';
 
 const BUNDLED = [
-  { id: 'nexus.nexus-auth', name: 'Nexus Account', desc: 'Вход (Google / код на email), токены, профиль.' },
+  { id: 'nexus.nexus-auth', name: 'Nexus Account', desc: 'Вход через Google, токены, профиль и синхронизация с сайтом.' },
   {
     id: 'nexus.nexus-billing',
     name: 'Nexus Billing',
@@ -58,7 +58,7 @@ const AI_FEATURES = [
 const INSTALL_STEPS = [
   'Скачайте VSIX Nexus AI (кнопка ниже) или установите Nexus IDE Desktop со встроенными расширениями.',
   'VSCodium / VS Code: Extensions → ⋯ → Install from VSIX… → выберите файл.',
-  'Войдите: палитра → Nexus: Sign In (тот же аккаунт, что на сайте).',
+  'Войдите: палитра → Nexus: Sign In with Google (тот же аккаунт, что на сайте).',
   'Панель Nexus → AI Chat: модель, при необходимости ⚡ Агент.',
 ];
 
@@ -99,6 +99,17 @@ export default function IdeDownloadPage() {
             <p className="text-[var(--nx-muted)] text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
               Облачный ИИ, вход и тарифы — в боковой панели VSCodium. Тот же чат и агент, что на сайте.
             </p>
+          </div>
+
+          <div className="text-center mb-6">
+            <Link
+              to="/ide/lite"
+              className="inline-flex items-center gap-2 text-sm text-teal-400 hover:text-teal-300 font-medium"
+            >
+              <Code2 size={16} />
+              Попробовать Web IDE Lite в браузере
+              <ArrowRight size={14} />
+            </Link>
           </div>
 
           <section className="rounded-2xl border border-teal-500/35 bg-teal-500/5 p-5 mb-8">
