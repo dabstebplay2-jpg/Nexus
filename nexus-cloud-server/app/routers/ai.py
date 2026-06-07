@@ -20,7 +20,7 @@ from app.schemas import CloudChatRequest, ResearchRequest, SimpleChatRequest
 from app.security import get_current_user
 from app.services.ai_billing import apply_usage_billing
 from app.services.quota_limits import QuotaLimitExceeded, assert_quota_budget
-from app.services.polza import ensure_polza_key_for_user
+from app.services.polza import user_has_polza_key
 from app.services.subscription_guard import enforce_paid_subscription
 from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
 from app.services.auth_rate_limit import check_rate_limit
@@ -111,13 +111,10 @@ async def _check_tier_ai_access(user: UserDB, db: Session):
             detail="ИИ доступен только после оплаты подписки (Hobby и выше). Free — без облачного ИИ.",
         )
     if not user_has_polza_key(user):
-        ok = await ensure_polza_key_for_user(db, user)
-        db.refresh(user)
-        if not ok and not user_has_polza_key(user):
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Ключ облачного ИИ создаётся автоматически. Повторите через минуту или напишите в поддержку.",
-            )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ключ облачного ИИ выдаётся после оплаты тарифа. Подождите минуту или нажмите «Восстановить ключ» в настройках.",
+        )
 
 
 def _check_quota_limit(db: Session, user: UserDB):

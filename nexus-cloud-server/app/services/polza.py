@@ -27,6 +27,7 @@ from app.services.credentials_vault import decrypt_secret, encrypt_secret
 from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
 from app.services.polza_mcp import (
     PolzaMcpError,
+    delete_polza_keys_by_name,
     mcp_create_api_key,
     mcp_delete_api_key,
     mcp_update_api_key_monthly_limit,
@@ -174,6 +175,20 @@ def _extract_created_key_payload(raw: Any) -> tuple[str | None, str | None]:
     return key, key_id
 
 
+def polza_key_name_for_email(email: str) -> str:
+    """Каноническое имя ключа Polza — один ключ на email."""
+    return f"nexus-{(email or 'user').strip().lower()[:72]}"
+
+
+async def delete_polza_keys_for_email(email: str) -> int:
+    """Удалить все ключи Polza с каноническим именем email (очистка дубликатов)."""
+    name = polza_key_name_for_email(email)
+    deleted = await delete_polza_keys_by_name(name)
+    if deleted:
+        logger.info("Polza cleanup: removed %s key(s) for %s", deleted, email)
+    return deleted
+
+
 def _pool_rub_for_user(db: Session, user: UserDB) -> float:
     from app.services.invoice_pool import get_user_period_pool_usd
 
@@ -189,7 +204,7 @@ async def provision_polza_for_user(
     pool_rub: float | None = None,
     force: bool = False,
 ) -> bool:
-    """Создать и привязать ключ Polza к пользователю (платформенная выдача, без OAuth)."""
+    """Создать и привязать ключ Polza к пользователю (только после оплаты / промо / админ)."""
     if not (POLZA_MCP_TOKEN or "").strip():
         logger.error("POLZA_MCP_TOKEN не задан — автовыдача ключей недоступна")
         return False
@@ -199,7 +214,12 @@ async def provision_polza_for_user(
         await suspend_polza_for_user(user, db)
         return False
 
-    limit_rub = max(1.0, float(pool_rub if pool_rub is not None else _pool_rub_for_user(db, user)))
+    if pool_rub is None:
+        pool_rub = _pool_rub_for_user(db, user)
+    limit_rub = max(1.0, float(pool_rub))
+    if limit_rub <= 0:
+        logger.error("provision_polza user=%s: pool_rub must be > 0", user.id)
+        return False
 
     if user_has_polza_key(user) and not force:
         await sync_polza_key_limit_after_payment(user, pool_rub=limit_rub)
@@ -215,11 +235,13 @@ async def provision_polza_for_user(
             return True
 
         old_key_id = getattr(user, "polza_key_id", None)
-        if force and old_key_id:
+        if old_key_id:
             await mcp_delete_api_key(key_id=str(old_key_id))
             clear_user_polza_key(db, user)
 
-        name = f"nexus-{user.id}-{(user.email or 'user')[:36]}"
+        await delete_polza_keys_for_email(user.email or "")
+
+        name = polza_key_name_for_email(user.email or "")
         try:
             raw = await mcp_create_api_key(name=name, amount_rub=limit_rub)
         except PolzaMcpError as exc:
@@ -239,22 +261,14 @@ async def provision_polza_for_user(
             return False
 
         set_user_polza_key(db, user, api_key, polza_key_id=key_id)
-        logger.info("Polza key provisioned for user %s (tier=%s, limit=%.0f ₽)", user.id, tier, limit_rub)
+        logger.info(
+            "Polza key provisioned for user %s email=%s (tier=%s, limit=%.0f ₽)",
+            user.id,
+            user.email,
+            tier,
+            limit_rub,
+        )
         return True
-
-
-async def ensure_polza_key_for_user(db: Session, user: UserDB) -> bool:
-    """Перед чатом / после оплаты: ключ есть или создаём автоматически."""
-    if user_has_polza_key(user):
-        return True
-    tier = normalize_tier(user.subscription_tier)
-    if not tier_requires_payment(tier):
-        return False
-    from app.services.subscription_guard import user_has_active_paid_subscription
-
-    if not user_has_active_paid_subscription(db, user):
-        return False
-    return await provision_polza_for_user(user, db, force=False)
 
 
 def user_has_polza_key(user: UserDB) -> bool:
@@ -278,7 +292,11 @@ def require_inference_api_key(user: UserDB) -> str:
 
 
 async def suspend_polza_for_user(user: UserDB, db: Session) -> None:
-    """Понижение тарифа: ключ остаётся у пользователя в Polza, в Nexus отвязываем."""
+    """Понижение тарифа: удалить ключ в Polza и отвязать в Nexus."""
+    key_id = getattr(user, "polza_key_id", None)
+    if key_id:
+        await mcp_delete_api_key(key_id=str(key_id))
+    await delete_polza_keys_for_email(user.email or "")
     clear_user_polza_key(db, user)
     user.polza_connect_required = 0
     db.commit()

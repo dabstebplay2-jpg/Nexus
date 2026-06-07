@@ -10,7 +10,7 @@ from app.database import InvoiceDB, TransactionDB, UserDB
 from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
 from app.services.quota_limits import get_quota_limit_info, start_subscription_period
 from app.services.polza import (
-    ensure_polza_key_for_user,
+    provision_polza_for_user,
     sync_polza_key_limit_after_payment,
     user_has_polza_key,
 )
@@ -113,7 +113,7 @@ async def activate_paid_tier(
                 ok,
             )
         else:
-            ok = await ensure_polza_key_for_user(db, user)
+            ok = await provision_polza_for_user(user, db, pool_rub=pool_rub, force=False)
             db.commit()
             logger.info(
                 "[ПОДПИСКА: ВЫДАЧА] автовыдача Polza для %s (тариф %s) ok=%s",

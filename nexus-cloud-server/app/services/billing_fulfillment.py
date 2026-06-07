@@ -13,7 +13,7 @@ from app.services.invoice_pool import invoice_pool_usd, persist_invoice_pool_usd
 from app.services.platform_funding import record_payment_obligation
 from app.services.quota_limits import get_quota_limit_info
 from app.services.polza import (
-    ensure_polza_key_for_user,
+    provision_polza_for_user,
     sync_polza_key_limit_after_payment,
     user_has_polza_key,
 )
@@ -48,17 +48,16 @@ async def _sync_paid_invoice_polza(
     """Идемпотентно: ключ Polza + месячный лимит = пул из счёта (₽)."""
     amount_rub = float(getattr(invoice, "amount_rub", 0) or 0)
     pool_rub = usd_to_rub(pool_usd, get_usd_rub_rate_sync())
-    if not user_has_polza_key(user):
-        ok = await ensure_polza_key_for_user(db, user)
-        db.refresh(user)
-        if not ok:
-            logger.warning(
-                "[ПОДПИСКА: ПУЛ] автовыдача Polza не удалась | user=%s | invoice=%s | trigger=%s",
-                user.id,
-                invoice.id,
-                trigger,
-            )
-            return False
+    ok = await provision_polza_for_user(user, db, pool_rub=pool_rub, force=False)
+    db.refresh(user)
+    if not ok:
+        logger.warning(
+            "[ПОДПИСКА: ПУЛ] автовыдача Polza не удалась | user=%s | invoice=%s | trigger=%s",
+            user.id,
+            invoice.id,
+            trigger,
+        )
+        return False
     ok = await sync_polza_key_limit_after_payment(user, pool_rub=pool_rub)
     db.commit()
     logger.info(
@@ -240,10 +239,8 @@ async def fulfill_topup_invoice(
     )
 
     pool_rub = usd_to_rub(pool_usd, rate)
-    if not user_has_polza_key(user):
-        await ensure_polza_key_for_user(db, user)
-        db.refresh(user)
-    await sync_polza_key_limit_after_payment(user, pool_rub=pool_rub)
+    if user_has_polza_key(user):
+        await sync_polza_key_limit_after_payment(user, pool_rub=pool_rub)
     db.commit()
     record_payment_obligation(db, invoice=invoice, pool_usd=pool_usd, user_id=user.id)
 

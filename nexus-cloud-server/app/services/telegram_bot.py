@@ -32,7 +32,6 @@ from app.database import UserDB
 from app.services.auth_rate_limit import check_rate_limit_async
 from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
 from app.services.quota_limits import get_quota_limit_info
-from app.services.auth_session import ensure_paid_subscription_polza
 from app.services.polza import user_has_polza_key
 from app.services.telegram_chat import TelegramChatError, run_telegram_chat
 from app.services.telegram_auth import (
@@ -128,7 +127,6 @@ async def cmd_start(message: Message, db: Session):
                 telegram_id=message.from_user.id,
                 telegram_username=message.from_user.username,
             )
-            await ensure_paid_subscription_polza(db, user)
             await _send_site_login(
                 message,
                 db,

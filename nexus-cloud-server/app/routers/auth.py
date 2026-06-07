@@ -35,7 +35,7 @@ from app.schemas import (
     UserRegister,
 )
 from app.security import create_access_token, get_current_user
-from app.services.auth_session import ensure_paid_subscription_polza, issue_tokens_and_setup
+from app.services.auth_session import issue_tokens_and_setup
 from app.services.auth_rate_limit import RateLimitExceeded
 from app.services.email_login import request_login_code, verify_login_code
 from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
@@ -422,9 +422,26 @@ async def repair_polza_key(
             status_code=403,
             detail="Облачный ИИ доступен только после оплаты платного тарифа.",
         )
-    from app.services.polza import provision_polza_for_user, user_has_polza_key
+    from app.services.invoice_pool import get_user_period_pool_usd
+    from app.services.polza import (
+        provision_polza_for_user,
+        sync_polza_key_limit_after_payment,
+        user_has_polza_key,
+    )
+    from app.tiers import tier_monthly_cap
 
-    ok = await provision_polza_for_user(current_user, db, force=True)
+    pool_usd = float(get_user_period_pool_usd(db, current_user) or tier_monthly_cap(tier))
+    pool_rub = usd_to_rub(pool_usd, get_usd_rub_rate_sync())
+
+    if user_has_polza_key(current_user):
+        ok = await sync_polza_key_limit_after_payment(current_user, pool_rub=pool_rub)
+        if ok:
+            db.commit()
+            db.refresh(current_user)
+            return {"status": "ok", "has_polza_key": True}
+        ok = await provision_polza_for_user(current_user, db, pool_rub=pool_rub, force=True)
+    else:
+        ok = await provision_polza_for_user(current_user, db, pool_rub=pool_rub, force=False)
     db.refresh(current_user)
     if not ok:
         raise HTTPException(
@@ -443,7 +460,5 @@ async def get_profile(
         await ensure_testing_subscription(db, current_user, tier=current_user.subscription_tier or "ULTRA")
     else:
         await enforce_paid_subscription(db, current_user, trigger="profile")
-        db.refresh(current_user)
-        await ensure_paid_subscription_polza(db, current_user)
         db.refresh(current_user)
     return _profile_payload(current_user, db)
