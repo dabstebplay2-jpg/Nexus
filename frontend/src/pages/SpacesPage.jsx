@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Search, Lock } from 'lucide-react';
+import { Plus, Search, Lock, ChevronLeft } from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
 import NexusComposer from '../components/layout/NexusComposer';
 import ChatMessage from '../components/chat/ChatMessage';
@@ -330,15 +330,23 @@ export default function SpacesPage() {
           </div>
         ) : (
           <main className="flex-1 flex flex-col min-w-0 min-h-0">
-            <div className="px-4 py-2 border-b border-[var(--nx-border)] text-xs text-[var(--nx-muted)] shrink-0">
-              {activeWs?.emoji} {activeWs?.name} · контекст ~24 сообщений + глобальная память из настроек
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--nx-border)] shrink-0">
               <button
                 type="button"
                 onClick={() => setState((s) => ({ ...s, activeConversationId: null }))}
-                className="ml-3 text-teal-500 hover:underline"
+                className="p-2 -ml-2 rounded-lg hover:bg-[var(--nx-surface-hover)] text-teal-400 min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0"
+                aria-label="Назад к списку"
               >
-                ← К списку
+                <ChevronLeft size={20} />
               </button>
+              <div className="min-w-0">
+                <p className="font-medium text-sm text-[var(--nx-text)] truncate">
+                  {activeWs?.emoji} {activeWs?.name}
+                </p>
+                <p className="text-[10px] text-[var(--nx-muted)] truncate">
+                  контекст ~24 сообщений + глобальная память
+                </p>
+              </div>
             </div>
             <div className="flex flex-1 min-h-0 min-w-0 flex-col lg:flex-row">
               <div className="flex flex-col flex-1 min-w-0 min-h-0">

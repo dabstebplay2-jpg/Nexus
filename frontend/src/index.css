@@ -830,6 +830,14 @@ select.nexus-select option {
   background: #444444;
 }
 
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 @media (max-width: 768px) {
   .nx-shell {
     overflow-x: hidden;

@@ -193,7 +193,7 @@ export default function TierPicker({
 
   const isGrid = layout === 'grid';
   const gridClass = isGrid
-    ? 'grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 items-stretch'
+    ? 'flex overflow-x-auto snap-x snap-mandatory gap-4 px-4 pb-4 -mx-4 scrollbar-none sm:grid sm:gap-3 sm:px-0 sm:mx-0 sm:pb-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 items-stretch'
     : 'flex flex-col gap-3';
   const cardPad = isGrid || compact ? 'p-3' : 'p-4';
 
@@ -242,7 +242,7 @@ export default function TierPicker({
                   : t.popular
                     ? 'border-cyan-500/30 bg-cyan-500/5 hover:border-cyan-500/50'
                     : 'border-white/10 bg-white/[0.02] hover:border-white/25 hover:bg-white/[0.04]'
-              } ${isGrid ? 'hover:border-cyan-500/40' : ''}`}
+              } ${isGrid ? 'hover:border-cyan-500/40 snap-start shrink-0 w-[280px] sm:w-auto' : ''}`}
             >
               <div className="flex justify-between items-start gap-2 shrink-0">
                 <div className="min-w-0">

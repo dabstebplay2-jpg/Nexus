@@ -21,6 +21,7 @@ import BrandLogo from '../brand/BrandLogo';
 import DiscordInviteLink from '../DiscordInviteLink';
 import AmbientBackground from '../AmbientBackground';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import { useVisualViewportPadding } from '../../hooks/useVisualViewportPadding';
 
 const IDE_WEB_NAV_BADGE_KEY = 'nexus_seen_ide_web_nav';
 
@@ -322,6 +323,9 @@ export default function AppShell({
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const pageTitle = usePageTitle();
+  const keyboardPad = useVisualViewportPadding();
+  const isKeyboardOpen = keyboardPad > 50;
+  const showMobileTabBarWithKeyboard = showMobileTabBar && !isKeyboardOpen;
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const shellRef = useRef(null);
@@ -460,12 +464,12 @@ export default function AppShell({
         )}
         <div
           className={`flex-1 flex min-h-0 overflow-hidden ${
-            showMobileTabBar && !compactChrome ? 'max-md:pb-[calc(var(--nx-dock-h)+var(--nx-safe-bottom))]' : ''
+            showMobileTabBarWithKeyboard && !compactChrome ? 'max-md:pb-[calc(var(--nx-dock-h)+var(--nx-safe-bottom))]' : ''
           }`}
         >
           {children}
         </div>
-        {showMobileTabBar && !compactChrome && (
+        {showMobileTabBarWithKeyboard && !compactChrome && (
           <nav
             className="md:hidden fixed bottom-0 inset-x-0 z-30 flex items-stretch justify-around border-t border-[var(--nx-border)] bg-[color-mix(in_srgb,var(--nx-sidebar)_95%,transparent)] backdrop-blur-xl"
             style={{ paddingBottom: 'var(--nx-safe-bottom)', height: 'calc(var(--nx-dock-h) + var(--nx-safe-bottom))' }}

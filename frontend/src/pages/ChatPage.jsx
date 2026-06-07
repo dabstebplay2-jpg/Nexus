@@ -600,7 +600,7 @@ export default function ChatPage() {
                 </p>
               )}
 
-              <div className="grid gap-3 w-full mt-10 sm:grid-cols-2">
+              <div className="flex sm:grid flex-row overflow-x-auto gap-2.5 px-4 pb-2 -mx-4 scrollbar-none snap-x snap-mandatory sm:grid-cols-2 sm:px-0 sm:mx-0 sm:pb-0 mt-10">
                 {suggested.map((prompt, i) => (
                   <motion.button
                     key={prompt}
@@ -611,7 +611,7 @@ export default function ChatPage() {
                     whileTap={{ scale: 0.99 }}
                     type="button"
                     onClick={() => setInput(prompt)}
-                    className="nx-suggestion-card text-left text-base px-5 py-4 rounded-2xl text-[var(--nx-muted)] leading-snug"
+                    className="nx-suggestion-card text-left text-sm px-4 py-3 rounded-xl text-[var(--nx-muted)] leading-snug shrink-0 w-[240px] snap-start sm:w-auto sm:text-base sm:px-5 sm:py-4 sm:rounded-2xl"
                   >
                     {prompt}
                   </motion.button>
