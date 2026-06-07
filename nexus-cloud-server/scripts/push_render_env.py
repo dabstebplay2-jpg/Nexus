@@ -61,7 +61,7 @@ DEFAULTS = {
     "POLZA_APP_NAME": "Nexus",
     "NEXUS_CORS_ORIGINS": "https://nexus-zeta-ruby-12.vercel.app,https://nexus-ide.vercel.app",
     "NEXUS_FRONTEND_URL": "https://nexus-zeta-ruby-12.vercel.app",
-    "GOOGLE_REDIRECT_URI": "https://nexus-zeta-ruby-12.vercel.app/api/auth/google/callback",
+    "GOOGLE_REDIRECT_URI": "https://nexus-cloud-bxcc.onrender.com/v1/auth/google/callback",
     "NEXUS_BILLING_TEST_MODE": "false",
     "NEXUS_PROMO_CODES_ENABLED": "false",
     "NEXUS_TESTING_MODE": "false",
