@@ -1,6 +1,31 @@
 {
   "entries": [
     {
+      "version": "0.1.34",
+      "date": "7 июня 2026 г.",
+      "dateISO": "2026-06-07",
+      "title": "Google-вход и бесплатные модели OpenRouter",
+      "summary": "Вход через Google снова работает на проде. Тариф Free получил актуальный каталог бесплатных моделей OpenRouter — чат без подписки.",
+      "changes": [
+        {
+          "label": "Новое",
+          "text": "Вход через Google: один клик с любым Google-аккаунтом на nexus-zeta-ruby-12.vercel.app."
+        },
+        {
+          "label": "Новое",
+          "text": "Free-тариф: бесплатные модели OpenRouter (Nemotron, DeepSeek, Llama, Qwen и др.) — каталог обновляется автоматически."
+        },
+        {
+          "label": "Исправлено",
+          "text": "Прокси /api на Vercel — OAuth callback и API снова доходят до Render."
+        },
+        {
+          "label": "Улучшено",
+          "text": "Инфраструктура: новый Render (bxcc) + Vercel, Postgres в Frankfurt."
+        }
+      ]
+    },
+    {
       "version": "0.1.33",
       "date": "5 июня 2026 г.",
       "dateISO": "2026-06-05",
