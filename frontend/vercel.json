@@ -4,8 +4,8 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "env": {
-    "NEXUS_CLOUD_SERVER_URL": "https://nexus-cloud-ee17.onrender.com",
-    "VITE_CLOUD_FALLBACK_URL": "https://nexus-cloud-ee17.onrender.com",
+    "NEXUS_CLOUD_SERVER_URL": "https://nexus-cloud-bxcc.onrender.com",
+    "VITE_CLOUD_FALLBACK_URL": "https://nexus-cloud-bxcc.onrender.com",
     "VITE_GOOGLE_AUTH_ENABLED": "true"
   },
   "functions": {
@@ -14,7 +14,7 @@
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index?__subpath=$1" },
+    { "source": "/api/(.*)", "destination": "https://nexus-cloud-bxcc.onrender.com/v1/$1" },
     { "source": "/((?!api/|extensions/).*)", "destination": "/index.html" }
   ],
   "headers": [

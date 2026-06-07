@@ -2,7 +2,7 @@
  * Vercel Serverless: все /api/* → Nexus Cloud /v1/*
  * Vite: catch-all api/[...path].js не матчит вложенные пути — нужен index + rewrite в vercel.json.
  */
-const CLOUD_BASE = (process.env.NEXUS_CLOUD_SERVER_URL || 'https://nexus-cloud-ee17.onrender.com').replace(
+const CLOUD_BASE = (process.env.NEXUS_CLOUD_SERVER_URL || 'https://nexus-cloud-bxcc.onrender.com').replace(
   /\/$/,
   ''
 );
