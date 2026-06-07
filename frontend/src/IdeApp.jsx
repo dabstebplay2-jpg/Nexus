@@ -836,23 +836,37 @@ function IdeApp({ embedded = false }) {
     }
   }, [activeTab, enabledViews, appendOutput]);
 
+  const commandHandlersRef = useRef({});
+  commandHandlersRef.current = {
+    handleOpenFolderDialog,
+    handleSaveActiveFile,
+    handleCreateFileUI,
+    setCommandPaletteOpen,
+    setIsSidebarCollapsed,
+    setIsTerminalCollapsed,
+    setBottomPanel,
+    setActiveTab,
+  };
+
   const commandList = useMemo(
-    () => [
-      { id: 'palette', category: 'View', label: 'Show Command Palette', keys: 'Ctrl+Shift+P', run: () => setCommandPaletteOpen(true) },
-      { id: 'file.openFolder', category: 'File', label: 'Open Folder...', keys: 'Ctrl+K Ctrl+O', run: () => handleOpenFolderDialog() },
-      { id: 'file.save', category: 'File', label: 'Save', keys: 'Ctrl+S', run: () => handleSaveActiveFile() },
-      { id: 'file.new', category: 'File', label: 'New File', keys: 'Ctrl+N', run: () => handleCreateFileUI() },
-      { id: 'view.sidebar', category: 'View', label: 'Toggle Sidebar', keys: 'Ctrl+B', run: () => setIsSidebarCollapsed((p) => !p) },
-      { id: 'view.terminal', category: 'View', label: 'Toggle Terminal', keys: 'Ctrl+`', run: () => { setIsTerminalCollapsed((p) => !p); setBottomPanel('terminal'); } },
-      { id: 'view.explorer', category: 'View', label: 'Show Explorer', run: () => setActiveTab('explorer') },
-      { id: 'view.search', category: 'View', label: 'Show Search', run: () => setActiveTab('search') },
-      { id: 'view.scm', category: 'View', label: 'Show Source Control', run: () => setActiveTab('git') },
-      { id: 'view.extensions', category: 'View', label: 'Show Extensions', run: () => setActiveTab('extensions') },
-      { id: 'view.copilot', category: 'View', label: 'Show Copilot', run: () => setActiveTab('ai') },
-      { id: 'go.settings', category: 'Preferences', label: 'Open Settings', run: () => setActiveTab('settings') },
-      { id: 'account.profile', category: 'Account', label: 'Nexus Account', run: () => setActiveTab('profile') },
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () => {
+      const h = () => commandHandlersRef.current;
+      return [
+        { id: 'palette', category: 'View', label: 'Show Command Palette', keys: 'Ctrl+Shift+P', run: () => h().setCommandPaletteOpen(true) },
+        { id: 'file.openFolder', category: 'File', label: 'Open Folder...', keys: 'Ctrl+K Ctrl+O', run: () => h().handleOpenFolderDialog() },
+        { id: 'file.save', category: 'File', label: 'Save', keys: 'Ctrl+S', run: () => h().handleSaveActiveFile() },
+        { id: 'file.new', category: 'File', label: 'New File', keys: 'Ctrl+N', run: () => h().handleCreateFileUI() },
+        { id: 'view.sidebar', category: 'View', label: 'Toggle Sidebar', keys: 'Ctrl+B', run: () => h().setIsSidebarCollapsed((p) => !p) },
+        { id: 'view.terminal', category: 'View', label: 'Toggle Terminal', keys: 'Ctrl+`', run: () => { h().setIsTerminalCollapsed((p) => !p); h().setBottomPanel('terminal'); } },
+        { id: 'view.explorer', category: 'View', label: 'Show Explorer', run: () => h().setActiveTab('explorer') },
+        { id: 'view.search', category: 'View', label: 'Show Search', run: () => h().setActiveTab('search') },
+        { id: 'view.scm', category: 'View', label: 'Show Source Control', run: () => h().setActiveTab('git') },
+        { id: 'view.extensions', category: 'View', label: 'Show Extensions', run: () => h().setActiveTab('extensions') },
+        { id: 'view.copilot', category: 'View', label: 'Show Copilot', run: () => h().setActiveTab('ai') },
+        { id: 'go.settings', category: 'Preferences', label: 'Open Settings', run: () => h().setActiveTab('settings') },
+        { id: 'account.profile', category: 'Account', label: 'Nexus Account', run: () => h().setActiveTab('profile') },
+      ];
+    },
     [activeFilePath, openFiles]
   );
 

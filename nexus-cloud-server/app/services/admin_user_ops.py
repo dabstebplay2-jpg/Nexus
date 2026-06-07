@@ -138,8 +138,16 @@ async def admin_delete_user(db: Session, user: UserDB) -> None:
     if polza_key_id:
         try:
             await mcp_delete_api_key(key_id=str(polza_key_id))
-        except PolzaMcpError:
-            pass
+        except PolzaMcpError as exc:
+            _ops_log.warning(
+                "Polza key delete failed for user_id=%s key=%s: %s", uid, polza_key_id, exc
+            )
+            log_admin_action(
+                "delete_user_polza_key_failed",
+                email,
+                user_id=uid,
+                meta={"polza_key_id": str(polza_key_id), "error": str(exc)[:200]},
+            )
 
     purge_user_data(db, uid)
     db.delete(user)

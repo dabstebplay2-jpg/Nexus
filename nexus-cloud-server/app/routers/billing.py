@@ -22,6 +22,7 @@ from app.services.polza import suspend_polza_for_user
 from app.services.promo_codes import promo_codes_enabled, public_promo_hints
 from app.services.promo_redeem import redeem_promo_code, resolve_subscribe_discount
 from app.services.usage_stats import aggregate_usage_stats
+from app.services.auth_rate_limit import check_rate_limit
 from app.services.yookassa import YooKassaError, create_payment, get_payment, payment_is_succeeded, yookassa_configured
 from app.tiers import normalize_tier, public_tiers_list, tier_monthly_cap, tier_price, tier_requires_payment
 
@@ -420,11 +421,26 @@ async def check_subscription_invoice(
     return await fulfill_subscription_invoice(db, invoice, trigger="billing_test_mode")
 
 
+def _payment_amount_rub(payment: dict) -> float | None:
+    amount = payment.get("amount") or {}
+    value = amount.get("value")
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @router.post("/yookassa/webhook")
 async def yookassa_webhook(request: Request, db: Session = Depends(get_db)):
     """Уведомления ЮKassa (HTTP notifications в личном кабинете)."""
     if not yookassa_configured():
         raise HTTPException(status_code=503, detail="ЮKassa не настроена")
+
+    client_ip = request.client.host if request.client else "unknown"
+    if not check_rate_limit(f"yookassa:webhook:{client_ip}", 120, 3600.0):
+        raise HTTPException(status_code=429, detail="Too many webhook requests")
 
     try:
         payload = await request.json()
@@ -461,6 +477,17 @@ async def yookassa_webhook(request: Request, db: Session = Depends(get_db)):
     if not invoice:
         logger.warning("Webhook: invoice not found for payment %s", payment_id)
         return {"status": "invoice_not_found"}
+
+    paid_rub = _payment_amount_rub(payment)
+    if paid_rub is not None and abs(paid_rub - float(invoice.amount_rub or 0)) > 0.02:
+        logger.error(
+            "Webhook: amount mismatch payment=%s invoice=%s paid=%.2f expected=%.2f",
+            payment_id,
+            invoice.id,
+            paid_rub,
+            float(invoice.amount_rub or 0),
+        )
+        raise HTTPException(status_code=400, detail="Payment amount mismatch")
 
     if not invoice.yookassa_payment_id:
         invoice.yookassa_payment_id = payment_id

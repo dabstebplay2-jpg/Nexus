@@ -18,7 +18,7 @@ def test_user_snapshot_roundtrip_preserves_polza_fields(db_session):
     db.commit()
 
     payload = export_snapshot(db)
-    assert payload["v"] == 2
+    assert payload["v"] == 3
     polza_row = payload["users"][0]
     assert polza_row["polza_api_key_encrypted"] == "enc:pza_test"
     assert polza_row["polza_key_id"] == "pk-1"
