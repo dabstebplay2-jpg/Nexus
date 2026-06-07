@@ -18,6 +18,7 @@ class TopupPayload(BaseModel):
 
 class SubscribePayload(BaseModel):
     tier: str
+    promo_code: str | None = None
 
 
 class SaveRequest(BaseModel):

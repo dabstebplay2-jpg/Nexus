@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from sqlalchemy.orm import Session
@@ -72,6 +73,26 @@ async def _sync_paid_invoice_polza(
     return ok
 
 
+async def _sync_paid_invoice_polza_with_retry(
+    db: Session,
+    user: UserDB,
+    invoice: InvoiceDB,
+    pool_usd: float,
+    *,
+    trigger: str,
+    max_attempts: int = 3,
+) -> bool:
+    """Повторная попытка выдачи ключа Polza после оплаты."""
+    for attempt in range(max_attempts):
+        ok = await _sync_paid_invoice_polza(db, user, invoice, pool_usd, trigger=trigger)
+        db.refresh(user)
+        if ok and user_has_polza_key(user):
+            return True
+        if attempt < max_attempts - 1:
+            await asyncio.sleep(1.5)
+    return user_has_polza_key(user)
+
+
 async def _repair_paid_invoice_entitlements(
     db: Session,
     user: UserDB,
@@ -110,7 +131,7 @@ async def _repair_paid_invoice_entitlements(
         db.refresh(user)
         return tier
 
-    ok = await _sync_paid_invoice_polza(db, user, invoice, pool_usd, trigger=trigger)
+    ok = await _sync_paid_invoice_polza_with_retry(db, user, invoice, pool_usd, trigger=trigger)
     if ok:
         logger.info(
             "[ПОДПИСКА: ВОССТАНОВЛЕНИЕ] Polza лимит синхронизирован | %s | тариф %s | trigger=%s",
@@ -299,13 +320,19 @@ async def fulfill_subscription_invoice(
         invoice=invoice,
         quota_usd=pool_usd,
     )
-    await _sync_paid_invoice_polza(db, user, invoice, pool_usd, trigger=trigger)
+    await _sync_paid_invoice_polza_with_retry(db, user, invoice, pool_usd, trigger=trigger)
     db.refresh(user)
     record_payment_obligation(db, invoice=invoice, pool_usd=pool_usd, user_id=user.id)
     quota = result.get("quota") or get_quota_limit_info(db, user)
     pool_usd = float(result.get("monthly_quota_usd") or pool_usd)
 
     response = _fulfillment_response(tier=tier, user=user, pool_usd=pool_usd, quota=quota)
+    if not response.get("polza_ready"):
+        await _sync_paid_invoice_polza_with_retry(
+            db, user, invoice, pool_usd, trigger=f"{trigger}_retry"
+        )
+        db.refresh(user)
+        response.update(_polza_status_fields(user))
     if not response.get("polza_ready"):
         logger.warning(
             "[ПОДПИСКА: ОПЛАТА] тариф %s активен, ключ Polza не готов | user=%s | invoice=%s",

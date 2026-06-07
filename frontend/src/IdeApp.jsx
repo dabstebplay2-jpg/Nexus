@@ -717,15 +717,13 @@ function IdeApp({ embedded = false }) {
           }),
         });
 
-        if (res.status === 402) {
-          setChatHistory((prev) => [
-            ...prev,
-            {
-              role: 'assistant',
-              content:
-                'Пул ИИ исчерпан. Пополните баланс или продлите подписку в разделе «Тарифы» (Account → тарифы).',
-            },
-          ]);
+        if (res.status === 402 || res.status === 429) {
+          const errData = await res.json().catch(() => ({}));
+          const detail =
+            typeof errData.detail === 'string'
+              ? errData.detail
+              : 'Месячный пул ИИ исчерпан. Продлите подписку или пополните баланс в разделе «Тарифы».';
+          setChatHistory((prev) => [...prev, { role: 'assistant', content: detail }]);
           return;
         }
         if (!res.ok) {

@@ -189,7 +189,7 @@ export async function runDemoIdeAgent({
       }),
     });
 
-    if (res.status === 402) {
+    if (res.status === 402 || res.status === 429) {
       return { status: 'quota', reply: null, actions: frontendActions, billing };
     }
     if (!res.ok) {

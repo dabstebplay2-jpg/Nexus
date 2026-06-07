@@ -53,7 +53,10 @@ export function isQuotaErrorMessage(msg) {
     t.includes('402') ||
     t.includes('429') ||
     t.includes('исчерпан') ||
+    t.includes('Пул ИИ') ||
+    t.includes('пул ИИ') ||
     t.includes('лимит') ||
+    t.includes('период подписки') ||
     t.includes('Недостаточно')
   );
 }

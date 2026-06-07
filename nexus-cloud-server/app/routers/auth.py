@@ -121,6 +121,7 @@ def _profile_payload(user: UserDB, db: Session) -> dict:
         "topup_balance_usd": balance_usd,
         "topup_balance_rub": usd_to_rub(balance_usd, rate),
         "period_end": quota.get("period_end"),
+        "period_expired": bool(quota.get("period_expired")),
         "has_polza_key": user_has_polza_key(user),
         "polza_connect_required": bool(getattr(user, "polza_connect_required", 0)),
         "ai_enabled": tier_allows_ai(tier)

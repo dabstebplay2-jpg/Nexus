@@ -1,4 +1,5 @@
 import { apiFetch } from './apiClient';
+import { throwIfQuotaHttpError } from './quotaErrors';
 import { apiStreamFetch, consumeSseResponse } from './apiStream';
 import {
   resolveModelId,
@@ -140,7 +141,7 @@ export async function streamSimpleChat({
     const err = await res.json().catch(() => ({}));
     const detail = typeof err.detail === 'string' ? err.detail : 'Ошибка чата';
     if (res.status === 401) throw new Error(detail || 'Сессия истекла. Войдите снова.');
-    if (res.status === 402) throw new Error(detail || 'Недостаточно баланса.');
+    throwIfQuotaHttpError(res, detail);
     throw new Error(detail);
   }
   let result = null;
@@ -203,7 +204,7 @@ export async function sendSimpleChat({ model, messages, agentId }) {
     const err = await res.json().catch(() => ({}));
     const detail = typeof err.detail === 'string' ? err.detail : 'Ошибка чата';
     if (res.status === 401) throw new Error(detail || 'Сессия истекла. Войдите снова.');
-    if (res.status === 402) throw new Error(detail || 'Недостаточно баланса.');
+    throwIfQuotaHttpError(res, detail);
     throw new Error(detail);
   }
   return res.json();
@@ -224,7 +225,7 @@ export async function sendResearch({ model, query, messages, agentId, depth = 'd
     const err = await res.json().catch(() => ({}));
     const detail = typeof err.detail === 'string' ? err.detail : 'Ошибка Research';
     if (res.status === 401) throw new Error(detail || 'Сессия истекла. Войдите снова.');
-    if (res.status === 402) throw new Error(detail || 'Недостаточно баланса.');
+    throwIfQuotaHttpError(res, detail);
     throw new Error(detail);
   }
   return res.json();

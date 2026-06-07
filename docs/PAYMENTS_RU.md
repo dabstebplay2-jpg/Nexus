@@ -1,145 +1,104 @@
-# Подписки и дневная квота Nexus Pro (₽)
+# Подписки и пул ИИ Nexus (₽)
 
 ## Как сейчас
 
-1. **Free** — регистрация без ключа RouterAI, **облачный ИИ недоступен**.
-2. **Платный тариф** — только после **оплаченного** счёта `sub_TIER_xxx` (запись `paid` в БД).
-3. Без оплаты `subscribe/check` возвращает **402** (если `NEXUS_BILLING_TEST_MODE=false` на сервере).
-4. Тестовая кнопка «Подтвердить оплату» — **только** при `NEXUS_BILLING_TEST_MODE=true` и `VITE_BILLING_TEST_MODE=true` (локальная разработка).
-5. На **проде** оба флага **false** — иначе это бесплатная раздача тарифов.
+1. **Free** — бесплатные модели OpenRouter (лимит запросов: 15/мин, 100/день).
+2. **Платный тариф (Hobby+)** — после **оплаченного** счёта `sub_TIER_xxx` (`status=paid` в БД).
+3. Без подтверждённой оплаты `GET /billing/subscribe/check` возвращает **402** (если `NEXUS_BILLING_TEST_MODE=false`).
+4. Тестовая кнопка «Подтвердить оплату» — только при `NEXUS_BILLING_TEST_MODE=true` и `VITE_BILLING_TEST_MODE=true` (локально).
 
-**Лимит ИИ:** месячный пул на 30 дней после оплаты (`billing_mode: monthly_quota`), не дневная квота × 30.
+**Лимит ИИ:** месячный пул на **30 дней** после оплаты (`billing_mode: monthly_quota`). Поля `daily_*` в API — устаревшие алиасы **общего** бюджета (пул + top-up), не дневная квота.
 
-Пул считается от **фактической суммы счёта** в ₽: `amount_rub / курс_ЦБ × 92%` → лимит на персональном ключе RouterAI (`invoice.credits_usd`). Комиссия платформы Nexus — **8%**.
+Пул считается от **фактической суммы счёта** в ₽: `amount_rub / курс_ЦБ × 92%` → `invoice.credits_usd`. При промокоде пул пропорционален **скидочной** сумме. Комиссия платформы — **8%**.
 
-### Куда идут деньги (важно)
+После окончания 30 дней пул подписки **не тратится** (нужно продление), баланс пополнения (top-up) остаётся доступным.
 
-1. Пользователь платит **ЮKassa** → средства на **счёте магазина Nexus** (ЮMoney).
-2. Nexus **не переводит** эти ₽ на routerai.ru автоматически — у RouterAI нет такого API.
-3. **Владелец платформы** пополняет **депозит организации** на routerai.ru (аккаунт с мастер-ключом).
-4. После webhook/проверки оплаты Nexus выставляет пользователю **лимит на суб-ключе** RouterAI ≈ 92% от оплаченной суммы (8% — комиссия платформы).
-5. Расход токенов списывается с **депозита владельца**, а не с личного кошелька пользователя на routerai.ru.
+### Куда идут деньги
 
-Мониторинг для владельца: `GET /v1/local-admin/routerai/pool-status` (локальная админка).
+1. Пользователь платит **ЮKassa** → счёт магазина Nexus.
+2. Nexus выставляет пользователю **лимит на ключе Polza** ≈ 92% от оплаченной суммы.
+3. Владелец платформы пополняет **депозит Polza** (мастер-аккаунт) вручную.
 
-### «Failed to fetch»
-
-Обычно **backend :8000 не запущен** или страница открыта до старта серверов. Нужны три процесса: **8080** cloud, **8000** backend, **5173** frontend.
+Подробнее: [`nexus-cloud-server/docs/YOOKASSA_RU.md`](../nexus-cloud-server/docs/YOOKASSA_RU.md).
 
 ---
 
-## Рекомендация для продакшена: ЮKassa
-
-Для коммерческого сайта в РФ оптимален **[ЮKassa](https://yookassa.ru/)** (карты, СБП, ЮMoney, частично T-Pay).
-
-### Архитектура
+## Архитектура (прод)
 
 ```
-[Браузер] → POST /api/billing/subscribe (backend :8000)
-         → cloud :8080 создаёт InvoiceDB (pending)
-         → ЮKassa API: payment.create(amount_rub, return_url, metadata.invoice_id)
-         ← confirmation_url (редирект пользователя)
+[Браузер] → POST /api/billing/subscribe (Vercel /api → cloud :8080)
+         → InvoiceDB (pending) + credits_usd
+         → ЮKassa payment.create → redirect
 
-[ЮKassa] → POST /v1/billing/yookassa/webhook (cloud)
-         → invoice.status = paid, invoice.credits_usd = пул из amount_rub
-         → activate_paid_tier() + provision_routerai_for_user(limit)
-         → sync_routerai_key_limit()
+[ЮKassa] → POST /v1/billing/yookassa/webhook
+         → fulfill_subscription_invoice (идемпотентно)
+         → activate_paid_tier + Polza key + лимит
 
-[Владелец] → вручную пополняет депозит на routerai.ru (мастер-аккаунт)
+[Браузер] → GET /billing/subscribe/check?invoice_id=...
+         → poll + fulfill (параллельно webhook)
 ```
 
-### Почему webhook обязателен
+**Модули:**
 
-Не полагаться на `return_url` («вернулся на сайт») — пользователь может закрыть вкладку.  
-ЮKassa шлёт `payment.succeeded` на ваш URL; ответ **HTTP 200** в течение нескольких секунд.
+| Файл | Роль |
+|------|------|
+| `nexus-cloud-server/app/routers/billing.py` | subscribe, topup, webhook, check |
+| `nexus-cloud-server/app/services/yookassa.py` | ЮKassa API |
+| `nexus-cloud-server/app/services/billing_fulfillment.py` | активация после оплаты |
+| `nexus-cloud-server/app/services/quota_limits.py` | пул, период, enforcement |
+| `frontend/src/components/TierPicker.jsx` | UI тарифов |
+| `backend/app/routers/billing.py` | прокси для локальной разработки (:8000) |
 
-### Два продукта в ЮKassa
+---
 
-| Тип | Когда | Сумма | После оплаты |
-|-----|--------|-------|----------------|
-| **Подписка (разовый платёж)** | Смена тарифа Hobby→Standard… | `tier.price_rub` (минус промо) | `subscription_tier` + лимит ключа RouterAI ≈ 92% суммы |
-| **Пополнение** | — | — | **Отключено** (только подписка с месячным пулом) |
+## Два продукта
 
-Автопродление (рекуррент) — отдельный этап: `save_payment_method` + cron, в ЮKassa это сложнее; на старте достаточно **ручного продления**.
+| Тип | Endpoint | После оплаты |
+|-----|----------|----------------|
+| **Подписка** | `POST /v1/billing/subscribe` | тариф + пул на 30 дней |
+| **Пополнение** | `POST /v1/billing/topup` | `user.balance` (тратится после пула подписки) |
 
-### Переменные окружения (cloud)
+Автопродление — **не реализовано**; пользователь оформляет подписку заново.
+
+---
+
+## Промокоды
+
+- `GET /v1/billing/promo` — публичные подсказки
+- `POST /v1/billing/promo/redeem` — мгновенная выдача тарифа (акция)
+- При оплате: `promo_code` в `POST /subscribe` — скидка на сумму и **на пул**
+
+---
+
+## Переменные окружения (cloud)
 
 ```env
 YOOKASSA_SHOP_ID=...
 YOOKASSA_SECRET_KEY=...
-YOOKASSA_RETURN_URL=https://your-domain.ru/payment/return
-YOOKASSA_WEBHOOK_URL=https://api.your-domain.ru/v1/billing/webhook/yookassa
+NEXUS_FRONTEND_URL=https://nexus-zeta-ruby-12.vercel.app
+YOOKASSA_RETURN_PATH=/pricing
+NEXUS_BILLING_TEST_MODE=false
+NEXUS_TIER_POOL_FRACTION=0.92
 ```
 
-### Библиотеки (Python, async)
+Webhook в личном кабинете ЮKassa: `https://nexus-cloud-bxcc.onrender.com/v1/billing/yookassa/webhook`
 
-- Официально: `yookassa` ([yookassa-sdk-python](https://github.com/yoomoney/yookassa-sdk-python))
-- Async: `aioyookassa` / `async_yookassa` под FastAPI + httpx
+---
 
-### Пример создания платежа (логика)
+## Коды ошибок ИИ
 
-```python
-payment = await yookassa.create_payment(
-    amount={"value": f"{amount_rub:.2f}", "currency": "RUB"},
-    confirmation={"type": "redirect", "return_url": RETURN_URL},
-    capture=True,
-    description=f"Nexus Pro — {invoice_id}",
-    metadata={"invoice_id": invoice_id, "user_id": str(user.id)},
-)
-# сохранить payment.id в InvoiceDB
-return {"payment_url": payment.confirmation.confirmation_url}
-```
-
-### Webhook (упрощённо)
-
-```python
-@router.post("/webhook/yookassa")
-async def yookassa_webhook(request: Request, db: Session = Depends(get_db)):
-    body = await request.json()
-    if body.get("event") != "payment.succeeded":
-        return {"ok": True}
-    invoice_id = body["object"]["metadata"]["invoice_id"]
-    # идемпотентность: если invoice уже paid — 200 и exit
-    await mark_invoice_paid(invoice_id, db)
-    return {"ok": True}
-```
-
-### Безопасность
-
-- Секреты только на **cloud**, не во frontend.
-- Webhook: проверка IP ЮKassa и/или подписи.
-- Идемпотентность по `invoice_id` + `payment.id`.
-- Логировать все `TransactionDB`.
-
-### Альтернативы
-
-| Сервис | Плюсы | Минусы для Nexus |
-|--------|-------|------------------|
-| **ЮKassa** | ₽, СБП, привычно в РФ | Нужен ИП/ООО |
-| **Robokassa** | Простое подключение | Старый UX |
-| **Stripe** | Удобно глобально | ₽/РФ ограничены |
-| **CloudPayments** | Подписки | Другой API |
-
-### Этапы внедрения
-
-1. **MVP (уже есть):** тестовая кнопка «Подтвердить оплату» — для разработки ИИ.
-2. **ЮKassa sandbox:** реальный redirect + webhook на ngrok.
-3. **Прод:** домен, HTTPS, webhook на cloud, убрать тест-кнопку или оставить только в `DEBUG`.
-4. **Позже:** чеки 54-ФЗ (ЮKassa receipts), автопродление, промокоды.
-
-### Где менять код в репозитории
-
-- `nexus-cloud-server/app/routers/billing.py` — create_payment, webhook, убрать заглушку Stripe
-- `nexus-cloud-server/app/services/yookassa_client.py` — новый модуль
-- `backend/app/routers/billing.py` — прокси без изменений логики
-- `frontend` — после `subscribe` открывать `payment_url` в той же вкладке; страница `/payment/return` с опросом статуса
+| Код | Значение |
+|-----|----------|
+| **429** | Месячный пул исчерпан или период подписки закончился |
+| **402** | Оплата счёта не подтверждена (billing check) |
+| **403** | Нет оплаченной подписки на платном тарифе |
 
 ---
 
 ## Чеклист перед приёмом платежей
 
 - [ ] ИП/ООО и договор с ЮKassa
-- [ ] HTTPS на API
+- [ ] HTTPS на API (Render)
 - [ ] Webhook доступен из интернета
 - [ ] Оферта и политика возвратов на сайте
-- [ ] Курс ЦБ уже используется для отображения ₽
+- [ ] `CHANGELOG_NOTIFIED_VERSION` на Vercel после релиза

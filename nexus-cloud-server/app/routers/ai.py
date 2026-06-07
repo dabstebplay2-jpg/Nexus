@@ -137,14 +137,23 @@ def _check_quota_limit(db: Session, user: UserDB):
             ) from exc
         end = info.get("resets_at") or info.get("period_end") or ""
         balance_usd = float(info.get("user_balance_usd") or 0)
+        if info.get("period_expired") or info.get("renewal_required"):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    f"Период подписки закончился{f' ({end})' if end else ''}. "
+                    "Продлите тариф в разделе «Тарифы»"
+                    f"{'' if balance_usd <= 0 else f' или используйте баланс пополнения ({usd_to_rub(balance_usd, rate):.0f} ₽).'}"
+                ),
+            ) from exc
         if balance_usd <= 0:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=(
-                    f"Пул ИИ исчерпан: {usd_to_rub(info['spent_usd'], rate):.0f} ₽ из "
+                    f"Месячный пул ИИ исчерпан: {usd_to_rub(info['spent_usd'], rate):.0f} ₽ из "
                     f"{usd_to_rub(info.get('subscription_cap_usd') or info['cap_usd'], rate):.0f} ₽. "
                     f"Пополните баланс в разделе «Тарифы»"
-                    f"{f' или дождитесь продления {end}.' if end else '.'}"
+                    f"{f' или продлите подписку до {end}.' if end else '.'}"
                 ),
             ) from exc
         raise HTTPException(

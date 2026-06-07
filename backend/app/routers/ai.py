@@ -67,11 +67,8 @@ async def proxy_simple_chat(body: dict):
     response = await cloud_request("POST", "/v1/ai/chat/simple", json_data=body)
     if response.status_code == 401:
         raise HTTPException(status_code=401, detail="Сессия истекла. Войдите снова.")
-    if response.status_code == 402:
-        raise HTTPException(
-            status_code=402,
-            detail="Дневная квота исчерпана или нет подписки. Смените тариф или дождитесь сброса в 00:00 UTC.",
-        )
+    if response.status_code in (402, 429):
+        raise HTTPException(status_code=response.status_code, detail=_cloud_detail(response))
     if response.status_code == 403:
         detail = response.json().get("detail", "Доступ запрещён.")
         raise HTTPException(status_code=403, detail=detail)
@@ -86,11 +83,8 @@ async def proxy_research(body: dict):
     response = await cloud_request("POST", "/v1/ai/research", json_data=body)
     if response.status_code == 401:
         raise HTTPException(status_code=401, detail="Сессия истекла. Войдите снова.")
-    if response.status_code == 402:
-        raise HTTPException(
-            status_code=402,
-            detail="Дневная квота исчерпана или нет подписки. Смените тариф или дождитесь сброса в 00:00 UTC.",
-        )
+    if response.status_code in (402, 429):
+        raise HTTPException(status_code=response.status_code, detail=_cloud_detail(response))
     if response.status_code == 403:
         detail = response.json().get("detail", "Доступ запрещён.")
         raise HTTPException(status_code=403, detail=detail)
@@ -161,10 +155,10 @@ async def ai_chat_proxy(req: AIChatRequest):
                     status_code=401,
                     detail="Ваша сессия авторизации истекла. Пожалуйста, войдите в аккаунт заново во вкладке Профиль.",
                 )
-            if response.status_code == 402:
+            if response.status_code in (402, 429):
                 raise HTTPException(
-                    status_code=402,
-                    detail="Баланс вашего аккаунта исчерпан. Пожалуйста, пополните счет во вкладке Профиль.",
+                    status_code=response.status_code,
+                    detail=_cloud_detail(response),
                 )
             if response.status_code == 403:
                 detail_msg = response.json().get("detail", "Доступ запрещен облаком.")

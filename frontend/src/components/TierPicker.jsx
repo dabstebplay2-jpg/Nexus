@@ -46,6 +46,8 @@ export default function TierPicker({
 
     if (mode !== 'subscribe' && !isPaymentReturn) return;
     if (!isPaymentReturn || !inv) return;
+    // topup_* обрабатывает PricingPage
+    if (inv.startsWith('topup_')) return;
 
     let cancelled = false;
     (async () => {
@@ -55,7 +57,7 @@ export default function TierPicker({
         const isTopup = inv.startsWith('topup_');
         const data = isTopup ? await checkTopup(inv) : await checkSubscription(inv);
         if (cancelled) return;
-        const q = data.monthly_quota_rub ?? data.daily_quota_rub ?? data.pool_rub;
+        const q = data.pool_rub ?? data.monthly_quota_rub;
         const polzaNote = data.polza_warning ? ` ${data.polza_warning}` : '';
         setMessage(
           isTopup
@@ -89,7 +91,7 @@ export default function TierPicker({
     return () => {
       cancelled = true;
     };
-  }, [mode, authStatus.authorized]);
+  }, [mode, authStatus.authorized, checkSubscription, checkTopup, fetchProfile, onSuccess]);
 
   const effectiveCurrent =
     currentTierId || authStatus.profile?.subscription_tier || selectedTierId || 'FREE';
@@ -148,7 +150,7 @@ export default function TierPicker({
       }
       if (data.invoice_id) {
         setInvoiceId(data.invoice_id);
-        setPaymentUrl('');
+        setPaymentUrl(data.payment_url || '');
         setPendingTier(tierId);
         setMessage(
           data.message ||
@@ -171,7 +173,7 @@ export default function TierPicker({
     try {
       const isTopup = invoiceId.startsWith('topup_');
       const data = isTopup ? await checkTopup(invoiceId) : await checkSubscription(invoiceId);
-      const q = data.monthly_quota_rub ?? data.daily_quota_rub ?? data.pool_rub;
+      const q = data.pool_rub ?? data.monthly_quota_rub;
       const qStr = q ? formatBalanceRub(q) : 'см. профиль';
       setMessage(
         isTopup

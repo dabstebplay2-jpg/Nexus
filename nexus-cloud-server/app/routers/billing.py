@@ -260,6 +260,7 @@ async def create_subscription_invoice(
     amount_rub, discount_promo = resolve_subscribe_discount(payload.promo_code, amount_rub)
 
     pool_usd = round(rub_to_usd(amount_rub, rate) * TIER_POOL_FRACTION, 4)
+    pool_rub = usd_to_rub(pool_usd, rate)
 
     invoice_id = f"sub_{tier}_{uuid.uuid4().hex[:8]}"
     invoice = _invoice_row(
@@ -313,10 +314,14 @@ async def create_subscription_invoice(
         "tier": tier,
         "amount_rub": amount_rub,
         "amount_usd": price_usd,
-        "monthly_quota_usd": quota_usd,
-        "monthly_quota_rub": quota_rub,
-        "daily_quota_usd": quota_usd,
-        "daily_quota_rub": quota_rub,
+        "monthly_quota_usd": pool_usd,
+        "monthly_quota_rub": pool_rub,
+        "daily_quota_usd": pool_usd,
+        "daily_quota_rub": pool_rub,
+        "pool_usd": pool_usd,
+        "pool_rub": pool_rub,
+        "catalog_quota_usd": quota_usd,
+        "catalog_quota_rub": quota_rub,
         "usd_rub_rate": rate,
         "payment_url": payment_url,
         "payment_provider": "yookassa" if payment_url else "test",
@@ -324,7 +329,7 @@ async def create_subscription_invoice(
         "discount_percent": discount_promo.discount_percent if discount_promo else None,
         "message": (
             f"Счёт {amount_rub:,.0f} ₽ — тариф {tier}{discount_note}. "
-            f"Месячный пул ИИ: ≈ {quota_rub:,.0f} ₽ на 30 дней после оплаты."
+            f"Месячный пул ИИ: ≈ {pool_rub:,.0f} ₽ на 30 дней после оплаты."
         ).replace(",", " "),
     }
 
@@ -362,10 +367,23 @@ async def check_subscription_invoice(
         raise HTTPException(status_code=403, detail="Чужой счёт")
 
     if invoice.status == "paid":
+        from app.services.billing_fulfillment import (
+            _polza_status_fields,
+            _repair_paid_invoice_entitlements,
+            _sync_paid_invoice_polza_with_retry,
+        )
+
         rate = get_usd_rub_rate_sync()
         pool_usd = invoice_pool_usd(invoice, rate=rate)
         pool_rub = usd_to_rub(pool_usd, rate)
-        return {
+        await _repair_paid_invoice_entitlements(
+            db, current_user, invoice, trigger="subscribe_check_paid"
+        )
+        await _sync_paid_invoice_polza_with_retry(
+            db, current_user, invoice, pool_usd, trigger="subscribe_check_paid"
+        )
+        db.refresh(current_user)
+        out = {
             "status": "paid",
             "tier": normalize_tier(current_user.subscription_tier),
             "billing_mode": "monthly_quota",
@@ -378,6 +396,8 @@ async def check_subscription_invoice(
             "balance_usd": round(current_user.balance, 4),
             "balance_rub": usd_to_rub(current_user.balance, rate),
         }
+        out.update(_polza_status_fields(current_user))
+        return out
 
     if yookassa_configured() and invoice.yookassa_payment_id:
         try:

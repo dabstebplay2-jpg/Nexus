@@ -42,6 +42,14 @@ def get_billing_period_end(user: UserDB) -> datetime | None:
     return _naive_utc(getattr(user, "subscription_period_end", None))
 
 
+def is_subscription_period_expired(user: UserDB) -> bool:
+    """Период 30 дней истёк — пул подписки не тратится, top-up остаётся."""
+    end = get_billing_period_end(user)
+    if not end:
+        return False
+    return datetime.utcnow() > end
+
+
 def start_subscription_period(user: UserDB, db: Session, *, days: int | None = None) -> None:
     """Начало нового оплаченного периода (сброс учёта AI_SPEND по дате)."""
     period_days = days if days is not None else SUBSCRIPTION_PERIOD_DAYS
@@ -89,43 +97,45 @@ def get_today_ai_spend(db: Session, user_id: int) -> float:
 
 def get_quota_limit_info(db: Session, user: UserDB) -> dict:
     from app.services.invoice_pool import get_user_period_pool_usd
+    from app.services.subscription_guard import sync_billing_period_if_paid, user_has_paid_subscription
+    from app.tiers import tier_requires_payment
 
     tier = normalize_tier(user.subscription_tier)
-    
-    # Базовый лимит подписки
+
+    if tier_requires_payment(tier) and user_has_paid_subscription(db, user):
+        sync_billing_period_if_paid(db, user)
+        db.refresh(user)
+
+    # Базовый лимит подписки (каталог / счёт)
     sub_cap = get_user_period_pool_usd(db, user) or tier_monthly_cap(tier)
     if not tier_allows_ai(tier):
         sub_cap = 0.0
 
-    # Баланс пополнения
-    user_balance = float(getattr(user, "balance", 0) or 0)
-    
-    # Общий лимит = лимит подписки + баланс пополнения
-    cap = sub_cap + user_balance
-
     period_end = get_billing_period_end(user)
     period_start = get_billing_period_start(user)
+    period_expired = is_subscription_period_expired(user)
 
-    # Траты подписки считаются только в текущем периоде
-    if sub_cap > 0 and not period_start:
+    # После окончания 30 дней пул подписки не тратится — только top-up
+    spendable_sub_cap = 0.0 if period_expired else sub_cap
+
+    user_balance = float(getattr(user, "balance", 0) or 0)
+    cap = spendable_sub_cap + user_balance
+
+    if spendable_sub_cap > 0 and not period_start:
         spent = 0.0
     else:
-        spent = get_period_ai_spend(db, user) if sub_cap > 0 else 0.0
+        spent = get_period_ai_spend(db, user) if spendable_sub_cap > 0 else 0.0
 
-    sub_remaining = max(0.0, round(sub_cap - spent, 4))
-
-    # Остаток = (лимит подписки - траты подписки) + баланс пополнения
+    sub_remaining = max(0.0, round(spendable_sub_cap - spent, 4))
     remaining = max(0.0, round(sub_remaining + user_balance, 4))
-    
-    # Процент использования (только по пулу подписки)
-    pct = min(100.0, round((spent / sub_cap) * 100, 1)) if sub_cap > 0 else 0.0
 
-    resets_label = ""
-    if period_end:
-        resets_label = period_end.strftime("%d.%m.%Y")
+    pct = min(100.0, round((spent / spendable_sub_cap) * 100, 1)) if spendable_sub_cap > 0 else 0.0
 
-    # Если у пользователя нет подписки, но есть баланс, то квота активна
-    quota_enabled = cap > 0 and (bool(period_start) or user_balance > 0)
+    resets_label = period_end.strftime("%d.%m.%Y") if period_end else ""
+
+    quota_enabled = cap > 0 and (
+        user_balance > 0 or (bool(period_start) and not period_expired and sub_cap > 0)
+    )
 
     return {
         "cap_usd": cap,
@@ -135,6 +145,7 @@ def get_quota_limit_info(db: Session, user: UserDB) -> dict:
         "resets_at": resets_label,
         "period_start": period_start.isoformat() if period_start else None,
         "period_end": period_end.isoformat() if period_end else None,
+        "period_expired": period_expired,
         "tier": tier,
         "quota_enabled": quota_enabled,
         "billing_mode": "monthly_quota",
@@ -187,6 +198,15 @@ def assert_quota_budget(db: Session, user: UserDB, projected_cost: float = 0.0) 
             }
         )
     info = get_quota_limit_info(db, user)
+    if info.get("period_expired") and float(info.get("user_balance_usd") or 0) <= 0:
+        raise QuotaLimitExceeded(
+            {
+                **info,
+                "remaining_usd": 0,
+                "used_percent": 100,
+                "renewal_required": True,
+            }
+        )
     if info["cap_usd"] > 0 and not info.get("quota_enabled"):
         raise QuotaLimitExceeded(
             {
@@ -197,6 +217,15 @@ def assert_quota_budget(db: Session, user: UserDB, projected_cost: float = 0.0) 
         )
     ok, info = can_spend_quota(db, user, projected_cost)
     if not ok:
+        if info.get("period_expired") and float(info.get("user_balance_usd") or 0) <= 0:
+            raise QuotaLimitExceeded(
+                {
+                    **info,
+                    "remaining_usd": 0,
+                    "used_percent": 100,
+                    "renewal_required": True,
+                }
+            )
         raise QuotaLimitExceeded(info)
     return info
 
