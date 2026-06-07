@@ -81,6 +81,8 @@ The `patch_file` tool is your primary and most powerful tool. Complete rewrites 
   * Local IDE backend: `8000`
   * Frontend Vite dev: `5173` — маршруты: `/` (сайт), `/dashboard` (кабинет), `/ide` (IDE)
   * Nexus Cloud Server: `8080`
+  * Local admin UI: `8790`
+* **Локальный запуск**: `.\scripts\nexus.ps1` или `nexus.bat` — `install`, `start`, `stop`, `diagnose`, `admin`
 
 ---
 

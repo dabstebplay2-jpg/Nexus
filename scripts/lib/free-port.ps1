@@ -1,4 +1,4 @@
-# Nexus Pro - force-free a TCP listen port (Windows + uvicorn multiprocessing)
+# Nexus - force-free a TCP listen port (Windows + uvicorn multiprocessing)
 param(
     [Parameter(Mandatory = $true)]
     [int]$Port
@@ -34,7 +34,6 @@ for ($round = 0; $round -lt 6; $round++) {
         Stop-PidTree -ProcessId $owner
     }
 
-    # Any uvicorn / spawn worker for this port
     Get-CimInstance Win32_Process -Filter "name='python.exe'" -ErrorAction SilentlyContinue |
         Where-Object {
             $_.CommandLine -match 'uvicorn|spawn_main|app\.main:app' -and

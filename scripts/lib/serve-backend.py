@@ -5,9 +5,10 @@ import os
 import socket
 import subprocess
 import sys
+
 HOST = "127.0.0.1"
 PORTS = (8000, 8001, 8002)
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend"))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "backend"))
 
 
 def port_in_use(port: int) -> bool:
@@ -51,13 +52,12 @@ def main() -> None:
         "app.main:app",
         "--host",
         HOST,
-        f"--port",
+        "--port",
         str(port),
         "--workers",
         "1",
         "--no-access-log",
     ]
-    # Never inherit accidental --reload from environment
     env = os.environ.copy()
     env.pop("UVICORN_RELOAD", None)
     raise SystemExit(subprocess.call(cmd, env=env))

@@ -8,7 +8,9 @@ import sys
 
 HOST = "127.0.0.1"
 PORT = 8080
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "nexus-cloud-server"))
+ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "nexus-cloud-server")
+)
 
 
 def port_in_use(port: int) -> bool:
@@ -21,7 +23,9 @@ def port_in_use(port: int) -> bool:
 
 def main() -> None:
     if port_in_use(PORT):
-        raise SystemExit(f"Port {PORT} busy. Run nexus.bat stop and close old Cloud windows.")
+        raise SystemExit(
+            f"Port {PORT} busy. Run nexus.bat stop and close old Cloud windows."
+        )
 
     print(f"Nexus Cloud: http://{HOST}:{PORT}")
     os.chdir(ROOT)

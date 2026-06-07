@@ -1,12 +1,12 @@
-# Nexus Pro diagnostics (ASCII output for cmd.exe)
+# Nexus diagnostics (ASCII output for cmd.exe)
 $ErrorActionPreference = 'SilentlyContinue'
 
-Write-Host "=== Nexus Pro diagnostics ===" -ForegroundColor Cyan
+Write-Host "=== Nexus diagnostics ===" -ForegroundColor Cyan
 Write-Host ""
 
-Write-Host "Ports LISTEN (5173, 8000, 8080):"
+Write-Host "Ports LISTEN (5173, 8000, 8080, 8790):"
 Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
-    Where-Object { $_.LocalPort -in 5173, 8000, 8080 } |
+    Where-Object { $_.LocalPort -in 5173, 8000, 8080, 8790 } |
     ForEach-Object {
         Write-Host ("  {0}:{1}  PID {2}" -f $_.LocalAddress, $_.LocalPort, $_.OwningProcess)
     }
