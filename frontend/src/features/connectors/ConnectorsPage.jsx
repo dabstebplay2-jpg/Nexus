@@ -122,20 +122,9 @@ export default function ConnectorsPage({ compact = false }) {
           {oauthNotReady && (
             <div className="mb-4 rounded-xl border border-zinc-500/30 bg-zinc-500/10 px-4 py-3">
               <p className="text-sm text-zinc-300">
-                OAuth для части коннекторов ещё не настроен на сервере. Gmail, GitHub и Vercel появятся
-                после добавления переменных на Render — см.{' '}
-                <code className="text-xs text-teal-300">nexus-cloud-server/docs/CONNECTORS_SETUP_RU.md</code>
-                .
+                Часть подключений временно недоступна: для них завершается безопасная настройка входа.
+                Доступные коннекторы можно подключать уже сейчас.
               </p>
-              {oauthStatus?.providers && (
-                <ul className="mt-2 text-xs text-zinc-500 flex flex-wrap gap-2">
-                  {Object.entries(oauthStatus.providers).map(([id, ready]) => (
-                    <li key={id}>
-                      {id}: {ready ? '✓' : '—'}
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
           )}
 

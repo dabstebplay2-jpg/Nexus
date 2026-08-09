@@ -6,15 +6,14 @@ import base64
 import hashlib
 import logging
 import secrets
+import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
 import jwt
-import time
-from typing import Any
-
 from jwt import PyJWKSet
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -30,9 +29,10 @@ from app.config import (
     redis_persistence_enabled,
 )
 from app.database import UserDB
-from app.services.auth_session import issue_tokens_and_setup, _add_auth_method
+from app.services.auth_session import _add_auth_method, issue_tokens_and_setup
 from app.services.oauth_redirect import normalize_return_to
 from app.services.oauth_state_store import pop_exchange_user_id, pop_oauth_state
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ def _require_secret() -> str:
 
 def _encode_oauth_state(verifier: str, return_to: str | None) -> str:
     """Signed state — works on any Render instance without Redis."""
-    exp = datetime.utcnow() + timedelta(seconds=OAUTH_STATE_TTL_SEC)
+    exp = utc_now() + timedelta(seconds=OAUTH_STATE_TTL_SEC)
     return jwt.encode(
         {"typ": "oauth_state", "pkce": verifier, "rt": return_to or "", "exp": exp},
         _require_secret(),
@@ -86,7 +86,7 @@ def _resolve_oauth_state(db: Session, state: str) -> tuple[str, str]:
 
 
 def _issue_exchange_jwt(user_id: int, email: str) -> str:
-    exp = datetime.utcnow() + timedelta(seconds=AUTH_EXCHANGE_CODE_TTL_SEC)
+    exp = utc_now() + timedelta(seconds=AUTH_EXCHANGE_CODE_TTL_SEC)
     return jwt.encode(
         {"typ": "oauth_ex", "uid": user_id, "email": email.strip().lower(), "exp": exp},
         _require_secret(),
@@ -291,7 +291,7 @@ async def find_or_create_google_user(
         by_email.google_sub = google_sub
         _add_auth_method(by_email, "google")
         if email_verified and not by_email.email_verified_at:
-            by_email.email_verified_at = datetime.utcnow()
+            by_email.email_verified_at = utc_now()
         db.commit()
         db.refresh(by_email)
         return by_email
@@ -303,7 +303,7 @@ async def find_or_create_google_user(
         subscription_tier="FREE",
         balance=0.0,
         refresh_token="ref_" + str(uuid.uuid4()),
-        email_verified_at=datetime.utcnow() if email_verified else None,
+        email_verified_at=utc_now() if email_verified else None,
         auth_methods="google",
     )
     db.add(user)

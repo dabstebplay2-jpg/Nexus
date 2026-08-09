@@ -13,48 +13,52 @@ from app.config import (
     NEXUS_FREE_OPENROUTER_RPM,
     OPENROUTER_BASE_URL,
     POLZA_BASE_URL,
+    is_testing_mode,
     openrouter_free_tier_enabled,
 )
 from app.database import UserDB, get_db
 from app.schemas import BrowserSearchRequest, CloudChatRequest, ResearchRequest, SimpleChatRequest
 from app.security import get_current_user
 from app.services.ai_billing import apply_usage_billing
-from app.services.quota_limits import QuotaLimitExceeded, assert_quota_budget
-from app.services.polza import user_has_polza_key
-from app.services.subscription_guard import enforce_paid_subscription
-from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
 from app.services.auth_rate_limit import check_rate_limit
+from app.services.auto_tool_router import route_explicit_tools
+from app.services.connector_agent_loop import run_connector_agent_phase
+from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
+from app.services.image_materialize import materialize_image_list, materialize_image_url
+from app.services.memory_auto_learn import (
+    last_user_message_text,
+    schedule_learn_from_turn,
+    should_update_memory_from_user_text,
+)
+from app.services.message_builder import (
+    build_router_payload,
+    extract_message_images,
+)
+from app.services.models_registry import tier_rank
+from app.services.openrouter import OpenRouterError, OpenRouterService
+from app.services.openrouter_provision import (
+    ensure_openrouter_key_for_user,
+    user_has_openrouter_key,
+)
 from app.services.polza import (
     PolzaError,
     PolzaService,
+    provision_polza_for_user,
     require_inference_api_key,
     user_has_polza_key,
 )
 from app.services.pre_search_reasoning import iter_pre_search_reasoning
+from app.services.quota_limits import QuotaLimitExceeded, assert_quota_budget
+from app.services.subscription_guard import enforce_paid_subscription
+from app.services.user_memory import get_enabled_memory_text, inject_user_memory_messages
+from app.services.web_search_agent import run_web_search_session
 from app.services.web_search_context import (
     DEEP_RESEARCH_DEFAULT_MODEL,
     build_web_search_system_content,
     run_web_search_for_chat,
     web_search_quick,
 )
-from app.services.web_search_agent import run_web_search_session
 from app.services.web_search_gate import resolve_web_search_need
-from app.services.message_builder import (
-    build_router_payload,
-    extract_message_images,
-)
-from app.services.user_memory import get_enabled_memory_text, inject_user_memory_messages
-from app.services.memory_auto_learn import (
-    last_user_message_text,
-    schedule_learn_from_turn,
-    should_update_memory_from_user_text,
-)
-from app.services.connector_agent_loop import run_connector_agent_phase
-from app.services.image_materialize import materialize_image_list, materialize_image_url
-from app.services.models_registry import tier_rank
-from app.config import is_testing_mode
-from app.services.openrouter import OpenRouterError, OpenRouterService
-from app.services.openrouter_provision import ensure_openrouter_key_for_user, user_has_openrouter_key
 from app.tiers import tier_allows_ai, tier_requires_payment, tier_uses_openrouter_free
 
 router = APIRouter(prefix="/v1/ai", tags=["ai"])
@@ -112,10 +116,25 @@ async def _check_tier_ai_access(user: UserDB, db: Session):
             detail="ИИ доступен только после оплаты подписки (Hobby и выше). Free — без облачного ИИ.",
         )
     if not user_has_polza_key(user):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Ключ облачного ИИ выдаётся после оплаты тарифа. Подождите минуту или нажмите «Восстановить ключ» в настройках.",
-        )
+        # Paid accounts should recover automatically after an interrupted payment hook,
+        # redeploy or provider-key reset.  This keeps the user out of manual admin flows.
+        try:
+            repaired = await asyncio.wait_for(
+                provision_polza_for_user(user, db, force=False),
+                timeout=12.0,
+            )
+        except Exception as exc:
+            logger.warning("Polza auto-repair before inference failed for user=%s: %s", user.id, exc)
+            repaired = False
+        db.refresh(user)
+        if not repaired or not user_has_polza_key(user):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Ключ облачного ИИ не удалось подготовить автоматически. "
+                    "Повторите запрос через минуту или откройте Настройки → ИИ → Восстановить ключ."
+                ),
+            )
 
 
 def _check_quota_limit(db: Session, user: UserDB):
@@ -130,8 +149,8 @@ def _check_quota_limit(db: Session, user: UserDB):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=(
-                    f"Слишком высокий расход за сутки. Подождите до завтра (UTC) "
-                    f"или пополните баланс в разделе «Тарифы»."
+                    "Слишком высокий расход за сутки. Подождите до завтра (UTC) "
+                    "или пополните баланс в разделе «Тарифы»."
                 ),
             ) from exc
         end = info.get("resets_at") or info.get("period_end") or ""
@@ -173,7 +192,7 @@ async def _apply_billing_safe(db: Session, user: UserDB, *, model: str, usage: d
         balance_usd = float(info.get("user_balance_usd") or 0)
         if info["remaining_usd"] <= 0 and balance_usd <= 0:
             detail = (
-                f"Пул ИИ исчерпан. Пополните баланс в разделе «Тарифы»."
+                "Пул ИИ исчерпан. Пополните баланс в разделе «Тарифы»."
             )
         else:
             detail = (
@@ -349,6 +368,94 @@ async def _resolve_simple_chat_model(payload: SimpleChatRequest, user: UserDB) -
         model = await models_catalog.get_default_model(user.subscription_tier)
     await _check_model_access(user, model)
     return model
+
+
+def _is_image_generation_model(model_id: str) -> bool:
+    meta = models_catalog.get_model(model_id) or {}
+    if meta.get("media_type") == "video":
+        return False
+    return bool(meta.get("category") == "media" or meta.get("supports_image_gen"))
+
+
+async def _default_image_generation_model(
+    subscription_tier: str,
+    *,
+    preferred: str | None = None,
+) -> str | None:
+    models = await models_catalog.list_media_models_for_user(subscription_tier)
+    usable = [
+        item
+        for item in models
+        if not item.get("locked")
+        and item.get("media_type") != "video"
+        and (item.get("category") == "media" or item.get("supports_image_gen"))
+    ]
+    if preferred:
+        match = next((item for item in usable if item.get("id") == preferred), None)
+        if match:
+            return str(match["id"])
+    preferred_ids = (
+        "google/gemini-3.1-flash-lite-image",
+        "google/gemini-2.5-flash-image",
+        "openai/gpt-5-image-mini",
+    )
+    for model_id in preferred_ids:
+        match = next((item for item in usable if item.get("id") == model_id), None)
+        if match:
+            return model_id
+    return str(usable[0]["id"]) if usable else None
+
+
+async def _resolve_simple_chat_route(
+    payload: SimpleChatRequest,
+    user: UserDB,
+) -> tuple[str, str | None]:
+    """Выбирает модель и встроенный инструмент до построения запроса провайдеру."""
+    requested = (payload.model or "").strip()
+    if requested and _is_image_generation_model(requested):
+        await _check_model_access(user, requested)
+        return requested, "image_generation"
+
+    user_text = last_user_message_text(payload.messages)
+    explicit = route_explicit_tools(user_text)
+    if explicit.image_generation:
+        image_model = await _default_image_generation_model(
+            user.subscription_tier,
+            preferred=payload.preferred_image_model,
+        )
+        if not image_model:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="На вашем тарифе сейчас нет доступной модели генерации изображений.",
+            )
+        await _check_model_access(user, image_model)
+        return image_model, "image_generation"
+
+    return await _resolve_simple_chat_model(payload, user), None
+
+
+def _supports_tool_calls(model: dict | None) -> bool:
+    if not model:
+        return False
+    params = set(model.get("supported_parameters") or [])
+    return bool(model.get("supports_tools") or {"tools", "tool_choice"} & params)
+
+
+async def _connector_tool_model(current_model: str, subscription_tier: str) -> str:
+    current_meta = models_catalog.get_model(current_model)
+    if _supports_tool_calls(current_meta):
+        return current_model
+    models = await models_catalog.list_usable_models_for_user(subscription_tier)
+    capable = [item for item in models if _supports_tool_calls(item)]
+    if not capable:
+        return current_model
+    capable.sort(
+        key=lambda item: (
+            float(item.get("price_1m_usd") or 0),
+            -int(item.get("quality_score") or 0),
+        )
+    )
+    return str(capable[0]["id"])
 
 
 def _collect_images_from_part(part: dict, seen_urls: set[str], out: list[dict[str, str]]):
@@ -635,10 +742,7 @@ async def refresh_models(current_user: UserDB = Depends(get_current_user)):
         )
     from app.services import models_registry as reg
 
-    await reg.refresh_models_cache(force=True)
-    from app.services import openrouter_models as or_models
-
-    await or_models.refresh_free_models_cache(force=True)
+    await reg.refresh_all_model_sources(force=True)
     models = await models_catalog.list_models_for_user(current_user.subscription_tier)
     meta = await models_catalog.catalog_meta()
     return {"models": models, "catalog": meta}
@@ -686,7 +790,7 @@ async def simple_chat(
 ):
     await _check_tier_ai_access(current_user, db)
     _check_quota_limit(db, current_user)
-    model = await _resolve_simple_chat_model(payload, current_user)
+    model, routed_tool = await _resolve_simple_chat_route(payload, current_user)
 
     memory_text = get_enabled_memory_text(db, current_user.id)
     router_body = build_router_payload(model, payload, memory_content=memory_text)
@@ -704,6 +808,7 @@ async def simple_chat(
         "images": reply_images,
         "model": model,
         "billing": billing,
+        "tools_used": [routed_tool] if routed_tool else [],
     }
 
 
@@ -715,30 +820,35 @@ async def simple_chat_stream(
 ):
     await _check_tier_ai_access(current_user, db)
     _check_quota_limit(db, current_user)
-    model = await _resolve_simple_chat_model(payload, current_user)
+    model, routed_tool = await _resolve_simple_chat_route(payload, current_user)
     memory_text = get_enabled_memory_text(db, current_user.id)
     router_body = build_router_payload(model, payload, memory_content=memory_text)
-    web_preference = bool(payload.use_web_search)
+    web_preference = bool(payload.auto_tools or payload.use_web_search)
 
     api_key = await _require_chat_api_key(current_user, db)
     stream_tokens = _stream_fn_for_user(current_user)
 
     user_text = last_user_message_text(payload.messages)
-    search_decision = await resolve_web_search_need(
-        user_text,
-        preference_enabled=web_preference,
-        api_key=api_key,
-        subscription_tier=current_user.subscription_tier or "STANDARD",
-    )
-    use_web = search_decision.should_search
-    search_skipped = web_preference and not use_web
-    search_skip_reason = search_decision.reason if search_skipped else ""
+    if routed_tool == "image_generation":
+        use_web = False
+        search_reason = "image_generation"
+    else:
+        search_decision = await resolve_web_search_need(
+            user_text,
+            preference_enabled=web_preference,
+            api_key=api_key,
+            subscription_tier=current_user.subscription_tier or "STANDARD",
+        )
+        use_web = search_decision.should_search
+        search_reason = search_decision.reason
+    search_skipped = web_preference and not use_web and routed_tool is None
+    search_skip_reason = search_reason if search_skipped else ""
     if web_preference or use_web:
         logger.info(
             "web search gate: preference=%s use_web=%s reason=%s",
             web_preference,
             use_web,
-            search_decision.reason,
+            search_reason,
         )
 
     user_id = current_user.id
@@ -750,7 +860,11 @@ async def simple_chat_stream(
 
         stream_sources: list[dict] = []
         stream_engine = ""
+        used_tools: list[str] = []
         body = dict(router_body)
+        if routed_tool == "image_generation":
+            used_tools.append("image_generation")
+            yield _sse_event({"type": "status", "content": "image_generation"})
         if search_skipped:
             yield _sse_event(
                 {
@@ -760,6 +874,7 @@ async def simple_chat_stream(
                 }
             )
         if use_web:
+            used_tools.append("web_search")
             pre_search_reasoning = ""
             yield _sse_event({"type": "status", "content": "planning"})
             try:
@@ -832,18 +947,26 @@ async def simple_chat_stream(
                     }
                 )
 
-        if payload.use_connectors:
+        if payload.auto_tools and payload.use_connectors and routed_tool != "image_generation":
             user_for_conn = db.query(UserDB).filter(UserDB.id == user_id).first()
             if user_for_conn:
                 body_messages = body.get("messages") or []
                 try:
+                    connector_model = await _connector_tool_model(
+                        model,
+                        user_for_conn.subscription_tier,
+                    )
                     async for conn_evt in run_connector_agent_phase(
                         db,
                         user_for_conn,
-                        model=model,
+                        model=connector_model,
                         messages=body_messages,
                         call_routerai=lambda p, u: _call_inference(p, u, db),
                     ):
+                        if conn_evt.get("type") == "tool_start":
+                            tool_name = str(conn_evt.get("tool") or "connector")
+                            if tool_name not in used_tools:
+                                used_tools.append(tool_name)
                         yield _sse_event(conn_evt)
                     body["messages"] = body_messages
                 except Exception as exc:
@@ -898,6 +1021,7 @@ async def simple_chat_stream(
             "images": reply_images,
             "had_thinking": had_thinking,
             "had_tokens": had_tokens or bool(reply_images),
+            "tools_used": used_tools,
         }
         if stream_sources:
             done_payload["sources"] = stream_sources

@@ -102,6 +102,7 @@ export async function streamSimpleChat({
   attachments,
   agentId,
   useWebSearch = false,
+  autoTools = true,
   webSearchDepth = 'standard',
   conversationSources,
   enableThinking = false,
@@ -118,6 +119,7 @@ export async function streamSimpleChat({
   onDone,
   signal,
   useConnectors = true,
+  preferredImageModel,
 }) {
   const body = {
     model,
@@ -125,9 +127,11 @@ export async function streamSimpleChat({
     attachments: attachments?.length ? attachments : undefined,
     agent_id: agentId || undefined,
     use_web_search: Boolean(useWebSearch),
+    auto_tools: Boolean(autoTools),
     web_search_depth: useWebSearch ? webSearchDepth || 'standard' : 'standard',
     enable_thinking: Boolean(enableThinking),
     use_connectors: Boolean(useConnectors),
+    preferred_image_model: preferredImageModel || undefined,
   };
   if (conversationSources?.length) {
     body.conversation_sources = conversationSources;
@@ -166,7 +170,7 @@ export async function streamSimpleChat({
   });
   if (!stats.done) {
     throw new Error(
-      'Соединение оборвалось до конца ответа (таймаут прокси или сервера). Повторите запрос или отключите «Поиск в сети».'
+      'Соединение оборвалось до конца ответа. Повторите запрос или временно отключите «Автоинструменты».'
     );
   }
   const hasAnswer =
@@ -177,7 +181,7 @@ export async function streamSimpleChat({
     result?.had_thinking;
   if (!hasAnswer) {
     throw new Error(
-      'Модель не вернула текст. Попробуйте другую модель или отключите «Поиск в сети».'
+      'Модель не вернула результат. Попробуйте другую модель или отключите «Автоинструменты».'
     );
   }
   return {
@@ -188,6 +192,7 @@ export async function streamSimpleChat({
     sources: result?.sources || [],
     search_engine: result?.search_engine,
     had_thinking: result?.had_thinking,
+    tools_used: result?.tools_used || [],
   };
 }
 

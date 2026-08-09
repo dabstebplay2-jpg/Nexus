@@ -17,7 +17,7 @@ import {
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_TEXT_CHANNEL_ID = '1512122313670262985';
 const DEFAULT_GUILD_ID = '1512107730427711498';
-const FALLBACK_SITE_URL = 'https://frontend-henna-tau-19.vercel.app';
+const FALLBACK_SITE_URL = 'https://nexus-zeta-ruby-12.vercel.app';
 const EMBED_COLOR = 0x14b8a6;
 const MAX_CHANGE_LINES = 4;
 

@@ -34,19 +34,19 @@ export default function ProfileMenu({ onOpenPricing, expanded = true }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`w-full flex items-center rounded-2xl hover:bg-[var(--nx-surface-hover)] transition-colors ${
+        className={`w-full flex items-center rounded-xl hover:bg-[var(--nx-surface-hover)] transition-colors ${
           expanded
-            ? 'gap-3 px-2 py-2.5 text-left'
-            : 'justify-center px-0 py-2.5'
+            ? 'gap-2.5 px-1.5 py-1.5 text-left'
+            : 'justify-center px-0 py-1.5'
         }`}
       >
-        <div className="h-10 w-10 shrink-0 rounded-full bg-gradient-to-br from-teal-500 to-emerald-700 flex items-center justify-center text-sm font-bold text-white uppercase">
+        <div className="h-8 w-8 shrink-0 rounded-xl border border-[var(--nx-border)] bg-[var(--nx-surface-hover)] flex items-center justify-center text-[11px] font-bold text-[var(--nx-text)] uppercase">
           {name.slice(0, 2)}
         </div>
         {expanded && (
           <div className="min-w-0 flex-1">
-            <p className="text-base font-medium truncate text-[var(--nx-text)]">{name}</p>
-            <p className="text-sm text-[var(--nx-muted)] truncate">{email}</p>
+            <p className="text-[12px] font-semibold truncate text-[var(--nx-text)]">{name}</p>
+            <p className="text-[10px] text-[var(--nx-muted)] truncate">{email}</p>
           </div>
         )}
       </button>

@@ -5,7 +5,7 @@
 | | |
 |--|--|
 | GitHub | [dabstebplay2-jpg/nexus-frontend](https://github.com/dabstebplay2-jpg/nexus-frontend) |
-| Прод (Vercel) | https://frontend-henna-tau-19.vercel.app |
+| Прод (Vercel) | https://nexus-zeta-ruby-12.vercel.app |
 | Cloud API | https://nexus-cloud-ee17.onrender.com |
 
 ## Vercel — переменные

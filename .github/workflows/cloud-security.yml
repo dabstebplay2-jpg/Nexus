@@ -29,10 +29,13 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: pip-audit
-        run: pip-audit -r requirements.txt
+        run: pip-audit -r requirements.txt -r requirements-dev.txt
+
+      - name: Ruff
+        run: ruff check app api scripts tests
 
       - name: pytest
         env:
           NEXUS_CLOUD_SECRET_KEY: test-secret-key-32-characters-long!!
-          NEXUS_CLOUD_DATABASE_URL: sqlite:///:memory:
+          NEXUS_CLOUD_DATABASE_URL: 'sqlite:///:memory:'
         run: pytest tests/ -q

@@ -3,9 +3,9 @@
 from app.database import UserDB
 from app.services.telegram_link import (
     attach_telegram_to_user,
+    create_link_token,
     is_reclaimable_tg_shadow,
     link_telegram_account,
-    create_link_token,
 )
 
 

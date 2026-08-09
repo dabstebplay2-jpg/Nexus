@@ -12,11 +12,13 @@ import httpx
 
 from app import models_catalog
 from app.config import (
+    OPENROUTER_APP_TITLE,
+    OPENROUTER_BASE_URL,
+    OPENROUTER_HTTP_REFERER,
     POLZA_BASE_URL,
     WEB_SEARCH_MAX_ROUNDS,
     WEB_SEARCH_MAX_SECONDS,
     WEB_SEARCH_MAX_SOURCES,
-    WEB_SEARCH_PER_QUERY_LIMIT,
     WEB_SEARCH_PROMPT_MAX_CHARS,
     WEB_SEARCH_SNIPPET_MAX_CHARS,
     WEB_SEARCH_TARGET_SOURCES,
@@ -257,12 +259,23 @@ def _parse_planner_json(raw: str) -> dict[str, Any]:
     return {"action": "search_more", "queries": [], "reason": "parse_failed"}
 
 
+def _planner_chat_url(api_key: str) -> tuple[str, bool]:
+    is_openrouter = (api_key or "").strip().lower().startswith("sk-or-")
+    base_url = OPENROUTER_BASE_URL if is_openrouter else POLZA_BASE_URL
+    return f"{base_url.rstrip('/')}/chat/completions", is_openrouter
+
+
 async def _call_planner_llm(api_key: str, model: str, messages: list[dict]) -> str:
-    url = f"{POLZA_BASE_URL.rstrip('/')}/chat/completions"
+    url, is_openrouter = _planner_chat_url(api_key)
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
+    if is_openrouter:
+        if OPENROUTER_HTTP_REFERER:
+            headers["HTTP-Referer"] = OPENROUTER_HTTP_REFERER
+        if OPENROUTER_APP_TITLE:
+            headers["X-Title"] = OPENROUTER_APP_TITLE
     payload = {
         "model": model,
         "messages": messages,

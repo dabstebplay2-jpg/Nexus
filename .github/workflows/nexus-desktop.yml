@@ -20,6 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Validate product.json
         run: |
           python -c "import json; json.load(open('nexus-desktop/product/product.json'))"
@@ -32,6 +36,12 @@ jobs:
             python -c "import json; json.load(open('${d}package.json'))"
             echo "OK $(basename $d)"
           done
+
+      - name: Validate extension JavaScript
+        run: find nexus-desktop/extensions -name '*.js' -print0 | xargs -0 -n1 node --check
+
+      - name: Test Nexus AI safety helpers
+        run: npm --prefix nexus-desktop/extensions/nexus-ai test
 
   package-extensions:
     runs-on: ubuntu-latest

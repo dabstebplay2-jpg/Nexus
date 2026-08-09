@@ -1,9 +1,12 @@
+const { randomBytes } = require('crypto');
+
 function getSupportPanelHtml() {
+  const nonce = randomBytes(18).toString('base64');
   return `<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src data: blob:;" />
   <style>
     * { box-sizing: border-box; }
     body {
@@ -102,7 +105,7 @@ function getSupportPanelHtml() {
 
   <input type="file" id="fileIn" multiple accept="image/jpeg,image/png,image/webp,image/gif,.txt,.md,.json,.js,.ts,.jsx,.tsx,.py,.css,.html,.xml,.yaml,.yml,.csv,.log" />
 
-  <script>
+  <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const MAX_ATT = 4;
     let view = 'list';
@@ -132,10 +135,24 @@ function getSupportPanelHtml() {
 
     function renderAttStrip(el, att, onRemove) {
       el.innerHTML = att.map((a, i) =>
-        '<span class="att-chip">' + a.name + ' <button type="button" data-i="' + i + '">×</button></span>'
+        '<span class="att-chip">' + escapeHtml(a.name) + ' <button type="button" data-i="' + i + '">×</button></span>'
       ).join('');
       el.querySelectorAll('button').forEach((b) => {
         b.onclick = () => { onRemove(Number(b.dataset.i)); };
+      });
+    }
+
+    function renderNewAttachments() {
+      renderAttStrip(document.getElementById('newAtt'), newAtt, (i) => {
+        newAtt.splice(i, 1);
+        renderNewAttachments();
+      });
+    }
+
+    function renderReplyAttachments() {
+      renderAttStrip(document.getElementById('replyAtt'), replyAtt, (i) => {
+        replyAtt.splice(i, 1);
+        renderReplyAttachments();
       });
     }
 
@@ -190,15 +207,9 @@ function getSupportPanelHtml() {
           target.push(await fileToAtt(f));
         }
         if (pickTarget === 'reply') {
-          renderAttStrip(document.getElementById('replyAtt'), replyAtt, (i) => {
-            replyAtt.splice(i, 1);
-            renderAttStrip(document.getElementById('replyAtt'), replyAtt, arguments.callee);
-          });
+          renderReplyAttachments();
         } else {
-          renderAttStrip(document.getElementById('newAtt'), newAtt, (i) => {
-            newAtt.splice(i, 1);
-            renderAttStrip(document.getElementById('newAtt'), newAtt, arguments.callee);
-          });
+          renderNewAttachments();
         }
       } catch (err) { showErr(err.message); }
     };
@@ -213,9 +224,10 @@ function getSupportPanelHtml() {
         return;
       }
       el.innerHTML = tickets.map((t) =>
-        '<button type="button" class="ticket" data-id="' + t.id + '">' +
+        '<button type="button" class="ticket" data-id="' + escapeHtml(t.id) + '">' +
         '<div class="sub">' + escapeHtml(t.subject) + '</div>' +
-        '<div class="meta">' + (STATUS[t.status] || t.status) + ' · ' + (t.last_preview || '').slice(0, 60) + '</div></button>'
+        '<div class="meta">' + escapeHtml(STATUS[t.status] || t.status) + ' · ' +
+        escapeHtml((t.last_preview || '').slice(0, 60)) + '</div></button>'
       ).join('');
       el.querySelectorAll('.ticket').forEach((btn) => {
         btn.onclick = () => vscode.postMessage({ type: 'supportGet', id: btn.dataset.id });
@@ -223,20 +235,31 @@ function getSupportPanelHtml() {
     }
 
     function escapeHtml(s) {
-      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return String(s ?? '')
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/'/g,'&#39;');
+    }
+
+    function safeImageSrc(value) {
+      const src = String(value || '');
+      return /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(src) ? src : '';
     }
 
     function renderThread(detail) {
       currentId = detail.id;
       document.getElementById('threadHead').innerHTML =
         '<strong>' + escapeHtml(detail.subject) + '</strong><br><span style="font-size:11px;opacity:0.8">' +
-        (STATUS[detail.status] || detail.status) + '</span>';
+        escapeHtml(STATUS[detail.status] || detail.status) + '</span>';
       const closed = detail.status === 'closed';
       document.getElementById('replyBox').classList.toggle('hidden', closed);
       document.getElementById('thread').innerHTML = (detail.messages || []).map((m) => {
         let att = '';
         (m.attachments || []).forEach((a) => {
-          if (a.preview_url) att += '<img src="' + a.preview_url + '" alt="" />';
+          const imageSrc = safeImageSrc(a.preview_url);
+          if (imageSrc) att += '<img src="' + imageSrc + '" alt="" />';
           else if (a.text_preview) att += '<pre style="font-size:10px">' + escapeHtml(a.text_preview) + '</pre>';
         });
         return '<div class="msg ' + (m.author === 'admin' ? 'admin' : 'user') + '">' +
@@ -296,14 +319,14 @@ function getSupportPanelHtml() {
         renderThread(msg.detail);
         document.getElementById('replyBody').value = '';
         replyAtt = [];
-        renderAttStrip(document.getElementById('replyAtt'), replyAtt, () => {});
+        renderReplyAttachments();
         showErr('');
       }
       if (msg.type === 'supportCreated') {
         newAtt = [];
         document.getElementById('subject').value = '';
         document.getElementById('body').value = '';
-        renderAttStrip(document.getElementById('newAtt'), newAtt, () => {});
+        renderNewAttachments();
         renderThread(msg.detail);
       }
       if (msg.type === 'supportError') showErr(msg.text);

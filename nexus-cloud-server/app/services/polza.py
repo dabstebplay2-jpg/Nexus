@@ -7,7 +7,7 @@ import base64
 import hashlib
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 from urllib.parse import urlencode
 
@@ -30,9 +30,11 @@ from app.services.polza_mcp import (
     delete_polza_keys_by_name,
     mcp_create_api_key,
     mcp_delete_api_key,
+    mcp_quarantine_api_key,
     mcp_update_api_key_monthly_limit,
 )
 from app.tiers import normalize_tier, tier_monthly_cap, tier_requires_payment
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +138,7 @@ def set_user_polza_key(
         user.polza_key_id = str(polza_key_id)
     if polza_user_id:
         user.polza_user_id = polza_user_id
-    user.polza_key_updated_at = datetime.utcnow()
+    user.polza_key_updated_at = utc_now()
     user.polza_connect_required = 0
     db.commit()
     db.refresh(user)
@@ -236,7 +238,9 @@ async def provision_polza_for_user(
 
         old_key_id = getattr(user, "polza_key_id", None)
         if old_key_id:
-            await mcp_delete_api_key(key_id=str(old_key_id))
+            deleted = await mcp_delete_api_key(key_id=str(old_key_id))
+            if not deleted:
+                await mcp_quarantine_api_key(key_id=str(old_key_id))
             clear_user_polza_key(db, user)
 
         await delete_polza_keys_for_email(user.email or "")
@@ -295,7 +299,9 @@ async def suspend_polza_for_user(user: UserDB, db: Session) -> None:
     """Понижение тарифа: удалить ключ в Polza и отвязать в Nexus."""
     key_id = getattr(user, "polza_key_id", None)
     if key_id:
-        await mcp_delete_api_key(key_id=str(key_id))
+        deleted = await mcp_delete_api_key(key_id=str(key_id))
+        if not deleted:
+            await mcp_quarantine_api_key(key_id=str(key_id))
     await delete_polza_keys_for_email(user.email or "")
     clear_user_polza_key(db, user)
     user.polza_connect_required = 0
@@ -332,7 +338,7 @@ def create_pkce_session(db: Session, user_id: int) -> tuple[str, str, str]:
 
 
 def _purge_expired_pkce(db: Session) -> None:
-    cutoff = datetime.utcnow() - timedelta(minutes=PKCE_TTL_MINUTES)
+    cutoff = utc_now() - timedelta(minutes=PKCE_TTL_MINUTES)
     db.query(OAuthPkceSessionDB).filter(OAuthPkceSessionDB.created_at < cutoff).delete()
     db.commit()
 

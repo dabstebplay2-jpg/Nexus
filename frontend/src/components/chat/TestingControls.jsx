@@ -16,6 +16,7 @@ export default function TestingControls({
 }) {
   const { subscribeToTier, checkSubscription } = useAuth();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const recents = getRecentModelIds()
     .map((id) => findModelById(models, id))
     .filter(Boolean);
@@ -23,11 +24,12 @@ export default function TestingControls({
   const handleTier = async (tier) => {
     if (busy || tier === currentTier) return;
     setBusy(true);
+    setError('');
     try {
       await setTestingTier(tier, { subscribeToTier, checkSubscription });
       await onTierChanged?.();
     } catch (e) {
-      alert(e.message);
+      setError(e.message || 'Не удалось сменить тестовый тариф');
     } finally {
       setBusy(false);
     }
@@ -74,6 +76,7 @@ export default function TestingControls({
           ))}
         </div>
       )}
+      {error ? <span className="text-red-300" role="alert">{error}</span> : null}
     </div>
   );
 }

@@ -193,9 +193,9 @@ export default function TierPicker({
 
   const isGrid = layout === 'grid';
   const gridClass = isGrid
-    ? 'flex overflow-x-auto snap-x snap-mandatory gap-4 px-4 pb-4 -mx-4 scrollbar-none sm:grid sm:gap-3 sm:px-0 sm:mx-0 sm:pb-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 items-stretch'
+    ? 'flex overflow-x-auto snap-x snap-mandatory gap-4 px-4 pb-4 -mx-4 scrollbar-none sm:grid sm:gap-4 sm:px-0 sm:mx-0 sm:pb-0 sm:grid-cols-2 lg:grid-cols-3 items-stretch'
     : 'flex flex-col gap-3';
-  const cardPad = isGrid || compact ? 'p-3' : 'p-4';
+  const cardPad = isGrid ? 'p-5' : compact ? 'p-3' : 'p-4';
 
   return (
     <div className="space-y-3">
@@ -242,15 +242,11 @@ export default function TierPicker({
                   : t.popular
                     ? 'border-cyan-500/30 bg-cyan-500/5 hover:border-cyan-500/50'
                     : 'border-white/10 bg-white/[0.02] hover:border-white/25 hover:bg-white/[0.04]'
-              } ${isGrid ? 'hover:border-cyan-500/40 snap-start shrink-0 w-[280px] sm:w-auto' : ''}`}
+              } ${isGrid ? 'hover:border-cyan-500/40 snap-start shrink-0 w-[300px] sm:w-auto' : ''}`}
             >
               <div className="flex justify-between items-start gap-2 shrink-0">
                 <div className="min-w-0">
-                  <h3
-                    className={`font-bold text-white truncate ${
-                      isGrid || compact ? 'text-sm' : 'text-base'
-                    }`}
-                  >
+                  <h3 className={`font-bold text-white ${isGrid ? 'text-base' : compact ? 'text-sm' : 'text-base'}`}>
                     {t.name}
                   </h3>
                   <div className="flex flex-wrap gap-1 mt-0.5">
@@ -279,8 +275,8 @@ export default function TierPicker({
               <div className="flex-1 flex flex-col min-h-0 mt-2">
                 {t.aiAccess ? (
                   <p
-                    className={`text-[11px] leading-snug text-emerald-400/95 line-clamp-2 ${
-                      isGrid ? 'min-h-[2.5rem]' : 'min-h-[2.25rem]'
+                    className={`text-xs leading-relaxed text-emerald-400/95 ${
+                      isGrid ? 'min-h-[2.75rem]' : 'min-h-[2.25rem]'
                     }`}
                     title={
                       t.quotaHint
@@ -302,20 +298,20 @@ export default function TierPicker({
                 )}
 
                 <ul
-                  className={`mt-2 space-y-1 flex-1 ${
+                  className={`mt-3 space-y-2 flex-1 ${
                     compact && !isGrid ? 'hidden sm:block' : ''
-                  } ${isGrid ? 'min-h-[4.75rem]' : ''}`}
+                  } ${isGrid ? 'min-h-[7.5rem]' : ''}`}
                 >
-                  {t.features.slice(0, isGrid ? 3 : compact ? 2 : 4).map((x) => (
-                    <li key={x} className="flex gap-1.5 text-[11px] leading-snug text-zinc-400">
-                      <Check size={11} className="text-emerald-500 shrink-0 mt-0.5" />
-                      <span className="line-clamp-1">{x}</span>
+                  {t.features.slice(0, isGrid ? 4 : compact ? 2 : 4).map((x) => (
+                    <li key={x} className="flex gap-2 text-xs leading-relaxed text-zinc-400">
+                      <Check size={13} className="text-emerald-500 shrink-0 mt-0.5" />
+                      <span>{x}</span>
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div className="mt-auto pt-2.5 shrink-0 border-t border-white/5">
+              <div className="mt-auto pt-4 shrink-0 border-t border-white/5">
                 {mode === 'select' ? (
                   <span
                     className={`block w-full text-center text-xs font-semibold py-2 rounded-lg ${

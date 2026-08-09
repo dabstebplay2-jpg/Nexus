@@ -1,123 +1,64 @@
 #!/usr/bin/env python3
-"""Smoke-тест прод Render API. Запуск: python scripts/smoke_test_render.py [BASE_URL]"""
+"""Read-only production smoke test. It never creates users or changes billing/provider state."""
+
+from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
-from uuid import uuid4
 
-DEFAULT_BASE = "https://nexus-cloud-ee17.onrender.com"
+DEFAULT_BASE = os.environ.get("NEXUS_PRODUCTION_CLOUD_URL", "https://nexus-cloud-ee17.onrender.com")
 
 
-def req(method: str, url: str, body=None, headers=None):
-    data = None
-    h = {"Accept": "application/json", **(headers or {})}
-    if body is not None:
-        data = json.dumps(body).encode()
-        h["Content-Type"] = "application/json"
-    r = urllib.request.Request(url, data=data, headers=h, method=method)
+def request(url: str):
+    req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "NexusSmoke/0.4"})
     try:
-        with urllib.request.urlopen(r, timeout=60) as resp:
-            raw = resp.read().decode()
+        with urllib.request.urlopen(req, timeout=40) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
             return resp.status, json.loads(raw) if raw else {}
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode()
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
         try:
-            detail = json.loads(raw)
+            body = json.loads(raw) if raw else {}
         except json.JSONDecodeError:
-            detail = raw
-        return e.code, detail
+            body = {"raw": raw[:500]}
+        return exc.code, body
+    except Exception as exc:
+        return 0, {"error": str(exc)}
 
 
-def ok(name: str, cond: bool, extra: str = ""):
-    status = "OK" if cond else "FAIL"
-    print(f"  [{status}] {name}" + (f" — {extra}" if extra else ""))
-    return cond
+def check(name: str, condition: bool, detail="") -> bool:
+    print(f"[{'OK' if condition else 'FAIL'}] {name}" + (f" — {detail}" if detail else ""))
+    return condition
 
 
 def main() -> int:
     base = (sys.argv[1] if len(sys.argv) > 1 else DEFAULT_BASE).rstrip("/")
-    print(f"Smoke test: {base}\n")
-    passed = 0
-    total = 0
+    print(f"Nexus production check: {base}\n")
+    results: list[bool] = []
 
-    def check(name, cond, extra=""):
-        nonlocal passed, total
-        total += 1
-        if ok(name, cond, extra):
-            passed += 1
+    code, health = request(f"{base}/v1/health?verbose=true")
+    results.append(check("Cloud health", code == 200 and health.get("status") == "ok", f"HTTP {code}"))
 
-    code, data = req("GET", f"{base}/v1/health")
-    check("GET /v1/health", code == 200 and data.get("status") == "ok", str(data))
+    code, status = request(f"{base}/v1/system/status")
+    ready = code == 200 and status.get("status") == "ready"
+    results.append(check("Production integrations", ready, ", ".join(status.get("issues") or []) or f"HTTP {code}"))
 
-    code, data = req("GET", f"{base}/v1/billing/catalog")
-    check(
-        "GET /v1/billing/catalog",
-        code == 200 and isinstance(data.get("tiers"), list) and len(data["tiers"]) > 0,
-        f"tiers={len(data.get('tiers', []))}",
-    )
+    code, auth = request(f"{base}/v1/auth/config")
+    has_auth = bool(auth.get("google_oauth_enabled") or auth.get("email_auth_enabled") or auth.get("telegram_auth_enabled"))
+    results.append(check("Authentication provider", code == 200 and has_auth, f"HTTP {code}"))
 
-    email = f"smoke.{uuid4().hex[:12]}@gmail.com"
-    password = "SmokeTestPass123!"
-    code, data = req(
-        "POST",
-        f"{base}/v1/auth/register",
-        {"email": email, "password": password, "tier": "FREE"},
-    )
-    check("POST /v1/auth/register", code == 200 and "access_token" in data, f"code={code}")
+    code, catalog = request(f"{base}/v1/billing/catalog")
+    results.append(check("Billing catalog", code == 200 and bool(catalog.get("tiers")), f"HTTP {code}"))
 
-    if code != 200:
-        print("\nStopped: register failed")
-        print(f"Passed {passed}/{total}")
-        return 1
+    code, _ = request(f"{base}/v1/ai/models")
+    results.append(check("AI route protected", code in (401, 403), f"HTTP {code}"))
 
-    token = data["access_token"]
-    auth = {"Authorization": f"Bearer {token}"}
-
-    code, profile = req("GET", f"{base}/v1/auth/profile", headers=auth)
-    check(
-        "GET /v1/auth/profile",
-        code == 200 and profile.get("email") == email,
-        profile.get("subscription_tier", ""),
-    )
-
-    code, models = req("GET", f"{base}/v1/ai/models", headers=auth)
-    model_list = models.get("models") or []
-    check(
-        "GET /v1/ai/models",
-        code == 200 and len(model_list) > 0,
-        f"models={len(model_list)}",
-    )
-
-    code, agents = req("GET", f"{base}/v1/ai/agents", headers=auth)
-    check(
-        "GET /v1/ai/agents",
-        code == 200 and len(agents.get("agents") or []) > 0,
-        f"agents={len(agents.get('agents') or [])}",
-    )
-
-    # CORS preflight (как браузер с Vercel)
-    cors_origin = "https://frontend-henna-tau-19.vercel.app"
-    cors_req = urllib.request.Request(
-        f"{base}/v1/health",
-        method="OPTIONS",
-        headers={
-            "Origin": cors_origin,
-            "Access-Control-Request-Method": "GET",
-        },
-    )
-    try:
-        with urllib.request.urlopen(cors_req, timeout=30) as resp:
-            acao = resp.headers.get("Access-Control-Allow-Origin", "")
-            cors_ok = cors_origin in acao or acao == "*"
-            check("CORS preflight (Vercel origin)", cors_ok, f"Allow-Origin={acao!r}")
-    except urllib.error.HTTPError as e:
-        check("CORS preflight (Vercel origin)", False, f"HTTP {e.code}")
-
-    print(f"\nPassed {passed}/{total}")
-    return 0 if passed == total else 1
+    print(f"\nPassed {sum(results)}/{len(results)} checks")
+    return 0 if all(results) else 1
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

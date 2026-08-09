@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import secrets
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
 from app.config import OAUTH_STATE_TTL_SEC
 from app.database import ConnectorOAuthStateDB
 from app.services.oauth_redirect import normalize_return_to
+from app.time_utils import utc_now
 
 
 def create_connector_oauth_state(
@@ -21,7 +22,7 @@ def create_connector_oauth_state(
     return_to: str | None,
 ) -> str:
     state = secrets.token_urlsafe(32)
-    expires = datetime.utcnow() + timedelta(seconds=OAUTH_STATE_TTL_SEC)
+    expires = utc_now() + timedelta(seconds=OAUTH_STATE_TTL_SEC)
     db.add(
         ConnectorOAuthStateDB(
             state=state,
@@ -40,7 +41,7 @@ def pop_connector_oauth_state(db: Session, state: str) -> tuple[int, str, str, s
     row = db.query(ConnectorOAuthStateDB).filter(ConnectorOAuthStateDB.state == state).first()
     if not row:
         raise ValueError("Сессия OAuth истекла или недействительна")
-    if row.expires_at < datetime.utcnow():
+    if row.expires_at < utc_now():
         db.delete(row)
         db.commit()
         raise ValueError("Сессия OAuth истекла")

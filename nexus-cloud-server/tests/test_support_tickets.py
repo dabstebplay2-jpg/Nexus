@@ -67,3 +67,25 @@ def test_list_support_tickets(client, db_session):
     res = client.get("/v1/support/tickets", headers=headers)
     assert res.status_code == 200
     assert len(res.json().get("tickets") or []) >= 1
+
+
+def test_rejects_non_image_data_url_attachment(client, db_session):
+    headers = _auth_headers(db_session)
+    res = client.post(
+        "/v1/support/tickets",
+        headers=headers,
+        json={
+            "category": "bug",
+            "subject": "Attachment validation",
+            "body": "Invalid image MIME type must not be stored.",
+            "attachments": [
+                {
+                    "kind": "image",
+                    "name": "payload.html",
+                    "mime": "text/html",
+                    "data_base64": "PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==",
+                }
+            ],
+        },
+    )
+    assert res.status_code == 400

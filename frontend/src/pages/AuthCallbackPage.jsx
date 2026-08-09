@@ -7,14 +7,14 @@ import { getStoredTokens } from '../lib/authStorage';
 
 const OAUTH_ERROR_MESSAGES = {
   access_denied:
-    'Google отклонил вход. Добавьте ваш Gmail в Test users (Google Cloud → Audience) или опубликуйте приложение.',
+    'Google отклонил вход. Разрешите доступ и повторите попытку или войдите по коду из email.',
   oauth_state: 'Сессия входа истекла. Закройте вкладку и нажмите «Продолжить с Google» снова.',
   oauth_token:
-    'Ошибка обмена кода с Google. Проверьте GOOGLE_CLIENT_SECRET и GOOGLE_REDIRECT_URI на Render (должны совпадать с Google Console).',
+    'Не удалось завершить вход через Google. Попробуйте ещё раз или войдите по коду из email.',
   oauth_redirect:
-    'Неверный redirect URI. В Google Cloud Console → OAuth client → Authorized redirect URIs добавьте точно: https://nexus-zeta-ruby-12.vercel.app/api/auth/google/callback. На Render переменная GOOGLE_REDIRECT_URI должна совпадать с этим URL.',
+    'Вход через Google временно недоступен. Воспользуйтесь кодом из email или напишите в поддержку.',
   oauth_client:
-    'Неверный Client ID или Client Secret на сервере. Обновите GOOGLE_CLIENT_ID и GOOGLE_CLIENT_SECRET на Render.',
+    'Вход через Google временно недоступен. Воспользуйтесь кодом из email или напишите в поддержку.',
   oauth_jwt: 'Не удалось проверить токен Google. Попробуйте снова через минуту.',
   oauth_account: 'Этот email уже привязан к другому Google-аккаунту.',
   oauth_exchange:

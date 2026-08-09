@@ -11,13 +11,13 @@
 
 ## Локальный запуск
 
-```powershell
-cd C:\nexus   # или путь к клону
-.\scripts\nexus.ps1 install
-.\scripts\nexus.ps1 start
+```bat
+cd C:\nexus   rem или путь к распакованному проекту
+nexus.bat install
+nexus.bat start
 ```
 
-Коротко: `nexus.bat start` / `nexus.bat stop` / `nexus.bat diagnose` / `nexus.bat admin`
+`nexus.bat` сам запускает внутренний PowerShell с process-local ExecutionPolicy Bypass. Коротко: `nexus.bat start` / `nexus.bat stop` / `nexus.bat status` / `nexus.bat diagnose` / `nexus.bat admin`.
 
 Порты: frontend **5173**, backend **8000**, cloud **8080**, admin **8790**.
 

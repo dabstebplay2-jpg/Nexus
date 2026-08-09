@@ -28,9 +28,10 @@ export const DEFAULT_WEB_SEARCH_DEPTH = 'standard';
 
 export function readWebSearchEnabled() {
   try {
-    return localStorage.getItem(ENABLED_KEY) === 'true';
+    const stored = localStorage.getItem(ENABLED_KEY);
+    return stored === null ? true : stored === 'true';
   } catch {
-    return false;
+    return true;
   }
 }
 

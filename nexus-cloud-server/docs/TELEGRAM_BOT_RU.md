@@ -10,7 +10,7 @@
 
 Опционально: `/setcommands` — login, balance, profile, tariffs, model, image.
 
-**Login Widget на сайте:** в BotFather выполните `/setdomain` → `frontend-henna-tau-19.vercel.app`
+**Login Widget на сайте:** в BotFather выполните `/setdomain` → `nexus-zeta-ruby-12.vercel.app`
 
 ## 2. Переменные на Render
 
@@ -38,7 +38,7 @@ Webhook URL: `https://nexus-cloud-ee17.onrender.com/v1/telegram/webhook`
 ## 3. Поток пользователя
 
 ### Сайт → Telegram (привязка)
-1. Регистрация и оплата на [сайте](https://frontend-henna-tau-19.vercel.app).
+1. Регистрация и оплата на [сайте](https://nexus-zeta-ruby-12.vercel.app).
 2. **Настройки → Аккаунт → Подключить Telegram** — ссылка `t.me/Bot?start=TOKEN`.
 3. В боте `/start TOKEN` — привязка `telegram_id` к `user_id`.
 

@@ -8,16 +8,24 @@ from sqlalchemy.orm import Session
 
 from app.database import InvoiceDB, TransactionDB, UserDB
 from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
-from app.services.quota_limits import get_quota_limit_info, start_subscription_period
+from app.services.openrouter_provision import delete_openrouter_key_for_user
 from app.services.polza import (
     provision_polza_for_user,
     sync_polza_key_limit_after_payment,
     user_has_polza_key,
 )
+from app.services.quota_limits import get_quota_limit_info, start_subscription_period
 from app.services.subscription_audit_log import log_tier_granted, subscription_state_snapshot
-from app.services.subscription_guard import admin_subscription_invoice_id, record_admin_subscription_invoice
-from app.services.openrouter_provision import delete_openrouter_key_for_user
-from app.tiers import normalize_tier, tier_monthly_cap, tier_requires_payment, tier_uses_openrouter_free
+from app.services.subscription_guard import (
+    admin_subscription_invoice_id,
+    record_admin_subscription_invoice,
+)
+from app.tiers import (
+    normalize_tier,
+    tier_monthly_cap,
+    tier_requires_payment,
+    tier_uses_openrouter_free,
+)
 
 logger = logging.getLogger("app.subscription")
 

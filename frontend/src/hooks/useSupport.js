@@ -16,8 +16,7 @@ async function parseJson(res) {
     const d = data.detail;
     let msg = typeof d === 'string' ? d : d?.message || `HTTP ${res.status}`;
     if (res.status === 404) {
-      msg =
-        'Сервис поддержки на облаке ещё не обновлён (404). Задеплойте nexus-cloud-server на Render (Manual Deploy).';
+      msg = 'Сервис поддержки временно обновляется. Попробуйте ещё раз чуть позже.';
     } else if (res.status === 401) {
       msg = 'Войдите в аккаунт на сайте, чтобы отправить обращение.';
     }
@@ -31,6 +30,7 @@ export function useSupport() {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const clearTicket = useCallback(() => setDetail(null), []);
 
   const loadTickets = useCallback(async () => {
     setLoading(true);
@@ -123,6 +123,7 @@ export function useSupport() {
     loadTicket,
     createTicket,
     sendMessage,
+    clearTicket,
     maxAttachments: MAX_SUPPORT_ATTACH,
   };
 }

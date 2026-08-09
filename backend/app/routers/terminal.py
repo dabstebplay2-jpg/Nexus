@@ -1,22 +1,38 @@
 import asyncio
+import os
 import sys
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+from app.config import CORS_ORIGINS
 
 router = APIRouter(tags=["terminal"])
 
 
 @router.websocket("/api/ws/terminal")
 async def websocket_terminal(websocket: WebSocket):
-    await websocket.accept()
+    origin = (websocket.headers.get("origin") or "").rstrip("/")
+    allowed_origins = {item.rstrip("/") for item in CORS_ORIGINS}
+    if origin and origin not in allowed_origins:
+        await websocket.close(code=1008, reason="Origin not allowed")
+        return
 
-    cwd = websocket.query_params.get("cwd") or "."
+    cwd = os.path.realpath(os.path.abspath(websocket.query_params.get("cwd") or "."))
+    if not os.path.isdir(cwd):
+        await websocket.close(code=1008, reason="Working directory does not exist")
+        return
+
+    await websocket.accept()
     encoding = "utf-8" if sys.platform != "win32" else "cp866"
 
     if sys.platform == "win32":
-        shell_command = f'powershell.exe -NoLogo -NoExit -Command "Set-Location -LiteralPath \'{cwd.replace(chr(39), "''")}\'"'
+        escaped_cwd = cwd.replace("'", "''")
+        shell_command = (
+            "powershell.exe -NoLogo -NoExit -Command "
+            f'"Set-Location -LiteralPath \'{escaped_cwd}\'"'
+        )
     else:
-        shell_command = f"bash --login"
+        shell_command = "bash --login"
 
     try:
         proc = await asyncio.create_subprocess_shell(

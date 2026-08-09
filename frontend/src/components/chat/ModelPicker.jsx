@@ -77,6 +77,14 @@ export default function ModelPicker({
     () => safeFavorites.map((id) => findModelById(pool, id)).filter(Boolean),
     [safeFavorites, pool]
   );
+  const latestModels = useMemo(
+    () =>
+      [...pool]
+        .filter((model) => model.is_latest)
+        .sort((a, b) => (b.created || 0) - (a.created || 0))
+        .slice(0, 12),
+    [pool]
+  );
   const segmentGroups = useMemo(() => groupModelsBySegment(pool), [pool]);
   const providerGroups = useMemo(() => groupModelsByProvider(pool), [pool]);
 
@@ -262,6 +270,14 @@ export default function ModelPicker({
             >
               <span className="font-medium inline-flex items-center gap-1 flex-wrap">
                 {displayName}
+                {m.is_latest && (
+                  <span
+                    className="text-[9px] px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300"
+                    title="Недавно добавлена в каталог Polza"
+                  >
+                    Новинка
+                  </span>
+                )}
                 {!locked && visionBadge(m)}
                 {!locked && modelSupportsToolCalling(m) && (
                   <span
@@ -387,6 +403,15 @@ export default function ModelPicker({
               </div>
             )}
 
+            {latestModels.length > 0 && tab === 'chat' && (
+              <div className="mb-2 border border-violet-500/20 rounded-xl p-1">
+                <p className="px-2 py-1 text-[10px] font-bold uppercase text-violet-300/90 flex items-center gap-1">
+                  <Sparkles size={11} /> Новинки Polza
+                </p>
+                <ul>{latestModels.map((m) => renderModelRow(m))}</ul>
+              </div>
+            )}
+
             {tab === 'chat' && visionGuide && (
               <div className="mb-2 border border-white/10 rounded-xl overflow-hidden">
                 <button
@@ -469,7 +494,7 @@ export default function ModelPicker({
   ) : null;
 
   const btnClass = compact
-    ? `w-full flex items-center justify-between gap-2 px-3 md:px-4 py-2 md:py-2.5 min-h-[44px] md:min-h-[52px] rounded-full text-sm md:text-base font-medium hover:bg-[var(--nx-surface-hover)] ${
+    ? `w-full flex items-center justify-between gap-2 px-3 py-2 min-h-[40px] rounded-xl text-sm font-medium hover:bg-[var(--nx-surface-hover)] ${
         disabled ? 'opacity-50' : ''
       } ${open ? 'bg-[var(--nx-surface-hover)]' : ''}`
     : `w-full flex items-center justify-between gap-2 text-left text-xs rounded-lg border px-2.5 py-2 ${

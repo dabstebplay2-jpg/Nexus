@@ -1,15 +1,10 @@
-"""
-Кураторский каталог Nexus (июнь 2026).
-Семейства моделей: одна строка в UI + опциональный «режим мышления» (отдельный RouterAI id).
-
-Проверено: GET https://routerai.ru/api/v1/models (2026-06-02)
-"""
+"""Базовый кураторский каталог Nexus + автодобавление свежих моделей Polza."""
 
 from __future__ import annotations
 
 import re
 
-CATALOG_VERSION = "2026-06-02-v2"
+CATALOG_VERSION = "2026-07-14-dynamic-v3"
 
 COST_SEGMENT_ORDER = ["cheap", "medium", "expensive", "very_expensive"]
 COST_SEGMENT_LABEL_RU = {

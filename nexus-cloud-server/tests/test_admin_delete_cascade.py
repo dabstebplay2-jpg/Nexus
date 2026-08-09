@@ -6,6 +6,7 @@ from app.database import (
     SupportTicketDB,
     TransactionDB,
     UserDB,
+    WorkspaceDB,
 )
 from app.services.admin_user_ops import purge_user_data
 
@@ -52,6 +53,14 @@ def test_purge_user_data_removes_related_rows(db_session):
             messages_json="[]",
         )
     )
+    db_session.add(
+        WorkspaceDB(
+            user_id=uid,
+            workspace_id="ws-purge-1",
+            name="Purge workspace",
+            emoji="✨",
+        )
+    )
     db_session.commit()
 
     purge_user_data(db_session, uid)
@@ -62,3 +71,4 @@ def test_purge_user_data_removes_related_rows(db_session):
     assert db_session.query(TransactionDB).filter(TransactionDB.user_id == uid).count() == 0
     assert db_session.query(SupportTicketDB).filter(SupportTicketDB.user_id == uid).count() == 0
     assert db_session.query(ChatConversationDB).filter(ChatConversationDB.user_id == uid).count() == 0
+    assert db_session.query(WorkspaceDB).filter(WorkspaceDB.user_id == uid).count() == 0

@@ -15,9 +15,9 @@ def get_agent(agent_id: str) -> dict | None:
 
 
 async def list_agents_for_user(subscription_tier: str) -> list[dict]:
+    from app.config import is_testing_mode
     from app.models_catalog import get_default_model
     from app.services.models_registry import tier_rank
-    from app.config import is_testing_mode
     from app.tiers import normalize_tier
 
     user_rank = tier_rank(normalize_tier(subscription_tier))

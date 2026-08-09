@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.database import UserArtifactDB
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -17,17 +18,17 @@ ALLOWED_KINDS = frozenset({"image", "code", "file", "export", "research"})
 
 def _ms_to_dt(value: int | float | None) -> datetime:
     if value is None:
-        return datetime.utcnow()
+        return utc_now()
     try:
         sec = float(value) / 1000.0 if float(value) > 1e12 else float(value)
         return datetime.utcfromtimestamp(sec)
     except (TypeError, ValueError, OSError):
-        return datetime.utcnow()
+        return utc_now()
 
 
 def _dt_to_ms(dt: datetime | None) -> int:
     if not dt:
-        return int(datetime.utcnow().timestamp() * 1000)
+        return int(utc_now().timestamp() * 1000)
     return int(dt.timestamp() * 1000)
 
 

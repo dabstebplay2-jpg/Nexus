@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import random
-from datetime import datetime, timedelta
+import secrets
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
@@ -13,17 +13,23 @@ from app.config import (
     AUTH_OTP_LOCK_MINUTES,
     AUTH_OTP_MAX_VERIFY_ATTEMPTS,
     AUTH_OTP_REQUEST_EMAIL_WINDOW_SEC,
+    AUTH_OTP_REQUEST_IP_WINDOW_SEC,
     AUTH_OTP_REQUEST_PER_EMAIL,
     AUTH_OTP_REQUEST_PER_IP,
-    AUTH_OTP_REQUEST_IP_WINDOW_SEC,
     AUTH_OTP_TTL_SEC,
     NEXUS_AUTH_DEV_LOG_CODES,
     SECRET_KEY,
 )
 from app.database import LoginCodeDB
-from app.services.auth_rate_limit import RateLimitExceeded, assert_rate_limit_async
-from app.services.auth_session import ensure_user_after_otp, issue_tokens_and_setup, _add_auth_method
+from app.production_guard import is_production_environment
+from app.services.auth_rate_limit import assert_rate_limit_async
+from app.services.auth_session import (
+    _add_auth_method,
+    ensure_user_after_otp,
+    issue_tokens_and_setup,
+)
 from app.services.resend_mailer import send_login_code_email
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +45,12 @@ def _code_hash(email: str, code: str) -> str:
 
 
 def _generate_code() -> str:
-    return f"{random.randint(0, 999999):06d}"
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def _can_expose_dev_code() -> bool:
+    """Allow the browser to show an OTP only on an explicitly enabled local server."""
+    return NEXUS_AUTH_DEV_LOG_CODES and not is_production_environment()
 
 
 async def request_login_code(db: Session, email: str, client_ip: str | None) -> dict:
@@ -64,14 +75,17 @@ async def request_login_code(db: Session, email: str, client_ip: str | None) -> 
 
     code = _generate_code()
     code_hash = _code_hash(email, code)
-    now = datetime.utcnow()
+    now = utc_now()
     expires = now + timedelta(seconds=AUTH_OTP_TTL_SEC)
 
-    if NEXUS_AUTH_DEV_LOG_CODES:
+    dev_mode = _can_expose_dev_code()
+    if dev_mode:
         logger.warning("DEV OTP for %s: %s", email, code)
 
-    sent = await send_login_code_email(email, code)
-    if not sent and not NEXUS_AUTH_DEV_LOG_CODES:
+    # In local dev the browser shows the code immediately, so do not wait on
+    # an external mail provider. Production always requires successful delivery.
+    sent = True if dev_mode else await send_login_code_email(email, code)
+    if not sent:
         logger.error("OTP email not sent to %s (Resend failed or not configured)", email)
         raise ValueError(
             "Не удалось отправить письмо. Попробуйте через минуту или проверьте папку «Спам»."
@@ -89,7 +103,10 @@ async def request_login_code(db: Session, email: str, client_ip: str | None) -> 
         )
     )
     db.commit()
-    return {"message": _GENERIC_SENT_MSG}
+    response = {"message": _GENERIC_SENT_MSG}
+    if dev_mode:
+        response["dev_code"] = code
+    return response
 
 
 async def verify_login_code(db: Session, email: str, code: str) -> dict:
@@ -109,7 +126,7 @@ async def verify_login_code(db: Session, email: str, code: str) -> dict:
             "Код недействителен или уже использован. Запросите новый код на email."
         )
 
-    now = datetime.utcnow()
+    now = utc_now()
     if row.expires_at < now:
         db.delete(row)
         db.commit()
@@ -119,7 +136,7 @@ async def verify_login_code(db: Session, email: str, code: str) -> dict:
     if row.attempts >= AUTH_OTP_MAX_VERIFY_ATTEMPTS and now < lock_until:
         raise ValueError("Слишком много попыток. Подождите 15 минут.")
 
-    if _code_hash(email, code) != row.code_hash:
+    if not secrets.compare_digest(_code_hash(email, code), row.code_hash):
         row.attempts = (row.attempts or 0) + 1
         db.commit()
         raise ValueError(

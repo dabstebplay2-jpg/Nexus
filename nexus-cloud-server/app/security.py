@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import jwt
 from fastapi import Depends, HTTPException, Security
@@ -7,13 +7,14 @@ from sqlalchemy.orm import Session
 
 from app.config import ALGORITHM, SECRET_KEY
 from app.database import UserDB, get_db
+from app.time_utils import utc_now
 
 security_bearer = HTTPBearer()
 
 
 def create_access_token(data: dict, expires_delta: timedelta = timedelta(days=1)):
     to_encode = data.copy()
-    expire = datetime.utcnow() + expires_delta
+    expire = utc_now() + expires_delta
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 

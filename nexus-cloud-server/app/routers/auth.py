@@ -1,7 +1,6 @@
 import logging
 import math
 import uuid
-from datetime import datetime
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -15,31 +14,44 @@ from app.config import (
     TELEGRAM_BOT_USERNAME,
     email_auth_enabled,
     google_oauth_configured,
+    is_testing_mode,
     telegram_bot_enabled,
     telegram_login_domain,
 )
 from app.database import UserDB, get_db, hash_password, verify_password
 from app.schemas import (
+    AuthConfigResponse,
     EmailRequestCode,
     EmailVerifyCode,
     GoogleExchangeRequest,
-    TelegramExchangeRequest,
-    TelegramExchangePreviewResponse,
-    TelegramLoginRequest,
     MessageResponse,
-    AuthConfigResponse,
     ProfileResponse,
     RefreshRequest,
+    TelegramExchangePreviewResponse,
+    TelegramExchangeRequest,
+    TelegramLoginRequest,
     TokenResponse,
     UserLogin,
     UserRegister,
 )
 from app.security import create_access_token, get_current_user
-from app.services.auth_session import issue_tokens_and_setup
+from app.services.auth_bruteforce import (
+    assert_login_allowed,
+    record_failed_login,
+    reset_login_attempts,
+)
 from app.services.auth_rate_limit import RateLimitExceeded
+from app.services.auth_session import issue_tokens_and_setup
 from app.services.email_login import request_login_code, verify_login_code
 from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
 from app.services.google_oauth import create_oauth_start, exchange_auth_code, handle_google_callback
+from app.services.oauth_redirect import safe_oauth_redirect_base
+from app.services.polza import user_has_polza_key
+from app.services.quota_limits import get_quota_limit_info
+from app.services.subscription_guard import (
+    enforce_paid_subscription,
+    user_has_active_paid_subscription,
+)
 from app.services.telegram_auth import (
     bind_email_for_telegram_user,
     exchange_telegram_auth_code,
@@ -48,21 +60,14 @@ from app.services.telegram_auth import (
     preview_telegram_exchange,
     request_bind_email_code,
 )
-from app.services.quota_limits import get_quota_limit_info
-from app.services.polza import user_has_polza_key
-from app.services.subscription_guard import (
-    enforce_paid_subscription,
-    user_has_active_paid_subscription,
-)
-from app.config import is_testing_mode
 from app.services.testing_mode import ensure_testing_subscription
-from app.services.oauth_redirect import safe_oauth_redirect_base
-from app.services.auth_bruteforce import (
-    assert_login_allowed,
-    record_failed_login,
-    reset_login_attempts,
+from app.tiers import (  # noqa: F401
+    normalize_tier,
+    tier_allows_ai,
+    tier_monthly_cap,
+    tier_requires_payment,
 )
-from app.tiers import normalize_tier, tier_allows_ai, tier_monthly_cap, tier_requires_payment  # noqa: F401
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
@@ -172,7 +177,7 @@ async def register(payload: UserRegister, request: Request, db: Session = Depend
         subscription_tier=tier,
         balance=0.0,
         refresh_token=refresh_token,
-        email_verified_at=datetime.utcnow(),
+        email_verified_at=utc_now(),
         auth_methods="password",
     )
     db.add(new_user)
@@ -204,12 +209,28 @@ async def login(payload: UserLogin, request: Request, db: Session = Depends(get_
 
 @router.get("/config", response_model=AuthConfigResponse)
 def auth_config():
-    from app.config import GOOGLE_REDIRECT_URI, oauth_allowed_redirect_bases, redis_persistence_enabled
+    from app.config import (
+        GOOGLE_REDIRECT_URI,
+        POLZA_BACKEND_API_KEY,
+        POLZA_MCP_TOKEN,
+        RESEND_API_KEY,
+        database_is_ephemeral,
+        oauth_allowed_redirect_bases,
+        openrouter_free_tier_enabled,
+        redis_persistence_enabled,
+        yookassa_enabled,
+    )
 
     email_on = email_auth_enabled()
     return AuthConfigResponse(
         google_oauth_enabled=google_oauth_configured(),
         email_auth_enabled=email_on,
+        email_delivery_ready=bool(RESEND_API_KEY),
+        billing_enabled=yookassa_enabled(),
+        polza_ai_enabled=bool(POLZA_BACKEND_API_KEY),
+        polza_autoprovision_enabled=bool(POLZA_MCP_TOKEN),
+        database_persistent=not database_is_ephemeral(),
+        free_ai_enabled=openrouter_free_tier_enabled(),
         telegram_auth_enabled=telegram_bot_enabled() and email_on,
         telegram_bot_username=(TELEGRAM_BOT_USERNAME or None)
         if telegram_bot_enabled() and email_on
@@ -438,7 +459,6 @@ async def repair_polza_key(
         sync_polza_key_limit_after_payment,
         user_has_polza_key,
     )
-    from app.tiers import tier_monthly_cap
 
     pool_usd = float(get_user_period_pool_usd(db, current_user) or tier_monthly_cap(tier))
     pool_rub = usd_to_rub(pool_usd, get_usd_rub_rate_sync())

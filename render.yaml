@@ -11,9 +11,10 @@ services:
       - key: PYTHON_VERSION
         value: "3.12.11"
       - key: NODE_VERSION
-        value: "20.18.0"
+        value: "22.16.0"
+      # IMPORTANT: keep the existing production secret. Do not rotate it on deploy.
       - key: NEXUS_CLOUD_SECRET_KEY
-        generateValue: true
+        sync: false
       - key: POLZA_BACKEND_API_KEY
         sync: false
       - key: POLZA_MCP_TOKEN
@@ -22,8 +23,14 @@ services:
         sync: false
       - key: POLZA_APP_NAME
         value: Nexus
+      - key: ENV
+        value: production
       - key: NEXUS_EMAIL_AUTH_ENABLED
-        value: "false"
+        value: "true"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
       - key: NEXUS_BILLING_TEST_MODE
         value: "false"
       - key: NEXUS_TIER_POOL_FRACTION
@@ -35,6 +42,8 @@ services:
       - key: NEXUS_CORS_ORIGINS
         sync: false
       - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MANAGEMENT_API_KEY
         sync: false
       - key: OPENROUTER_HTTP_REFERER
         sync: false
@@ -61,6 +70,8 @@ services:
       - key: NEXUS_CRON_SECRET
         generateValue: true
       - key: NEXUS_FRONTEND_URL
+        sync: false
+      - key: NEXUS_OAUTH_REDIRECT_ORIGINS
         sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false

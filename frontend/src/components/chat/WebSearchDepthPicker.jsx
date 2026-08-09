@@ -1,4 +1,4 @@
-import { Globe } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 /** Переключатель «Поиск в сети» (глубина всегда standard на бэкенде). */
 export default function WebSearchDepthPicker({
@@ -14,7 +14,7 @@ export default function WebSearchDepthPicker({
       type="button"
       disabled={disabled}
       onClick={() => onEnabledChange?.(!active)}
-      className={`flex items-center gap-1.5 md:gap-2 px-2.5 md:px-3 py-2 md:py-3 min-h-[44px] md:min-h-[52px] rounded-full border transition-colors shrink-0 ${
+      className={`flex items-center gap-1.5 md:gap-2 px-2.5 py-2 min-h-[40px] rounded-xl border transition-colors shrink-0 ${
         highlight ? 'ring-2 ring-teal-400/50' : ''
       } ${
         active
@@ -23,12 +23,12 @@ export default function WebSearchDepthPicker({
       }`}
       title={
         active
-          ? 'Выключить автопоиск в сети'
-          : 'Включить автопоиск — ищет только когда нужны свежие факты'
+          ? 'Автоинструменты включены: Nexus сам выберет поиск, генерацию или подключённый сервис'
+          : 'Включить автоматический выбор поиска и инструментов'
       }
     >
-      <Globe size={20} className="shrink-0" />
-      <span className="hidden sm:inline text-sm font-medium">Автопоиск</span>
+      <Sparkles size={20} className="shrink-0" />
+      <span className="hidden sm:inline text-sm font-medium">Автоинструменты</span>
     </button>
   );
 }

@@ -13,7 +13,7 @@
 
 | Компонент | URL |
 |-----------|-----|
-| Фронт | https://frontend-henna-tau-19.vercel.app |
+| Фронт | https://nexus-zeta-ruby-12.vercel.app |
 | Cloud | https://nexus-cloud-ee17.onrender.com |
 
 ---
@@ -36,7 +36,7 @@ ROUTER_AI_BASE_URL=https://routerai.ru/api/v1
 ROUTER_AI_ALLOW_PLATFORM_INFERENCE=false
 NEXUS_BILLING_TEST_MODE=false
 NEXUS_TESTING_MODE=false
-NEXUS_CORS_ORIGINS=https://frontend-henna-tau-19.vercel.app
+NEXUS_CORS_ORIGINS=https://nexus-zeta-ruby-12.vercel.app
 NEXUS_CLOUD_DATABASE_URL=sqlite:///./nexus_cloud_v2.db
 NEXUS_REMOTE_ADMIN=true
 NEXUS_ADMIN_PASSWORD=ваш-пароль

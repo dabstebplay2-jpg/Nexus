@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.config import is_testing_mode
 from app.database import InvoiceDB, UserDB
-from app.services.quota_limits import get_billing_period_start, start_subscription_period
 from app.services.polza import suspend_polza_for_user
+from app.services.quota_limits import get_billing_period_start, start_subscription_period
 from app.services.subscription_audit_log import (
     log_admin_invoice_recorded,
     log_enforce_skipped,
@@ -15,7 +16,6 @@ from app.services.subscription_audit_log import (
     log_tier_revoked_by_server,
     subscription_state_snapshot,
 )
-from app.config import is_testing_mode
 from app.tiers import normalize_tier, tier_requires_payment
 
 

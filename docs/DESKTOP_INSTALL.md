@@ -27,7 +27,7 @@ cd nexus-desktop
 1. **Nexus: Sign In** — войдите email/паролем облака.
 2. Проверьте настройки (**File → Preferences → Settings** → `nexus`):
    - `nexus.cloudUrl` — по умолчанию `https://nexus-cloud-ee17.onrender.com/v1`
-   - `nexus.webAppUrl` — веб-приложение (чат, тарифы): `https://frontend-henna-tau-19.vercel.app`
+   - `nexus.webAppUrl` — веб-приложение (чат, тарифы): `https://nexus-zeta-ruby-12.vercel.app`
 3. Откройте панель **Nexus → AI Chat**, выберите модель, отправьте сообщение.
 4. Расширения: **Ctrl+Shift+X** → поиск на [Open VSX](https://open-vsx.org) (Prettier, ESLint, Python, GitLens).
 

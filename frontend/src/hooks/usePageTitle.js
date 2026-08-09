@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 
 const TITLES = {
   '/': 'Чат',
+  '/no-code': 'No-Code Studio',
   '/ide/lite': 'IDE Web',
   '/browser': 'Скачать Browser',
   '/ide': 'Скачать IDE',
@@ -15,9 +16,19 @@ const TITLES = {
 
 export function usePageTitle() {
   const { pathname } = useLocation();
-  return useMemo(() => {
+  const title = useMemo(() => {
     if (TITLES[pathname]) return TITLES[pathname];
-    if (pathname.startsWith('/offer') || pathname.startsWith('/privacy')) return 'Документы';
+    if (
+      pathname.startsWith('/offer') ||
+      pathname.startsWith('/privacy') ||
+      pathname.startsWith('/requisites')
+    ) return 'Документы';
     return 'Nexus';
   }, [pathname]);
+
+  useEffect(() => {
+    document.title = title === 'Nexus' ? 'Nexus — ИИ-чат и рабочее пространство' : `${title} — Nexus`;
+  }, [title]);
+
+  return title;
 }

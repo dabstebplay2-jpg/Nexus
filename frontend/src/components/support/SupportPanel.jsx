@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, LifeBuoy, Loader2, RefreshCw, Paperclip, Send } from 'lucide-react';
+import { X, LifeBuoy, Loader2, MessageCircleQuestion, Paperclip, Plus, RefreshCw, Send } from 'lucide-react';
 import { useSupport } from '../../hooks/useSupport';
 import { useVisualViewportPadding } from '../../hooks/useVisualViewportPadding';
 import { processAttachmentFiles } from '../../lib/attachments';
@@ -84,6 +84,7 @@ export default function SupportPanel({ open, onClose, onNeedAuth }) {
     loadTicket,
     createTicket,
     sendMessage,
+    clearTicket,
     maxAttachments,
   } = useSupport();
 
@@ -102,10 +103,12 @@ export default function SupportPanel({ open, onClose, onNeedAuth }) {
   useEffect(() => {
     if (!open) return;
     setError('');
+    setView('list');
+    clearTicket();
     loadTickets().catch((e) => {
       setError(e?.message || 'Не удалось загрузить обращения');
     });
-  }, [open, loadTickets, setError]);
+  }, [open, clearTicket, loadTickets, setError]);
 
   useEffect(() => {
     if (detail && threadRef.current) {
@@ -184,25 +187,27 @@ export default function SupportPanel({ open, onClose, onNeedAuth }) {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 16 }}
-          className="w-full sm:max-w-2xl h-full sm:h-[min(90vh,720px)] flex flex-col bg-[var(--nx-bg)] border border-[var(--nx-border)] sm:rounded-2xl shadow-2xl overflow-hidden"
+          className="w-full sm:max-w-2xl h-full sm:h-[min(86vh,660px)] flex flex-col bg-[var(--nx-surface-strong)] border border-[var(--nx-border-strong)] sm:rounded-3xl shadow-2xl overflow-hidden"
           style={{ paddingBottom: keyboardPad ? `${keyboardPad}px` : undefined }}
           onClick={(e) => e.stopPropagation()}
         >
-          <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--nx-border)]">
+          <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 border-b border-[var(--nx-border)]">
             <div className="flex items-center gap-2">
-              <LifeBuoy size={20} className="text-teal-400" />
-              <h2 className="font-semibold text-lg">Поддержка</h2>
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-400/10 text-teal-300"><LifeBuoy size={18} /></span>
+              <div><h2 className="font-semibold text-base">Поддержка</h2><p className="hidden sm:block text-[10px] text-[var(--nx-muted)]">Ответы и история обращений</p></div>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="text-xs text-teal-400 hover:underline"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-teal-400/10 px-3 text-xs font-semibold text-teal-200 hover:bg-teal-400/15"
                 onClick={() => {
-                  setView(view === 'new' ? 'list' : 'new');
+                  const next = view === 'new' ? 'list' : 'new';
+                  setView(next);
+                  if (next === 'list') clearTicket();
                   setError('');
                 }}
               >
-                {view === 'new' ? 'Мои обращения' : 'Новое обращение'}
+                {view === 'new' ? 'Мои обращения' : <><Plus size={14} /> Новое</>}
               </button>
               <button
                 type="button"
@@ -218,13 +223,13 @@ export default function SupportPanel({ open, onClose, onNeedAuth }) {
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-5">
             {(error || attachErr) && (
-              <p className="text-sm text-amber-400 mb-3">{error || attachErr}</p>
+              <p className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2.5 text-sm text-amber-200 mb-4">{error || attachErr}</p>
             )}
 
             {view === 'new' && (
-              <div className="space-y-3 max-w-lg">
+              <div className="space-y-4 max-w-xl mx-auto">
                 <label className="block text-sm text-[var(--nx-muted)]">
                   Тип
                   <select
@@ -297,10 +302,18 @@ export default function SupportPanel({ open, onClose, onNeedAuth }) {
 
             {view === 'list' && !detail && (
               <div className="space-y-2">
+                {loading && tickets.length === 0 ? (
+                  <div className="space-y-2" aria-label="Загрузка обращений">
+                    {[0, 1, 2].map((item) => <div key={item} className="h-20 animate-pulse rounded-xl border border-[var(--nx-border)] bg-white/[0.03]" />)}
+                  </div>
+                ) : null}
                 {tickets.length === 0 && !loading && (
-                  <p className="text-sm text-[var(--nx-muted)] py-6 text-center">
-                    Обращений пока нет. Нажмите «Новое обращение».
-                  </p>
+                  <div className="flex min-h-[360px] flex-col items-center justify-center px-4 text-center">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-teal-400/20 bg-teal-400/10 text-teal-300"><MessageCircleQuestion size={25} /></span>
+                    <h3 className="mt-4 text-base font-semibold text-[var(--nx-text)]">Чем можем помочь?</h3>
+                    <p className="mt-2 max-w-sm text-sm leading-relaxed text-[var(--nx-muted)]">Опишите вопрос или ошибку. Можно приложить скриншот, файл и продолжить переписку здесь.</p>
+                    <button type="button" onClick={() => setView('new')} className="nx-btn nx-btn--primary mt-5"><Plus size={16} /> Создать обращение</button>
+                  </div>
                 )}
                 {tickets.map((t) => (
                   <button
@@ -338,6 +351,7 @@ export default function SupportPanel({ open, onClose, onNeedAuth }) {
                   className="text-xs text-teal-400 hover:underline mb-2 self-start"
                   onClick={() => {
                     setView('list');
+                    clearTicket();
                     loadTickets();
                   }}
                 >

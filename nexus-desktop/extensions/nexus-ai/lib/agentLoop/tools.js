@@ -1,11 +1,11 @@
 const vscode = require('vscode');
-const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const {
   readWorkspaceFile,
   applyToWorkspaceFile,
   searchWorkspace,
+  workspaceUriFor,
 } = require('../agentTools');
 const { getEditorContext } = require('../context');
 
@@ -38,9 +38,7 @@ function workspaceRoot() {
 }
 
 async function toolListDir(args) {
-  const folder = workspaceRoot();
-  const rel = (args.path || '.').replace(/\\/g, '/');
-  const uri = rel === '.' ? folder.uri : vscode.Uri.joinPath(folder.uri, rel);
+  const uri = workspaceUriFor(args.path || '.');
   const entries = await vscode.workspace.fs.readDirectory(uri);
   const lines = entries
     .filter(([n]) => !n.startsWith('.') && n !== 'node_modules')
@@ -66,10 +64,9 @@ async function toolWriteFile(args) {
   if (!p) throw new Error('path обязателен');
   if (content === undefined) throw new Error('content обязателен');
   const rel = String(p).replace(/\\/g, '/');
-  const confirmWrites = vscode.workspace.getConfiguration('nexus.ai').get('confirmWrites', false);
+  const confirmWrites = vscode.workspace.getConfiguration('nexus.ai').get('confirmWrites', true);
   if (confirmWrites) {
-    const folder = workspaceRoot();
-    const targetUri = vscode.Uri.joinPath(folder.uri, rel);
+    const targetUri = workspaceUriFor(rel, { allowRoot: false });
     let previous = '';
     try {
       previous = Buffer.from(await vscode.workspace.fs.readFile(targetUri)).toString('utf8');
@@ -98,8 +95,7 @@ async function toolDeletePath(args) {
   if (!p) throw new Error('path обязателен');
   const ok = await confirmDestructive(`Удалить «${p}» из workspace?`);
   if (!ok) return 'Отменено пользователем';
-  const folder = workspaceRoot();
-  const uri = vscode.Uri.joinPath(folder.uri, String(p).replace(/\\/g, '/'));
+  const uri = workspaceUriFor(p, { allowRoot: false });
   const edit = new vscode.WorkspaceEdit();
   edit.deleteFile(uri, { recursive: true, ignoreIfNotExists: false });
   const applied = await vscode.workspace.applyEdit(edit);
@@ -118,10 +114,11 @@ async function toolSearchWorkspace(args) {
 async function toolRunTerminal(args) {
   const command = String(args.command || '').trim();
   if (!command) throw new Error('command обязателен');
-  if (DANGEROUS_CMD.test(command)) {
-    const ok = await confirmDestructive(`Выполнить опасную команду?\n${command}`);
-    if (!ok) return 'Отменено пользователем';
-  }
+  const warning = DANGEROUS_CMD.test(command)
+    ? `Выполнить потенциально опасную команду?\n${command}`
+    : `Разрешить агенту выполнить команду?\n${command}`;
+  const ok = await confirmDestructive(warning);
+  if (!ok) return 'Отменено пользователем';
   const folder = workspaceRoot();
   const cwd = folder.uri.fsPath;
   const channel = vscode.window.createOutputChannel('Nexus AI Agent');

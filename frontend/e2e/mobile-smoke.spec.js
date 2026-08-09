@@ -1,6 +1,31 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('mobile viewport smoke', () => {
+  test.beforeEach(async ({ page }) => {
+    // UI smoke tests should stay deterministic when the cloud API is not
+    // running on a developer machine or CI worker.
+    await page.route('**/api/**', async (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('/auth/config')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            google_oauth_enabled: false,
+            telegram_auth_enabled: false,
+            email_auth_enabled: true,
+          }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'API unavailable in UI smoke test' }),
+      });
+    });
+  });
+
   test('home loads without horizontal overflow', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('body')).toBeVisible();

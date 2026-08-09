@@ -12,7 +12,7 @@ function buildUrl(base, path) {
 function streamNetworkError(path, cause) {
   const msg = cause?.message || String(cause);
   if (msg === 'Failed to fetch' || cause?.name === 'TypeError') {
-    return 'Нет связи с сервером. Проверьте интернет; если Render заблокирован у провайдера — обновите страницу (API идёт через Vercel).';
+    return 'Нет связи с Nexus. Проверьте интернет, обновите страницу и повторите попытку.';
   }
   if (cause?.name === 'AbortError') {
     return 'Поток ответа прерван по таймауту. Попробуйте ещё раз.';

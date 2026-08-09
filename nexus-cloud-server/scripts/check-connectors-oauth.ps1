@@ -65,7 +65,7 @@ try {
     # #endregion
     if ($status -eq 401) {
         Write-Host "ERROR 401 Unauthorized: invalid or expired token." -ForegroundColor Red
-        Write-Host "1. Log in at https://frontend-henna-tau-19.vercel.app" -ForegroundColor Yellow
+        Write-Host "1. Log in at https://nexus-zeta-ruby-12.vercel.app" -ForegroundColor Yellow
         Write-Host "2. F12 -> Application -> Local Storage -> nexus_access_token" -ForegroundColor Yellow
         Write-Host "3. Copy the entire eyJ... string (no ... at the end)." -ForegroundColor Yellow
         Write-Host "4. Log out and log in again if needed." -ForegroundColor Yellow

@@ -1,10 +1,11 @@
 """Агрегация usage-stats из транзакций AI_SPEND."""
 
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from app.database import SessionLocal, TransactionDB, UserDB
-from app.services.usage_stats import aggregate_usage_stats, _parse_transaction
+from app.services.usage_stats import _parse_transaction, aggregate_usage_stats
+from app.time_utils import utc_now
 
 
 def test_parse_transaction_from_description():
@@ -42,8 +43,8 @@ def test_aggregate_usage_stats_sums_by_model():
             email=f"usage-stats-{uuid.uuid4().hex[:8]}@test.local",
             hashed_password="x",
             subscription_tier="STANDARD",
-            subscription_period_start=datetime.utcnow() - timedelta(days=1),
-            subscription_period_end=datetime.utcnow() + timedelta(days=29),
+            subscription_period_start=utc_now() - timedelta(days=1),
+            subscription_period_end=utc_now() + timedelta(days=29),
         )
         db.add(user)
         db.flush()

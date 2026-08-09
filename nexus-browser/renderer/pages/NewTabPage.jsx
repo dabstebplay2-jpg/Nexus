@@ -100,7 +100,9 @@ export default function NewTabPage({
   };
 
   const wallpaperUrl = settings?.wallpaperPath
-    ? (settings.wallpaperPath.startsWith('http') ? settings.wallpaperPath : `local-file://${settings.wallpaperPath}`)
+    ? (settings.wallpaperPath.startsWith('http')
+        ? settings.wallpaperPath
+        : `local-file://wallpaper/${encodeURIComponent(settings.wallpaperPath)}`)
     : '';
 
   return (

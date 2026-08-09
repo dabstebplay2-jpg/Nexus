@@ -6,7 +6,7 @@ import base64
 import hashlib
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import timedelta
 from urllib.parse import urlencode
 
 import httpx
@@ -28,6 +28,7 @@ from app.config import (
 )
 from app.services.connectors.oauth_state import create_connector_oauth_state
 from app.services.connectors.store import upsert_connection
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +209,7 @@ async def handle_oauth_callback(
         }
         expires_at = None
         if tokens.get("expires_in"):
-            expires_at = datetime.utcnow() + timedelta(seconds=int(tokens["expires_in"]))
+            expires_at = utc_now() + timedelta(seconds=int(tokens["expires_in"]))
         label = "Google"
         async with httpx.AsyncClient(timeout=15.0) as client:
             ui = await client.get(

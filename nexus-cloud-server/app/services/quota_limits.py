@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import DAILY_ABUSE_CAP_FRACTION, SUBSCRIPTION_PERIOD_DAYS, is_testing_mode
 from app.database import TransactionDB, UserDB
 from app.tiers import normalize_tier, tier_allows_ai, tier_monthly_cap
+from app.time_utils import utc_now
 
 
 class QuotaLimitExceeded(Exception):
@@ -47,13 +48,13 @@ def is_subscription_period_expired(user: UserDB) -> bool:
     end = get_billing_period_end(user)
     if not end:
         return False
-    return datetime.utcnow() > end
+    return utc_now() > end
 
 
 def start_subscription_period(user: UserDB, db: Session, *, days: int | None = None) -> None:
     """Начало нового оплаченного периода (сброс учёта AI_SPEND по дате)."""
     period_days = days if days is not None else SUBSCRIPTION_PERIOD_DAYS
-    now = datetime.utcnow()
+    now = utc_now()
     user.subscription_period_start = now
     user.subscription_period_end = now + timedelta(days=period_days)
     db.commit()
@@ -97,7 +98,10 @@ def get_today_ai_spend(db: Session, user_id: int) -> float:
 
 def get_quota_limit_info(db: Session, user: UserDB) -> dict:
     from app.services.invoice_pool import get_user_period_pool_usd
-    from app.services.subscription_guard import sync_billing_period_if_paid, user_has_paid_subscription
+    from app.services.subscription_guard import (
+        sync_billing_period_if_paid,
+        user_has_paid_subscription,
+    )
     from app.tiers import tier_requires_payment
 
     tier = normalize_tier(user.subscription_tier)

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Coins, ArrowRight, Loader2 } from 'lucide-react';
+import { Coins, ArrowRight, CreditCard, KeyRound, Loader2, PieChart, ShieldCheck } from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
+import { PageHero, ProductPage, SurfaceCard } from '../components/ui/ProductPage';
 import TierPicker from '../components/TierPicker';
 import LegalFooter from '../components/LegalFooter';
 import { useAuth } from '../context/AuthContext';
@@ -10,7 +11,6 @@ import { LEGAL } from '../config/legal';
 import { formatBalanceRub } from '../lib/formatBalance';
 
 export default function PricingPage() {
-  const navigate = useNavigate();
   const { authStatus, createTopup, checkTopup, usdRubRate, fetchProfile } = useAuth();
   const [topupAmount, setTopupAmount] = useState('1000');
   const [topupMessage, setTopupMessage] = useState('');
@@ -129,47 +129,58 @@ export default function PricingPage() {
     };
   }, [authStatus.authorized, checkTopup, fetchProfile, usdRubRate]);
 
+  const scrollToTiers = () => {
+    document.getElementById('tier-picker')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
-    <AppShell hideHistory onOpenPricing={() => navigate('/profile')}>
-      <div className="nx-scroll-region custom-scrollbar relative z-10">
-        <div className="max-w-[min(1400px,100%)] mx-auto px-4 sm:px-6 py-10">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center mb-10"
-          >
-            <h1 className="nx-wordmark text-4xl sm:text-5xl text-[var(--nx-text)] mb-3">
-              Выберите свой план
-            </h1>
-            <p className="text-[var(--nx-muted)] max-w-lg mx-auto">
-              Цены в ₽ по курсу ЦБ. Оплата через ЮKassa. Продавец: {LEGAL.merchantName}, ИНН{' '}
-              {LEGAL.inn}.
-            </p>
-            <p className="text-xs text-[var(--nx-muted)] max-w-2xl mx-auto mt-3 leading-relaxed">
-              Оплата через Nexus (ЮKassa). После оплаты ключ ИИ выдаётся автоматически —
-              ~92% суммы тарифа становится месячным лимитом ИИ на аккаунте (8% — комиссия Nexus).
-            </p>
-            <p className="text-xs text-[var(--nx-muted)] max-w-2xl mx-auto mt-4 leading-relaxed">
-              Ориентиры как у ChatGPT Plus ($20), Claude Max ($100 / $200) — но у Nexus{' '}
-              <span className="text-cyan-400/90">~92% подписки</span> идёт в прозрачный месячный пул
-              ИИ (8% — комиссия платформы). Пул можно потратить за любой срок в течение 30 дней, а
-              после исчерпания — мгновенно пополнить баланс без смены тарифа.
-            </p>
-            <p className="text-xs text-[var(--nx-muted)] mt-4 max-w-md mx-auto">
-              Оформляя подписку, вы принимаете{' '}
-              <Link to="/offer" className="text-cyan-400 hover:underline">
-                публичную оферту
-              </Link>
-              .{' '}
-              <Link to="/requisites" className="text-cyan-400 hover:underline">
-                Реквизиты
-              </Link>
-              {' · '}
-              <Link to="/privacy" className="text-cyan-400 hover:underline">
-                Конфиденциальность
-              </Link>
-            </p>
+    <AppShell hideHistory onOpenPricing={scrollToTiers}>
+      <ProductPage>
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
+            <PageHero
+              eyebrow="Прозрачная оплата ИИ"
+              icon={PieChart}
+              title="Тариф под ваш темп работы"
+              description="Выберите месячный пул или начните бесплатно. Расход виден в аккаунте, а при исчерпании лимита баланс можно пополнить без смены тарифа."
+              actions={
+                <>
+                  <button type="button" className="nx-btn nx-btn--primary" onClick={scrollToTiers}>
+                    Сравнить тарифы <ArrowRight size={17} />
+                  </button>
+                  {authStatus.authorized ? (
+                    <a href="#topup" className="nx-btn nx-btn--secondary">
+                      Пополнить баланс
+                    </a>
+                  ) : null}
+                </>
+              }
+              aside={
+                <SurfaceCard className="p-5">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300"><ShieldCheck size={21} /></span>
+                    <div>
+                      <strong className="block text-sm text-[var(--nx-text)]">До 92% — на модели</strong>
+                      <span className="text-[11px] text-[var(--nx-muted)]">8% комиссия платформы</span>
+                    </div>
+                  </div>
+                  <p className="mt-4 text-xs leading-relaxed text-[var(--nx-muted)]">Ключ Polza.ai создаётся и привязывается к аккаунту автоматически после подтверждения оплаты.</p>
+                </SurfaceCard>
+              }
+            />
           </motion.div>
+
+          <div className="mb-10 grid gap-3 sm:grid-cols-3">
+            {[
+              { icon: CreditCard, title: 'Оплата через ЮKassa', text: 'Банковские карты и доступные способы ЮKassa.' },
+              { icon: KeyRound, title: 'Ключ без ручной настройки', text: 'Лимит Polza.ai выдаётся автоматически вашему аккаунту.' },
+              { icon: Coins, title: 'Расходы под контролем', text: 'Пул, пополнения и операции видны в настройках.' },
+            ].map(({ icon: Icon, title, text }) => (
+              <SurfaceCard key={title} className="flex items-start gap-3 p-4">
+                <Icon size={18} className="mt-0.5 shrink-0 text-teal-300" />
+                <div><h2 className="text-sm font-semibold text-[var(--nx-text)]">{title}</h2><p className="mt-1 text-xs leading-relaxed text-[var(--nx-muted)]">{text}</p></div>
+              </SurfaceCard>
+            ))}
+          </div>
 
           <div id="tier-picker" className="scroll-mt-24 pb-24 md:pb-0">
             <TierPicker
@@ -185,7 +196,7 @@ export default function PricingPage() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="mt-12 max-w-xl mx-auto rounded-2xl border border-white/10 bg-white/[0.02] p-6 sm:p-8 relative overflow-hidden scroll-mt-24"
+              className="nx-panel mt-12 max-w-xl mx-auto p-6 sm:p-8 relative overflow-hidden scroll-mt-24"
             >
               <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/5 rounded-full blur-3xl -mr-12 -mt-12 pointer-events-none" />
               
@@ -316,9 +327,14 @@ export default function PricingPage() {
             </motion.div>
           )}
 
-          <LegalFooter className="mt-12 rounded-2xl border border-white/5 bg-black/20" />
-        </div>
-      </div>
+          <p className="mt-12 text-center text-[11px] leading-relaxed text-[var(--nx-muted)]">
+            Продавец: {LEGAL.merchantName}, ИНН {LEGAL.inn}. Оформляя подписку, вы принимаете{' '}
+            <Link to="/offer" className="text-teal-400 hover:underline">публичную оферту</Link>
+            {' · '}<Link to="/requisites" className="text-teal-400 hover:underline">Реквизиты</Link>
+            {' · '}<Link to="/privacy" className="text-teal-400 hover:underline">Конфиденциальность</Link>
+          </p>
+          <LegalFooter className="mt-5 rounded-2xl border border-white/5 bg-black/20" />
+      </ProductPage>
       <div
         className="md:hidden fixed inset-x-0 z-20 px-4 py-3 border-t border-[var(--nx-border)] bg-[color-mix(in_srgb,var(--nx-sidebar)_96%,transparent)] backdrop-blur-xl"
         style={{ bottom: 'calc(var(--nx-dock-h) + var(--nx-safe-bottom))' }}

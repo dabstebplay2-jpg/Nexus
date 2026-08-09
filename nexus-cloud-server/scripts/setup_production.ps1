@@ -26,7 +26,7 @@ $lines = @(
     "ROUTER_AI_ALLOW_PLATFORM_INFERENCE=false"
     "NEXUS_CLOUD_SECRET_KEY=$($env:NEXUS_CLOUD_SECRET_KEY)"
     $dbLine
-    "NEXUS_CORS_ORIGINS=$(Get-EnvOrDefault 'NEXUS_CORS_ORIGINS' 'https://frontend-henna-tau-19.vercel.app')"
+    "NEXUS_CORS_ORIGINS=$(Get-EnvOrDefault 'NEXUS_CORS_ORIGINS' 'https://nexus-zeta-ruby-12.vercel.app')"
     "NEXUS_BILLING_TEST_MODE=false"
     "NEXUS_TESTING_MODE=false"
     "NEXUS_REMOTE_ADMIN=true"

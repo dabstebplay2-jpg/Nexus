@@ -1,4 +1,5 @@
 .env
+.cache/
 deploy/render-production.env
 .vercel
 __pycache__/

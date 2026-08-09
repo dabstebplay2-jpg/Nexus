@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -22,6 +21,7 @@ from app.services.openrouter import (
     require_openrouter_api_key,
 )
 from app.tiers import tier_uses_openrouter_free
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ def set_user_openrouter_key(
     user.openrouter_api_key_encrypted = encrypt_secret(api_key.strip())
     if key_hash:
         user.openrouter_key_hash = str(key_hash)
-    user.openrouter_key_created_at = datetime.utcnow()
+    user.openrouter_key_created_at = utc_now()
     db.commit()
     db.refresh(user)
 

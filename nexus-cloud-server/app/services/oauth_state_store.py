@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.config import AUTH_EXCHANGE_CODE_TTL_SEC, redis_persistence_enabled
 from app.database import AuthExchangeCodeDB, OAuthStateDB
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ def _redis_setex(key: str, ttl: int, value: str) -> None:
 def _persist_state_row(
     db: Session, *, state: str, pkce_verifier: str, return_to: str | None, expires_at: datetime
 ) -> None:
-    db.query(OAuthStateDB).filter(OAuthStateDB.expires_at < datetime.utcnow()).delete()
+    db.query(OAuthStateDB).filter(OAuthStateDB.expires_at < utc_now()).delete()
     db.merge(
         OAuthStateDB(
             state=state,
@@ -49,7 +50,7 @@ def _persist_state_row(
 def save_oauth_state(
     db: Session, *, state: str, pkce_verifier: str, return_to: str | None, expires_at: datetime
 ) -> None:
-    ttl = max(60, int((expires_at - datetime.utcnow()).total_seconds()))
+    ttl = max(60, int((expires_at - utc_now()).total_seconds()))
     payload = json.dumps(
         {"pkce_verifier": pkce_verifier, "return_to": return_to or "", "expires_at": expires_at.isoformat()},
         ensure_ascii=False,
@@ -71,7 +72,7 @@ def _parse_state_payload(raw: str) -> tuple[str, str]:
     exp = datetime.fromisoformat(str(data["expires_at"]).replace("Z", "+00:00"))
     if exp.tzinfo is not None:
         exp = exp.astimezone().replace(tzinfo=None)
-    if exp < datetime.utcnow():
+    if exp < utc_now():
         raise ValueError("Сессия OAuth истекла. Попробуйте снова.")
     return data.get("return_to") or "", data["pkce_verifier"]
 
@@ -94,7 +95,7 @@ def pop_oauth_state(db: Session, state: str) -> tuple[str, str]:
             logger.warning("Redis oauth state load failed, trying DB: %s", exc)
 
     row = db.query(OAuthStateDB).filter(OAuthStateDB.state == state).first()
-    if not row or row.expires_at < datetime.utcnow():
+    if not row or row.expires_at < utc_now():
         raise ValueError("Сессия OAuth истекла. Попробуйте снова.")
     return_to = row.return_to or ""
     verifier = row.pkce_verifier
@@ -104,7 +105,7 @@ def pop_oauth_state(db: Session, state: str) -> tuple[str, str]:
 
 
 def store_exchange_code(db: Session, user_id: int, code: str) -> None:
-    expires = datetime.utcnow() + timedelta(seconds=AUTH_EXCHANGE_CODE_TTL_SEC)
+    expires = utc_now() + timedelta(seconds=AUTH_EXCHANGE_CODE_TTL_SEC)
     ttl = AUTH_EXCHANGE_CODE_TTL_SEC
 
     if redis_persistence_enabled():
@@ -113,7 +114,7 @@ def store_exchange_code(db: Session, user_id: int, code: str) -> None:
         except Exception as exc:
             logger.warning("Redis exchange code save failed, using DB only: %s", exc)
 
-    db.query(AuthExchangeCodeDB).filter(AuthExchangeCodeDB.expires_at < datetime.utcnow()).delete()
+    db.query(AuthExchangeCodeDB).filter(AuthExchangeCodeDB.expires_at < utc_now()).delete()
     db.add(AuthExchangeCodeDB(code=code, user_id=user_id, expires_at=expires))
     db.commit()
 
@@ -137,7 +138,7 @@ def pop_exchange_user_id(db: Session, exchange_code: str) -> int:
         .filter(AuthExchangeCodeDB.code == exchange_code)
         .first()
     )
-    if not row or row.expires_at < datetime.utcnow():
+    if not row or row.expires_at < utc_now():
         raise ValueError("Код входа недействителен или истёк")
     user_id = row.user_id
     db.delete(row)

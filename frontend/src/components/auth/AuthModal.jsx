@@ -96,7 +96,9 @@ export default function AuthModal() {
   const [err, setErr] = useState('');
   const [resendIn, setResendIn] = useState(RESEND_SEC);
   const [emailCooldown, setEmailCooldown] = useState(0);
+  const [devCode, setDevCode] = useState('');
   const inputRefs = useRef([]);
+  const dialogRef = useRef(null);
 
   const gmailAddress = isGoogleMailbox(email);
 
@@ -108,8 +110,29 @@ export default function AuthModal() {
       setErr('');
       setResendIn(RESEND_SEC);
       setEmailCooldown(0);
+      setDevCode('');
     }
   }, [authModalOpen]);
+
+  useEffect(() => {
+    if (!authModalOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const previousFocus = document.activeElement;
+    document.body.style.overflow = 'hidden';
+    const frame = window.requestAnimationFrame(() => {
+      dialogRef.current?.querySelector('input, button:not(.auth-modal-close)')?.focus();
+    });
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') closeAuthModal();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
+    };
+  }, [authModalOpen, closeAuthModal]);
 
   useEffect(() => {
     if (step !== 'otp' || resendIn <= 0) return undefined;
@@ -152,7 +175,8 @@ export default function AuthModal() {
     setBusy(true);
     setErr('');
     try {
-      await requestEmailCode(email);
+      const data = await requestEmailCode(email);
+      setDevCode(data?.dev_code || '');
       setStep('otp');
       setResendIn(RESEND_SEC);
       setEmailCooldown(0);
@@ -195,7 +219,8 @@ export default function AuthModal() {
     setBusy(true);
     setErr('');
     try {
-      await requestEmailCode(email);
+      const data = await requestEmailCode(email);
+      setDevCode(data?.dev_code || '');
       setResendIn(RESEND_SEC);
     } catch (ex) {
       applyRateLimitError(setResendIn, setErr, ex);
@@ -206,6 +231,8 @@ export default function AuthModal() {
 
   if (!authModalOpen) return null;
 
+  const noAuthProviders =
+    authConfigLoaded && !googleOAuthAvailable && !emailAuthEnabled && !telegramAuthEnabled;
   const googleOnly = authConfigLoaded && googleOAuthAvailable && !emailAuthEnabled;
   const emailSubmitDisabled = busy || emailCooldown > 0;
 
@@ -219,12 +246,14 @@ export default function AuthModal() {
         onClick={closeAuthModal}
       >
         <motion.div
+          ref={dialogRef}
           className="auth-modal"
           initial={{ opacity: 0, scale: 0.96, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 12 }}
           onClick={(e) => e.stopPropagation()}
           role="dialog"
+          aria-modal="true"
           aria-labelledby="auth-modal-title"
         >
           <button type="button" className="auth-modal-close" onClick={closeAuthModal} aria-label="Закрыть">
@@ -242,16 +271,27 @@ export default function AuthModal() {
           {step === 'email' ? (
             <>
               <h2 id="auth-modal-title">
-                {googleOnly ? 'Войти через Google' : 'Войти или создать аккаунт'}
+                {noAuthProviders
+                  ? 'Вход временно недоступен'
+                  : googleOnly
+                    ? 'Войти через Google'
+                    : 'Войти или создать аккаунт'}
               </h2>
               <p className="auth-modal-sub">
-                {googleOnly
-                  ? 'Один аккаунт Google — чаты, тариф и баланс на сайте и в IDE.'
-                  : 'Чаты, тариф и баланс сохраняются на всех устройствах под одним email.'}
+                {noAuthProviders
+                  ? 'Cloud API запущен, но на сервере ещё не настроен способ входа.'
+                  : googleOnly
+                    ? 'Один аккаунт Google — чаты, тариф и баланс на сайте и в IDE.'
+                    : 'Чаты, тариф и баланс сохраняются на всех устройствах под одним email.'}
               </p>
 
               {!authConfigLoaded ? (
                 <p className="auth-google-hint auth-google-hint--muted">Проверяем доступность входа…</p>
+              ) : noAuthProviders ? (
+                <div className="auth-setup-warning">
+                  На Render настройте <strong>RESEND_API_KEY</strong> для входа по email или
+                  Google OAuth. После сохранения переменных перезапустите <strong>nexus-cloud</strong>.
+                </div>
               ) : googleOnly ? (
                 googleOAuthAvailable ? (
                   <>
@@ -344,7 +384,7 @@ export default function AuthModal() {
                     </>
                   ) : !telegramAuthEnabled ? (
                     <p className="auth-google-hint auth-google-hint--muted">
-                      Вход через Google скоро будет доступен. Пока используйте код на email.
+                      Вход по email защищён одноразовым кодом — пароль не нужен.
                     </p>
                   ) : null}
                   {(telegramAuthEnabled || googleOAuthAvailable) ? (
@@ -353,7 +393,7 @@ export default function AuthModal() {
                 </>
               )}
 
-              {!googleOnly && (
+              {!googleOnly && !noAuthProviders && emailAuthEnabled && (
                 <>
                   {gmailAddress && googleOAuthAvailable && (
                     <p className="auth-gmail-tip">
@@ -389,6 +429,21 @@ export default function AuthModal() {
                 Мы отправили 6-значный код на <strong style={{ color: '#e4e4e7' }}>{email}</strong>
               </p>
 
+              {devCode && (
+                <button
+                  type="button"
+                  className="auth-dev-code"
+                  disabled={busy}
+                  onClick={() => {
+                    setDigits(devCode.split(''));
+                    submitCode(devCode);
+                  }}
+                >
+                  <span>Локальный режим — нажмите для входа</span>
+                  <strong>{devCode}</strong>
+                </button>
+              )}
+
               <div className="auth-otp-row" onPaste={handlePaste}>
                 {digits.map((d, i) => (
                   <input
@@ -419,7 +474,14 @@ export default function AuthModal() {
                   ? `Отправить снова через ${formatRetryCountdown(resendIn)}`
                   : 'Отправить код снова'}
               </button>
-              <button type="button" className="auth-back" onClick={() => setStep('email')}>
+              <button
+                type="button"
+                className="auth-back"
+                onClick={() => {
+                  setDevCode('');
+                  setStep('email');
+                }}
+              >
                 ← Изменить email
               </button>
             </>
@@ -451,7 +513,7 @@ export default function AuthModal() {
             </>
           )}
 
-          {err && <p className="auth-error">{err}</p>}
+          {err && <p className="auth-error" role="alert" aria-live="polite">{err}</p>}
 
           <p className="auth-legal-note">
             Продолжая, вы принимаете{' '}

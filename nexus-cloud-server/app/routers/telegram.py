@@ -14,9 +14,9 @@ from app.config import (
     telegram_bot_enabled,
 )
 from app.database import UserDB, get_db
+from app.schemas import MessageResponse, TelegramExchangeRequest
 from app.security import get_current_user
 from app.services.auth_rate_limit import check_rate_limit
-from app.schemas import MessageResponse, TelegramExchangeRequest
 from app.services.telegram_auth import link_telegram_from_exchange
 from app.services.telegram_link import build_deep_link, create_link_token
 
@@ -82,6 +82,7 @@ async def telegram_webhook(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid webhook secret")
 
     from aiogram.types import Update
+
     from app.services.telegram_bot import get_bot_and_dispatcher
 
     bot, dp = get_bot_and_dispatcher()

@@ -11,19 +11,18 @@ from sqlalchemy.orm import Session
 from app.config import NEXUS_FRONTEND_URL
 from app.database import UserDB, get_db
 from app.security import get_current_user
+from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
+from app.services.invoice_pool import get_user_period_pool_usd
 from app.services.polza import (
     PolzaError,
     create_pkce_session,
     exchange_code_for_key,
     fetch_user_balance_rub,
-    get_user_polza_key,
     resolve_oauth_callback_url,
     set_user_polza_key,
     sync_polza_key_limit_after_payment,
     user_has_polza_key,
 )
-from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
-from app.services.invoice_pool import get_user_period_pool_usd
 from app.services.quota_limits import get_quota_limit_info
 
 logger = logging.getLogger(__name__)
@@ -56,7 +55,7 @@ async def polza_callback(
     db: Session = Depends(get_db),
 ):
     """Callback после consent screen Polza.ai."""
-    frontend = (NEXUS_FRONTEND_URL or "https://frontend-henna-tau-19.vercel.app").rstrip("/")
+    frontend = (NEXUS_FRONTEND_URL or "https://nexus-zeta-ruby-12.vercel.app").rstrip("/")
     if error:
         return RedirectResponse(f"{frontend}/?polza=denied&settings=usage")
     if not code or not state:

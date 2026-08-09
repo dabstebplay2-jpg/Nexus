@@ -2,8 +2,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import CORS_ORIGINS
-from app.tokens import reset_request_bearer, set_request_bearer
 from app.routers import ai, auth, billing, database, files, git, search, terminal, tools, workspace
+from app.tokens import reset_request_bearer, set_request_bearer
 
 app = FastAPI(title="Nexus IDE Backend")
 

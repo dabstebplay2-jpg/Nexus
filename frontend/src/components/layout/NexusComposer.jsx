@@ -21,7 +21,7 @@ import WebSearchDepthPicker from '../chat/WebSearchDepthPicker';
 import { useVisualViewportPadding } from '../../hooks/useVisualViewportPadding';
 
 const WEB_SEARCH_HINT =
-  'Автопоиск: ищет в интернете только когда нужны свежие факты. «Привет», творческие задачи и общие вопросы — без поиска.';
+  'Nexus сам решит, нужен ли поиск, генератор изображения или подключённый сервис. Обычные вопросы отвечаются без лишних вызовов.';
 
 export default function NexusComposer({
   value,
@@ -83,7 +83,7 @@ export default function NexusComposer({
     mode === 'research'
       ? 'Глубокое исследование: подробный отчёт с источниками…'
       : webSearchActive
-        ? 'Вопрос с поиском в интернете…'
+        ? 'Задайте вопрос — Nexus сам выберет нужный инструмент…'
         : isMedia
           ? 'Опишите картинку, которую нужно сгенерировать…'
           : 'Задайте любой вопрос…';
@@ -120,7 +120,7 @@ export default function NexusComposer({
                 submit();
               }
             }}
-            rows={centered ? 3 : 2}
+            rows={2}
             disabled={disabled}
             placeholder={placeholder || defaultPlaceholder}
             className="w-full resize-none bg-transparent px-4 pt-4 pb-3 md:px-6 md:pt-5 text-[var(--nx-text)] placeholder:text-[var(--nx-muted)] outline-none min-h-[64px] md:min-h-[72px]"
@@ -139,7 +139,7 @@ export default function NexusComposer({
                   <button
                     type="button"
                     onClick={() => setAttachOpen((o) => !o)}
-                    className="p-2 md:p-3 min-h-[44px] min-w-[44px] md:min-h-[52px] md:min-w-[52px] flex items-center justify-center rounded-2xl hover:bg-[var(--nx-surface-hover)] text-[var(--nx-muted)]"
+                    className="p-2 min-h-[40px] min-w-[40px] flex items-center justify-center rounded-2xl hover:bg-[var(--nx-surface-hover)] text-[var(--nx-muted)]"
                     title="Вложения"
                   >
                     <Plus size={22} />
@@ -215,7 +215,10 @@ export default function NexusComposer({
                 <button
                   type="button"
                   onClick={() => setSearchOpen((o) => !o)}
-                  className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-3 min-h-[44px] md:min-h-[52px] rounded-full bg-[var(--nx-surface-hover)] text-sm md:text-base font-medium"
+                  aria-label={mode === 'research' ? 'Режим: глубокое исследование' : 'Режим: обычный чат'}
+                  aria-expanded={searchOpen}
+                  aria-haspopup="menu"
+                  className="flex items-center gap-1.5 md:gap-2 px-3 py-2 min-h-[40px] rounded-full bg-[var(--nx-surface-hover)] text-sm font-medium"
                 >
                   {mode === 'research' ? (
                     <>
@@ -288,7 +291,7 @@ export default function NexusComposer({
                 <button
                   type="button"
                   onClick={onOpenSupport}
-                  className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full border border-[var(--nx-border)] text-[var(--nx-muted)] hover:text-teal-400 hover:border-teal-500/40 shrink-0"
+                  className="p-2 min-h-[40px] min-w-[40px] flex items-center justify-center rounded-full border border-[var(--nx-border)] text-[var(--nx-muted)] hover:text-teal-400 hover:border-teal-500/40 shrink-0"
                   title="Поддержка"
                 >
                   <LifeBuoy size={18} />

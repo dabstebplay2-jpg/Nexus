@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from app.database import TransactionDB, UserDB
 from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
 from app.services.quota_limits import get_billing_period_end, get_billing_period_start
+from app.time_utils import utc_now
 
 _TX_DESC_RE = re.compile(
     r"Квота:\s*(.+?)\s*\((\d+)\+(\d+)\s*tok\)",
@@ -43,7 +43,7 @@ def _parse_transaction(tx: TransactionDB) -> tuple[str, int, int] | None:
 def aggregate_usage_stats(db: Session, user: UserDB) -> dict:
     start = get_billing_period_start(user)
     end = get_billing_period_end(user)
-    now = datetime.utcnow()
+    now = utc_now()
 
     q = db.query(TransactionDB).filter(
         TransactionDB.user_id == user.id,

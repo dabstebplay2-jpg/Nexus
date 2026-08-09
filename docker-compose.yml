@@ -25,7 +25,9 @@ services:
     environment:
       NEXUS_CLOUD_SERVER_URL: http://cloud:8080
     ports:
-      - "8000:8000"
+      # The IDE backend exposes terminal and filesystem tools. Never publish it
+      # on a public interface; the browser UI reaches it from this host only.
+      - "127.0.0.1:8000:8000"
     depends_on:
       cloud:
         condition: service_healthy

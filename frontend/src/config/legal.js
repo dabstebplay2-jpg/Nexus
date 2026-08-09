@@ -10,7 +10,7 @@ export const LEGAL = {
   email: 'nexusai1995@mail.ru',
   siteUrl:
     (typeof import.meta !== 'undefined' && import.meta.env?.VITE_PUBLIC_SITE_URL) ||
-    'https://frontend-henna-tau-19.vercel.app',
+    'https://nexus-zeta-ruby-12.vercel.app',
   paymentProvider: 'ООО НКО «ЮMoney» (сервис ЮKassa)',
   supportHours: 'Ответ на обращения — в течение 3 рабочих дней',
 };

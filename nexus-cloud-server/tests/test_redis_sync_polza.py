@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from app.database import UserDB
+from app.database import UserDB, WorkspaceDB
 from app.services.redis_sync import export_snapshot, import_snapshot
 
 
@@ -18,15 +18,24 @@ def test_user_snapshot_roundtrip_preserves_polza_fields(db_session):
     user.openrouter_api_key_encrypted = "enc:sk-or-test"
     user.openrouter_key_hash = "or-hash-1"
     user.openrouter_key_created_at = datetime(2026, 6, 6, 10, 0, 0)
+    db.add(
+        WorkspaceDB(
+            user_id=user.id,
+            workspace_id="ws-snapshot",
+            name="Снимок проекта",
+            emoji="🧪",
+        )
+    )
     db.commit()
 
     payload = export_snapshot(db)
-    assert payload["v"] == 4
+    assert payload["v"] == 5
     polza_row = payload["users"][0]
     assert polza_row["polza_api_key_encrypted"] == "enc:pza_test"
     assert polza_row["polza_key_id"] == "pk-1"
     assert polza_row["openrouter_api_key_encrypted"] == "enc:sk-or-test"
     assert polza_row["openrouter_key_hash"] == "or-hash-1"
+    assert payload["workspaces"][0]["workspace_id"] == "ws-snapshot"
 
     import_snapshot(db, payload)
     restored = db.query(UserDB).filter(UserDB.id == 1).one()
@@ -37,6 +46,9 @@ def test_user_snapshot_roundtrip_preserves_polza_fields(db_session):
     assert restored.openrouter_api_key_encrypted == "enc:sk-or-test"
     assert restored.openrouter_key_hash == "or-hash-1"
     assert restored.openrouter_key_created_at == datetime(2026, 6, 6, 10, 0, 0)
+    restored_workspace = db.query(WorkspaceDB).filter(WorkspaceDB.user_id == restored.id).one()
+    assert restored_workspace.name == "Снимок проекта"
+    assert restored_workspace.emoji == "🧪"
 
 
 def test_user_from_dict_v1_snapshot_without_polza_defaults_none(db_session):

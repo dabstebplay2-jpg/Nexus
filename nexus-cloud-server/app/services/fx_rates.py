@@ -11,6 +11,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.database import FxRateDB, SessionLocal
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ def _is_stale(row: FxRateDB, today: str) -> bool:
 
 def _save_rate_to_db(db: Session, day: str, rate: float, source: str = "cbr") -> FxRateDB:
     row = _load_rate_row(db, day)
-    now = datetime.utcnow()
+    now = utc_now()
     if row:
         row.usd_rub = rate
         row.source = source

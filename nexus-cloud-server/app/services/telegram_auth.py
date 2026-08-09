@@ -7,7 +7,6 @@ import hmac
 import logging
 import time
 import uuid
-from datetime import datetime
 from urllib.parse import quote
 
 from sqlalchemy.exc import IntegrityError
@@ -16,12 +15,17 @@ from sqlalchemy.orm import Session
 from app.config import NEXUS_FRONTEND_URL, TELEGRAM_BOT_TOKEN, telegram_bot_enabled
 from app.database import UserDB
 from app.services.auth_session import _add_auth_method, issue_tokens_and_setup
-from app.services.google_oauth import _issue_exchange_jwt, _resolve_exchange_claims, exchange_auth_code
+from app.services.google_oauth import (
+    _issue_exchange_jwt,
+    _resolve_exchange_claims,
+    exchange_auth_code,
+)
 from app.services.telegram_link import (
     attach_telegram_to_user,
     get_user_by_telegram_id,
     is_tg_shadow_email,
 )
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -236,7 +240,7 @@ async def bind_email_for_telegram_user(
     )
     if not row:
         raise ValueError("Код недействителен. Запросите новый.")
-    now = datetime.utcnow()
+    now = utc_now()
     if row.expires_at < now:
         db.delete(row)
         db.commit()

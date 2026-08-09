@@ -31,4 +31,4 @@
 
 ## Обновление
 
-**Extensions → Install from VSIX…** — файл с [сайта Nexus](https://frontend-henna-tau-19.vercel.app/extensions/nexus-ai.vsix) или из релиза Desktop.
+**Extensions → Install from VSIX…** — файл с [сайта Nexus](https://nexus-zeta-ruby-12.vercel.app/extensions/nexus-ai.vsix) или из релиза Desktop.

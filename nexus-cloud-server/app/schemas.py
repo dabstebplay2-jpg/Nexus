@@ -50,6 +50,8 @@ class TelegramLoginRequest(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+    # Возвращается только локально при NEXUS_AUTH_DEV_LOG_CODES=true.
+    dev_code: str | None = Field(default=None, pattern=r"^\d{6}$")
 
 
 class RefreshRequest(BaseModel):
@@ -67,6 +69,12 @@ class TokenResponse(BaseModel):
 class AuthConfigResponse(BaseModel):
     google_oauth_enabled: bool
     email_auth_enabled: bool = True
+    email_delivery_ready: bool = False
+    billing_enabled: bool = False
+    polza_ai_enabled: bool = False
+    polza_autoprovision_enabled: bool = False
+    database_persistent: bool = False
+    free_ai_enabled: bool = False
     telegram_auth_enabled: bool = False
     telegram_bot_username: str | None = None
     telegram_login_domain: str | None = None
@@ -175,10 +183,12 @@ class SimpleChatRequest(BaseModel):
     agent_id: Optional[str] = Field(None, max_length=64)
     attachments: list[ChatAttachment] = Field(default_factory=list, max_length=8)
     use_web_search: bool = False
+    auto_tools: bool = True
     web_search_depth: str = Field(default="standard", max_length=16)
     conversation_sources: list[ConversationSourceItem] = Field(default_factory=list, max_length=80)
     enable_thinking: bool = False
     use_connectors: bool = True
+    preferred_image_model: Optional[str] = Field(None, max_length=256)
     page_context: BrowserPageContext | None = None
     browser_agent: bool = False
     browser_agent_steps: list[BrowserAgentStep] = Field(default_factory=list, max_length=24)
@@ -276,6 +286,23 @@ class ChatSyncRequest(BaseModel):
 
 class ChatImportRequest(BaseModel):
     conversations: list[ChatConversationPayload] = Field(default_factory=list)
+
+
+class WorkspacePayload(BaseModel):
+    id: str = Field(min_length=3, max_length=64)
+    name: str = Field(min_length=1, max_length=120)
+    emoji: str = Field(default="✨", min_length=1, max_length=16)
+    createdAt: int | float | None = None
+    updatedAt: int | float | None = None
+
+
+class SpaceStatePayload(BaseModel):
+    workspaces: list[WorkspacePayload] = Field(default_factory=list, max_length=40)
+    conversations: list[ChatConversationPayload] = Field(default_factory=list, max_length=240)
+
+
+class SpaceStateResponse(SpaceStatePayload):
+    pass
 
 
 class ArtifactPayload(BaseModel):

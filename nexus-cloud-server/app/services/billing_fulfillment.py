@@ -7,16 +7,16 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app.database import InvoiceDB, UserDB, TransactionDB
+from app.database import InvoiceDB, TransactionDB, UserDB
 from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
 from app.services.invoice_pool import invoice_pool_usd, persist_invoice_pool_usd
 from app.services.platform_funding import record_payment_obligation
-from app.services.quota_limits import get_quota_limit_info
 from app.services.polza import (
     provision_polza_for_user,
     sync_polza_key_limit_after_payment,
     user_has_polza_key,
 )
+from app.services.quota_limits import get_quota_limit_info
 from app.services.subscription_activate import activate_paid_tier
 from app.tiers import normalize_tier, tier_requires_payment
 
@@ -214,10 +214,10 @@ async def fulfill_topup_invoice(
 
     pool_usd = persist_invoice_pool_usd(invoice, rate=rate)
     invoice.status = "paid"
-    
+
     old_balance = float(user.balance or 0)
     user.balance = round(old_balance + pool_usd, 6)
-    
+
     db.add(
         TransactionDB(
             user_id=user.id,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -15,11 +15,13 @@ from app.config import (
 )
 from app.database import InvoiceDB, PlatformFundingObligationDB, PlatformSettingsDB
 from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
+from app.time_utils import utc_now
+
 logger = logging.getLogger(__name__)
 
 
 def _utc_now() -> datetime:
-    return datetime.utcnow()
+    return utc_now()
 
 
 def _month_start_utc() -> datetime:

@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from app.config import is_testing_mode
 from app.database import UserDB
 from app.security import create_access_token
-from app.services.polza import suspend_polza_for_user
+from app.services.polza import provision_polza_for_user, suspend_polza_for_user, user_has_polza_key
 from app.services.subscription_guard import enforce_paid_subscription
 from app.services.testing_mode import ensure_testing_subscription
 from app.tiers import normalize_tier, tier_requires_payment
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ def _add_auth_method(user: UserDB, method: str) -> None:
 async def issue_tokens_and_setup(db: Session, user: UserDB, *, mark_email_verified: bool = False) -> dict:
     """Enforce tier/Polza, rotate refresh token, return TokenResponse dict."""
     if mark_email_verified and not getattr(user, "email_verified_at", None):
-        user.email_verified_at = datetime.utcnow()
+        user.email_verified_at = utc_now()
 
     if is_testing_mode():
         await ensure_testing_subscription(db, user, tier="ULTRA")
@@ -41,6 +42,13 @@ async def issue_tokens_and_setup(db: Session, user: UserDB, *, mark_email_verifi
         db.refresh(user)
         if not tier_requires_payment(tier):
             await suspend_polza_for_user(user, db)
+        elif not user_has_polza_key(user):
+            # Existing paid accounts self-heal after a deploy or provider-key reset.
+            # Keep login responsive: inference performs the same repair again if MCP is slow.
+            try:
+                await asyncio.wait_for(provision_polza_for_user(user, db, force=False), timeout=8.0)
+            except Exception as exc:
+                logger.warning("Polza auto-repair during login failed for user=%s: %s", user.id, exc)
 
     refresh_token = "ref_" + str(uuid.uuid4())
     user.refresh_token = refresh_token
@@ -69,7 +77,7 @@ async def ensure_user_after_otp(db: Session, email: str) -> UserDB:
         subscription_tier="FREE",
         balance=0.0,
         refresh_token=refresh_token,
-        email_verified_at=datetime.utcnow(),
+        email_verified_at=utc_now(),
         auth_methods="email_otp",
     )
     db.add(user)

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { RefreshCw } from 'lucide-react';
+import { ArrowUpRight, RefreshCw, Sparkles } from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
 import NexusComposer from '../components/layout/NexusComposer';
 import ChatMessage from '../components/chat/ChatMessage';
@@ -45,14 +45,22 @@ import ConnectorChips from '../features/connectors/ConnectorChips';
 import { fetchConnectorsSummary } from '../features/connectors/connectorsApi';
 import ChatComposerBanners from '../components/chat/ChatComposerBanners';
 import { warmApiHealthOnce } from '../lib/warmApiHealth';
-import HomeFeatures from '../components/home/HomeFeatures';
-import { BrowserDownloadHeroCta, BrowserDownloadPill, BrowserDownloadStrip } from '../components/BrowserDownloadCta';
-import { Code2 } from 'lucide-react';
-import ChatHeaderOverflow from '../components/chat/ChatHeaderOverflow';
+import NoCodePresetBar from '../features/noCode/NoCodePresetBar';
+import {
+  buildNoCodeSystemPrompt,
+  detectNoCodePreset,
+  getNoCodePreset,
+  getNoCodeSuggestions,
+} from '../features/noCode/noCodeConfig';
 
-const TOPICS = ['Финансы', 'Код', 'Research', 'Учёба'];
+function getConversationExperience(conversation) {
+  if (!conversation) return 'chat';
+  if (conversation.experience === 'nocode') return 'nocode';
+  return detectNoCodePreset(conversation.messages || []) ? 'nocode' : 'chat';
+}
 
-export default function ChatPage() {
+export default function ChatPage({ experience = 'chat' }) {
+  const isNoCodeExperience = experience === 'nocode';
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { authStatus, fetchProfile, openAuthModal, openSettingsModal, loading: authLoading } = useAuth();
@@ -65,6 +73,7 @@ export default function ChatPage() {
   const [selectedModel, setSelectedModel] = useState('');
   const [selectedAgent] = useState('quick');
   const [mode, setMode] = useState('chat');
+  const [noCodePreset, setNoCodePreset] = useState('auto');
   const [modelsError, setModelsError] = useState('');
   const [streamingId, setStreamingId] = useState(null);
   const [attachments, setAttachments] = useState([]);
@@ -86,8 +95,31 @@ export default function ChatPage() {
   const skipGuestSaveOnceRef = useRef(false);
   const allowGuestLocalSaveRef = useRef(false);
   const guestHydratedRef = useRef(false);
-  const activeConv = chatState.conversations.find((c) => c.id === chatState.activeConversationId);
-  const hasMessages = Boolean(activeConv?.messages?.length);
+  const experienceKey = isNoCodeExperience ? 'nocode' : 'chat';
+  const activeConvCandidate = chatState.conversations.find(
+    (c) => c.id === chatState.activeConversationId
+  );
+  const activeConv =
+    activeConvCandidate && getConversationExperience(activeConvCandidate) === experienceKey
+      ? activeConvCandidate
+      : null;
+  const hasMessages = Boolean(activeConv?.messages?.some((message) => message.role !== 'system'));
+  const noCodePresetMeta = useMemo(() => getNoCodePreset(noCodePreset), [noCodePreset]);
+
+  useEffect(() => {
+    if (chatState.activeConversationId && activeConvCandidate && !activeConv) {
+      setChatState((state) => ({ ...state, activeConversationId: null }));
+    }
+  }, [experienceKey, chatState.activeConversationId, activeConvCandidate, activeConv]);
+
+  useEffect(() => {
+    if (!isNoCodeExperience || !activeConv?.messages?.length) return;
+    const detected = detectNoCodePreset(activeConv.messages);
+    if (detected && detected !== noCodePreset) {
+      setNoCodePreset(detected);
+    }
+  }, [isNoCodeExperience, activeConv?.id, activeConv?.messages, noCodePreset]);
+
   const { tiers } = usePricingCatalog();
   const tier = tierByIdFromList(tiers, authStatus.profile?.subscription_tier || 'FREE');
   const allModels = useMemo(
@@ -304,12 +336,13 @@ export default function ChatPage() {
   const ensureConversation = useCallback(() => {
     if (chatState.activeConversationId) {
       const c = chatState.conversations.find((x) => x.id === chatState.activeConversationId);
-      if (c) return c.id;
+      if (c && getConversationExperience(c) === experienceKey) return c.id;
     }
     const id = uid();
     const conv = {
       id,
-      title: 'Новый чат',
+      title: isNoCodeExperience ? 'Новый проект' : 'Новый чат',
+      experience: experienceKey,
       messages: [],
       model: selectedModel,
       createdAt: Date.now(),
@@ -328,6 +361,8 @@ export default function ChatPage() {
     selectedModel,
     isCloudMode,
     persistConversation,
+    experienceKey,
+    isNoCodeExperience,
   ]);
 
   const { loading, sendMessage, stopGeneration } = useNexusChat({
@@ -422,6 +457,7 @@ export default function ChatPage() {
       enableThinking: Boolean(
         finalModelMeta && usesReasoningApiForThinking(finalModelMeta)
       ),
+      systemPrompt: isNoCodeExperience ? buildNoCodeSystemPrompt(noCodePreset) : '',
     });
     setStreamingId(null);
   };
@@ -429,17 +465,20 @@ export default function ChatPage() {
   const modelPool = mode === 'research' ? researchModels : models;
   const historyItems = authStatus.authorized
     ? [...chatState.conversations]
+        .filter((conversation) => getConversationExperience(conversation) === experienceKey)
         .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
         .slice(0, 40)
         .map((c) => ({ id: c.id, title: c.title }))
     : [];
 
-  const suggested = [
-    'Объясни квантовые компьютеры простыми словами',
-    'Новости ИИ за эту неделю',
-    'Сравни GPT-5.5 и Claude Opus 4.8',
-    'План MVP SaaS за 2 недели',
-  ];
+  const suggested = isNoCodeExperience
+    ? getNoCodeSuggestions(noCodePreset)
+    : [
+        'Объясни квантовые компьютеры простыми словами',
+        'Новости ИИ за эту неделю',
+        'Сравни GPT-5.5 и Claude Opus 4.8',
+        'План MVP SaaS за 2 недели',
+      ];
 
   const openPricing = () => navigate('/pricing');
 
@@ -466,46 +505,17 @@ export default function ChatPage() {
           else openSettingsModal(tab);
         }}
         headerLeft={
-          <>
-            <div className="hidden sm:flex items-center gap-2 overflow-x-auto custom-scrollbar flex-wrap min-w-0">
-              <BrowserDownloadPill />
-              <Link
-                to="/ide/lite"
-                className="text-sm font-medium px-3 py-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 text-teal-300 hover:bg-teal-500/15 whitespace-nowrap inline-flex items-center gap-1.5"
-              >
-                <Code2 size={14} />
-                IDE Web
-              </Link>
-              <span className="text-sm text-[var(--nx-muted)] whitespace-nowrap">
-                {tier.name} тариф
-              </span>
-              {tier.id === 'FREE' || !tier.aiAccess ? (
-                <button
-                  type="button"
-                  onClick={openPricing}
-                  className="text-sm font-semibold px-4 py-1.5 rounded-full bg-[var(--nx-surface)] border border-[var(--nx-border)] hover:bg-[var(--nx-surface-hover)] whitespace-nowrap"
-                >
-                  Улучшить
-                </button>
-              ) : null}
-              {TOPICS.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setInput((v) => (v ? v : `Тема: ${t}. `))}
-                  className="text-sm px-4 py-1.5 rounded-full text-[var(--nx-muted)] hover:bg-[var(--nx-surface-hover)] whitespace-nowrap"
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-            <ChatHeaderOverflow
-              tier={tier}
-              topics={TOPICS}
-              onPickTopic={(t) => setInput((v) => (v ? v : `Тема: ${t}. `))}
-              onUpgrade={tier.id === 'FREE' || !tier.aiAccess ? openPricing : null}
-            />
-          </>
+          <div className="nx-chat-context">
+            <span className={`nx-chat-context__mark ${isNoCodeExperience ? 'is-studio' : ''}`}>
+              {isNoCodeExperience ? <Sparkles size={14} /> : <span className="nx-chat-context__dot" />}
+            </span>
+            <span className="nx-chat-context__title">
+              {isNoCodeExperience ? 'No-Code Studio' : 'Nexus AI'}
+            </span>
+            <span className="nx-chat-context__meta">
+              {isNoCodeExperience ? noCodePresetMeta.title : `${tier.name} · Chat`}
+            </span>
+          </div>
         }
         headerRight={
           <div className="flex items-center gap-3">
@@ -534,98 +544,94 @@ export default function ChatPage() {
             </div>
           ) : !hasMessages ? (
             <div className="nx-scroll-region w-full custom-scrollbar">
-              <div className="w-full max-w-[var(--nx-content-max)] mx-auto flex flex-col items-center px-4 pt-4 pb-[calc(var(--nx-dock-h)+var(--nx-safe-bottom)+1rem)]">
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-                className="text-center mb-6 md:mb-12 w-full"
-              >
-                <h1 className="nx-wordmark nx-wordmark-gradient nx-wordmark-hero md:text-7xl lg:text-8xl font-normal mb-3 md:mb-4 tracking-tight">
-                  nexus
-                </h1>
-                <p className="text-sm sm:text-base text-[var(--nx-muted)] max-w-lg mx-auto px-2">
-                  ИИ-чат, Research с источниками, браузер и IDE в одном аккаунте
-                </p>
-                <BrowserDownloadHeroCta className="mt-5" />
-              </motion.div>
+              <div className="nx-chat-home">
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.28 }}
+                  className="nx-chat-home__intro"
+                >
+                  <div className={`nx-chat-home__eyebrow ${isNoCodeExperience ? 'is-studio' : ''}`}>
+                    {isNoCodeExperience ? <Sparkles size={14} /> : <span className="nx-chat-context__dot" />}
+                    {isNoCodeExperience ? 'Nexus Studio' : 'Nexus AI'}
+                  </div>
+                  <h1 className="nx-chat-home__title">
+                    {isNoCodeExperience ? 'Соберём digital-продукт' : 'Чем помочь сегодня?'}
+                  </h1>
+                  <p className="nx-chat-home__subtitle">
+                    {isNoCodeExperience
+                      ? 'Опиши идею обычными словами. Nexus подготовит структуру, UX, тексты и понятный план реализации.'
+                      : 'Чат, Research, файлы и инструменты — в одном спокойном рабочем пространстве.'}
+                  </p>
+                </motion.div>
 
-              <BrowserDownloadStrip className="w-full max-w-2xl mt-6 md:hidden" />
+                {isNoCodeExperience ? (
+                  <NoCodePresetBar value={noCodePreset} onChange={setNoCodePreset} />
+                ) : null}
 
-              <ChatComposerBanners
-                profile={authStatus.profile}
-                modelsError={modelsError}
-                onRetryModels={loadCatalog}
-                connectorsForChat={connectorsForChat}
-                selectedModelMeta={selectedModelMeta}
-                onOpenSettingsConnectors={() => openSettingsModal('connectors')}
-              />
-              <NexusComposer
-                centered
-                value={input}
-                onChange={setInput}
-                onSend={handleSend}
-                onStop={stopGeneration}
-                loading={loading}
-                disabled={!authStatus.authorized}
-                guest={!authStatus.authorized}
-                onGuestRegister={openAuth}
-                mode={mode}
-                onModeChange={setMode}
-                models={modelPool}
-                mediaModels={mediaModels}
-                selectedModel={selectedModel}
-                onModelChange={handleModelChange}
-                modelVariant={mode === 'research' ? 'research' : 'chat'}
-                attachments={attachments}
-                onAttachmentsChange={setAttachments}
-                onPickFiles={handlePickFiles}
-                selectedModelMeta={selectedModelMeta}
-                visionGuide={visionGuide}
-                onOpenSupport={() => setSupportOpen(true)}
-                webSearch={webSearch}
-                onWebSearchChange={handleWebSearchChange}
-                webSearchHighlight={webSearchHighlight}
-              />
-              {attachToast && (
-                <p className="mt-2 text-xs text-amber-400/90 max-w-3xl mx-auto px-4 text-center">
-                  {attachToast}
-                </p>
-              )}
+                <div className="nx-chat-home__composer">
+                  <ChatComposerBanners
+                    profile={authStatus.profile}
+                    modelsError={modelsError}
+                    onRetryModels={loadCatalog}
+                    connectorsForChat={connectorsForChat}
+                    selectedModelMeta={selectedModelMeta}
+                    onOpenSettingsConnectors={() => openSettingsModal('connectors')}
+                  />
+                  <NexusComposer
+                    centered
+                    value={input}
+                    onChange={setInput}
+                    onSend={handleSend}
+                    onStop={stopGeneration}
+                    loading={loading}
+                    disabled={!authStatus.authorized}
+                    guest={!authStatus.authorized}
+                    onGuestRegister={openAuth}
+                    mode={mode}
+                    onModeChange={setMode}
+                    models={modelPool}
+                    mediaModels={mediaModels}
+                    selectedModel={selectedModel}
+                    onModelChange={handleModelChange}
+                    modelVariant={mode === 'research' ? 'research' : 'chat'}
+                    attachments={attachments}
+                    onAttachmentsChange={setAttachments}
+                    onPickFiles={handlePickFiles}
+                    selectedModelMeta={selectedModelMeta}
+                    visionGuide={visionGuide}
+                    onOpenSupport={() => setSupportOpen(true)}
+                    webSearch={webSearch}
+                    onWebSearchChange={handleWebSearchChange}
+                    webSearchHighlight={webSearchHighlight}
+                  />
+                </div>
 
-              <div className="flex flex-col sm:grid gap-2.5 w-full max-w-full mt-6 sm:mt-10 sm:grid-cols-2">
-                {suggested.map((prompt, i) => (
-                  <motion.button
-                    key={prompt}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.06 * i, duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                    whileHover={{ y: -2 }}
-                    whileTap={{ scale: 0.99 }}
-                    type="button"
-                    onClick={() => setInput(prompt)}
-                    className="nx-suggestion-card text-left text-sm px-4 py-3 rounded-xl text-[var(--nx-muted)] leading-snug w-full sm:text-base sm:px-5 sm:py-4 sm:rounded-2xl"
-                  >
-                    {prompt}
-                  </motion.button>
-                ))}
-              </div>
+                {attachToast ? <p className="nx-chat-home__notice">{attachToast}</p> : null}
 
-              {!authStatus.authorized && (
-                <p className="mt-6 text-sm text-[var(--nx-muted)] text-center">
-                  <button
-                    type="button"
-                    onClick={() => openAuthModal()}
-                    className="text-teal-500 hover:underline"
-                  >
-                    Войдите
-                  </button>
-                  , чтобы отправлять сообщения и выбирать модели.
-                </p>
-              )}
+                <div className="nx-prompt-grid">
+                  {suggested.map((prompt, index) => (
+                    <motion.button
+                      key={prompt}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.035 * index, duration: 0.2 }}
+                      type="button"
+                      onClick={() => setInput(prompt)}
+                      className="nx-prompt-card"
+                    >
+                      <span>{prompt}</span>
+                      <ArrowUpRight size={15} />
+                    </motion.button>
+                  ))}
+                </div>
 
-              <BrowserDownloadStrip className="hidden md:block w-full mt-10" />
-              <HomeFeatures className="hidden md:block mt-10 w-full" />
+                {!authStatus.authorized ? (
+                  <div className="nx-guest-hint">
+                    <span>Для отправки сообщений нужен аккаунт.</span>
+                    <button type="button" onClick={openAuth}>Войти</button>
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : (
@@ -636,7 +642,7 @@ export default function ChatPage() {
                   onScroll={handleMessagesScroll}
                   className="nx-scroll-region custom-scrollbar"
                 >
-                  {activeConv.messages.map((m, i) => {
+                  {activeConv.messages.filter((m) => m.role !== 'system').map((m, i) => {
                     const modelMeta =
                       m.role === 'assistant' && m.model
                         ? findModelById(modelPool, m.model)
@@ -660,6 +666,15 @@ export default function ChatPage() {
                   <div ref={messagesEndRef} />
                 </div>
                 <div className="shrink-0 sticky bottom-0 z-20 bg-gradient-to-t from-[var(--nx-bg)] via-[var(--nx-bg)] to-transparent pt-2">
+                  {isNoCodeExperience && (
+                    <div className="px-4 sm:px-6 pb-2">
+                      <NoCodePresetBar
+                        value={noCodePreset}
+                        onChange={setNoCodePreset}
+                        compact
+                      />
+                    </div>
+                  )}
                   <ChatComposerBanners
                     profile={authStatus.profile}
                     modelsError={modelsError}

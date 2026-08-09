@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.database import ChatConversationDB, UserMemoryDB
+from app.database import UserMemoryDB
 from app.services.chat_history import list_user_chats
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ def get_memory_row(db: Session, user_id: int) -> UserMemoryDB:
     if row:
         return row
     row = UserMemoryDB(
-        user_id=user_id, content="", enabled=1, auto_learn=1, updated_at=datetime.utcnow()
+        user_id=user_id, content="", enabled=1, auto_learn=1, updated_at=utc_now()
     )
     db.add(row)
     db.flush()
@@ -94,7 +94,7 @@ def save_memory(
     row.enabled = 1 if enabled else 0
     if auto_learn is not None:
         row.auto_learn = 1 if auto_learn else 0
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utc_now()
     db.flush()
     return _row_to_dict(row)
 

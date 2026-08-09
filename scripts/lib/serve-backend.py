@@ -33,9 +33,17 @@ def write_frontend_env(port: int) -> None:
     if port == 8000:
         return
     env_path = os.path.join(ROOT, "..", "frontend", ".env.local")
+    key = "VITE_IDE_API_BASE"
+    value = f"http://{HOST}:{port}/api"
+    lines: list[str] = []
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    lines = [line for line in lines if not line.startswith(f"{key}=")]
+    lines.append(f"{key}={value}")
     with open(env_path, "w", encoding="utf-8") as fh:
-        fh.write(f"VITE_API_BASE=http://{HOST}:{port}/api\n")
-    print(f"Wrote {env_path} -> port {port} (restart frontend: npm run dev)")
+        fh.write("\n".join(lines).rstrip() + "\n")
+    print(f"Updated {env_path}: {key}={value} (restart frontend if it is already open)")
 
 
 def main() -> None:

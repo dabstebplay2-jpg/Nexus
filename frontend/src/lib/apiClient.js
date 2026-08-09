@@ -6,7 +6,7 @@ const API_FETCH_TIMEOUT_MS = 55_000;
 function networkErrorMessage(path, cause) {
   const msg = cause?.message || String(cause);
   if (msg === 'Failed to fetch' || cause?.name === 'TypeError') {
-    return 'Нет связи с сервером. Проверьте интернет; если Render заблокирован у провайдера — обновите страницу (API идёт через Vercel).';
+    return 'Нет связи с Nexus. Проверьте интернет, обновите страницу и повторите попытку.';
   }
   if (cause?.name === 'AbortError') {
     return 'Сервер не ответил вовремя. Попробуйте ещё раз через минуту.';
@@ -31,6 +31,7 @@ export async function tryRefreshSession() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: refreshToken }),
+        signal: AbortSignal.timeout(9000),
       });
       if (res.status === 401) {
         clearStoredTokens();

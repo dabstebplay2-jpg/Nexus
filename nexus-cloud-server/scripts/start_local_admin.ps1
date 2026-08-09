@@ -58,7 +58,7 @@ if (-not $env:NEXUS_ADMIN_PASSWORD) {
 }
 
 if (-not $env:NEXUS_ADMIN_DEFAULT_CLOUD_URL) {
-    $env:NEXUS_ADMIN_DEFAULT_CLOUD_URL = "https://frontend-henna-tau-19.vercel.app/api"
+    $env:NEXUS_ADMIN_DEFAULT_CLOUD_URL = "https://nexus-zeta-ruby-12.vercel.app/api"
 }
 
 Write-Host "Admin UI: http://127.0.0.1:${port}/local-admin/" -ForegroundColor Cyan

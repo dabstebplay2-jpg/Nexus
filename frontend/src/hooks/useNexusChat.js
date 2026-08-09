@@ -20,6 +20,8 @@ import { useUserMemoryOptional } from '../context/UserMemoryContext';
 import { hasMemoryUpdateTrigger } from '../lib/memoryLearnTrigger';
 import { createRafPatcher } from '../lib/streamPatch';
 
+const EXPERIENCE_SYSTEM_PREFIX = '[NEXUS_EXPERIENCE:';
+
 export function useNexusChat({
   authStatus,
   fetchProfile,
@@ -54,6 +56,7 @@ export function useNexusChat({
       webSearchEnabled = false,
       webSearchDepth = 'standard',
       enableThinking = false,
+      systemPrompt = '',
     }) => {
       const trimmed = (text || '').trim();
       const hasAttachments = attachments.length > 0;
@@ -76,12 +79,43 @@ export function useNexusChat({
         attachments: attachmentsForStorage(attachments),
       };
 
-      patchConv(convId, (c) => ({
-        ...c,
-        title: c.messages.length === 0 ? titleFromMessage(trimmed || 'Вложение') : c.title,
-        messages: [...c.messages, userMsg],
-        updatedAt: Date.now(),
-      }));
+      const normalizedSystemPrompt = (systemPrompt || '').trim();
+      const hasExperiencePrompt = normalizedSystemPrompt.startsWith(EXPERIENCE_SYSTEM_PREFIX);
+
+      patchConv(convId, (c) => {
+        const previousMessages = Array.isArray(c.messages) ? c.messages : [];
+        const hadUserMessage = previousMessages.some((message) => message.role === 'user');
+        let baseMessages = previousMessages;
+
+        if (hasExperiencePrompt) {
+          const systemMessage = {
+            id: `experience-${convId}`,
+            role: 'system',
+            content: normalizedSystemPrompt,
+            at: Date.now(),
+          };
+          const existingIndex = baseMessages.findIndex(
+            (message) =>
+              message.role === 'system' &&
+              typeof message.content === 'string' &&
+              message.content.startsWith(EXPERIENCE_SYSTEM_PREFIX)
+          );
+          if (existingIndex >= 0) {
+            baseMessages = baseMessages.map((message, index) =>
+              index === existingIndex ? systemMessage : message
+            );
+          } else {
+            baseMessages = [systemMessage, ...baseMessages];
+          }
+        }
+
+        return {
+          ...c,
+          title: !hadUserMessage ? titleFromMessage(trimmed || 'Вложение') : c.title,
+          messages: [...baseMessages, userMsg],
+          updatedAt: Date.now(),
+        };
+      });
 
       const conv = conversation || { messages: [] };
       const existingCodeFiles = collectConversationCodeFiles(conv.messages || []);
@@ -89,6 +123,17 @@ export function useNexusChat({
         role: m.role,
         content: m.content,
       }));
+      if (hasExperiencePrompt) {
+        history = history.filter(
+          (message) =>
+            !(
+              message.role === 'system' &&
+              typeof message.content === 'string' &&
+              message.content.startsWith(EXPERIENCE_SYSTEM_PREFIX)
+            )
+        );
+        history = [{ role: 'system', content: normalizedSystemPrompt }, ...history];
+      }
       if (useContextTrim) {
         history = trimMessagesForContext(history, contextLimit);
       }
@@ -163,6 +208,7 @@ export function useNexusChat({
           let preSearchThinking = '';
           let streamPhase = 'answer';
           let searchEngaged = false;
+          let mediaToolEngaged = Boolean(isMediaModel);
           const connectorTools = [];
           const conversationSources = collectConversationSources(conv.messages || [], {
             excludeMessageId: assistantId,
@@ -189,7 +235,7 @@ export function useNexusChat({
                   connectorTools: connectorTools.length ? [...connectorTools] : m.connectorTools,
                   content,
                   imageGenerating:
-                    isMediaModel && !(m.images && m.images.length > 0),
+                    mediaToolEngaged && !(m.images && m.images.length > 0),
                 };
               }),
               updatedAt: Date.now(),
@@ -291,12 +337,28 @@ export function useNexusChat({
             attachments: apiAttachments,
             agentId: selectedAgent,
             useWebSearch: webSearchPreference,
+            autoTools: webSearchPreference,
             webSearchDepth: webSearchPreference ? webSearchDepth : 'standard',
             conversationSources:
               conversationSources.length > 0 ? conversationSources : undefined,
             enableThinking,
+            useConnectors: webSearchPreference,
+            preferredImageModel: localStorage.getItem('nexus_default_media_model') || undefined,
             signal,
             onStatus: (status) => {
+              if (status === 'image_generation') {
+                mediaToolEngaged = true;
+                schedule((c) => ({
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === assistantId
+                      ? { ...m, content: '', imageGenerating: true }
+                      : m
+                  ),
+                  updatedAt: Date.now(),
+                }));
+                return;
+              }
               if (status === 'search_skipped') {
                 searchEngaged = false;
                 patchSearchActivity((prev) => ({
@@ -306,7 +368,6 @@ export function useNexusChat({
                 }));
                 return;
               }
-              if (!webSearchPreference && !searchEngaged) return;
               if (status === 'planning') {
                 searchEngaged = true;
                 streamPhase = 'pre';
@@ -462,6 +523,8 @@ export function useNexusChat({
                       imageGenerating: false,
                       sources: streamSources.length ? streamSources : ensureArray(m.sources),
                       connectorTools: connectorTools.length ? connectorTools : m.connectorTools,
+                      model: result.model || m.model,
+                      toolsUsed: Array.isArray(result.tools_used) ? result.tools_used : m.toolsUsed,
                     }
                   : m
               ),

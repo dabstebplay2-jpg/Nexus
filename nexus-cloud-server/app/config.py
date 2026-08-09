@@ -5,9 +5,10 @@ from dotenv import load_dotenv
 
 _cloud_dir = Path(__file__).resolve().parent.parent
 _repo_root = _cloud_dir.parent
-load_dotenv(_repo_root / ".env")
-# .env сервера важнее устаревших переменных в shell (после смены ключа без перезапуска)
-load_dotenv(_cloud_dir / ".env", override=True)
+if os.environ.get("NEXUS_SKIP_DOTENV", "").lower() not in ("1", "true", "yes"):
+    load_dotenv(_repo_root / ".env")
+    # .env сервера важнее устаревших переменных в shell (после смены ключа без перезапуска)
+    load_dotenv(_cloud_dir / ".env", override=True)
 
 def _normalize_postgres_url(url: str) -> str:
     """Render/Neon часто отдают postgres:// — SQLAlchemy 2 ожидает postgresql://."""
@@ -103,11 +104,15 @@ MARGIN_MULTIPLIER = float(os.environ.get("NEXUS_MARGIN_MULTIPLIER", "1.15"))
 OPENROUTER_API_KEY = (os.environ.get("OPENROUTER_API_KEY") or "").strip()
 OPENROUTER_BASE_URL = (os.environ.get("OPENROUTER_BASE_URL") or "https://openrouter.ai/api/v1").rstrip("/")
 OPENROUTER_HTTP_REFERER = (
-    os.environ.get("OPENROUTER_HTTP_REFERER") or "https://frontend-henna-tau-19.vercel.app"
+    os.environ.get("OPENROUTER_HTTP_REFERER") or "https://nexus-zeta-ruby-12.vercel.app"
 ).strip()
 OPENROUTER_APP_TITLE = (os.environ.get("OPENROUTER_APP_TITLE") or "Nexus").strip()
 NEXUS_FREE_OPENROUTER_DAILY_LIMIT = int(os.environ.get("NEXUS_FREE_OPENROUTER_DAILY_LIMIT", "100") or "100")
 NEXUS_FREE_OPENROUTER_RPM = int(os.environ.get("NEXUS_FREE_OPENROUTER_RPM", "15") or "15")
+NEXUS_MODELS_REFRESH_INTERVAL_SEC = max(
+    3600,
+    int(os.environ.get("NEXUS_MODELS_REFRESH_INTERVAL_SEC", "86400") or "86400"),
+)
 OPENROUTER_MANAGEMENT_API_KEY = (os.environ.get("OPENROUTER_MANAGEMENT_API_KEY") or "").strip()
 _OPENROUTER_KEY_LIMIT_RAW = (os.environ.get("NEXUS_FREE_OPENROUTER_KEY_LIMIT_USD") or "").strip()
 NEXUS_FREE_OPENROUTER_KEY_LIMIT_USD: float | None = (
@@ -151,7 +156,7 @@ NEXUS_REMOTE_ADMIN = os.environ.get("NEXUS_REMOTE_ADMIN", "false").lower() in ("
 NEXUS_ADMIN_PASSWORD = (os.environ.get("NEXUS_ADMIN_PASSWORD") or os.environ.get("NEXUS_ADMIN_KEY") or "").strip()
 NEXUS_ADMIN_ALLOW_REMOTE = os.environ.get("NEXUS_ADMIN_ALLOW_REMOTE", "false").lower() in ("1", "true", "yes")
 NEXUS_ADMIN_VERCEL_API_URL = (
-    os.environ.get("NEXUS_ADMIN_VERCEL_API_URL", "https://frontend-henna-tau-19.vercel.app/api") or ""
+    os.environ.get("NEXUS_ADMIN_VERCEL_API_URL", "https://nexus-zeta-ruby-12.vercel.app/api") or ""
 ).strip().rstrip("/")
 # По умолчанию Vercel (/api → Render): у части ISP render.com недоступен напрямую.
 NEXUS_ADMIN_DEFAULT_CLOUD_URL = (
@@ -289,13 +294,20 @@ def google_oauth_configured() -> bool:
 
 
 def email_auth_enabled() -> bool:
-    """OTP на email. По умолчанию выкл., если настроен Google OAuth (прод без Resend-домена)."""
+    """Return True only when the OTP flow is both requested and deliverable.
+
+    Production must never show an email-login button that is guaranteed to fail.
+    Local development may use NEXUS_AUTH_DEV_LOG_CODES=true without Resend.
+    """
     raw = (os.environ.get("NEXUS_EMAIL_AUTH_ENABLED") or "").strip().lower()
-    if raw in ("1", "true", "yes", "on"):
-        return True
     if raw in ("0", "false", "no", "off"):
         return False
-    return not google_oauth_configured()
+
+    requested = raw in ("1", "true", "yes", "on") or not google_oauth_configured()
+    if not requested:
+        return False
+
+    return bool(RESEND_API_KEY) or bool(NEXUS_AUTH_DEV_LOG_CODES)
 
 
 # Connector OAuth (отдельно от входа Google)

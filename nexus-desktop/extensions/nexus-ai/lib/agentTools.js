@@ -1,5 +1,15 @@
 const vscode = require('vscode');
 const path = require('path');
+const { normalizeWorkspaceRelativePath } = require('./workspacePath');
+
+function workspaceUriFor(relativePath, options) {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    throw new Error('Откройте папку workspace (File → Open Folder)');
+  }
+  const normalized = normalizeWorkspaceRelativePath(relativePath, options);
+  return normalized === '.' ? folder.uri : vscode.Uri.joinPath(folder.uri, normalized);
+}
 
 /** @returns {{ filename: string, language: string, content: string }[]} */
 function parseCodeBlocks(text) {
@@ -26,11 +36,7 @@ function parseCodeBlocks(text) {
  * @param {string} content
  */
 async function applyToWorkspaceFile(relativePath, content) {
-  const folder = vscode.workspace.workspaceFolders?.[0];
-  if (!folder) {
-    throw new Error('Откройте папку workspace (File → Open Folder)');
-  }
-  const target = vscode.Uri.joinPath(folder.uri, relativePath.replace(/\\/g, '/'));
+  const target = workspaceUriFor(relativePath, { allowRoot: false });
   const edit = new vscode.WorkspaceEdit();
   try {
     const doc = await vscode.workspace.openTextDocument(target);
@@ -79,9 +85,7 @@ async function searchWorkspace(query, maxResults = 20) {
 }
 
 async function readWorkspaceFile(relativePath) {
-  const folder = vscode.workspace.workspaceFolders?.[0];
-  if (!folder) throw new Error('Нет открытой папки');
-  const uri = vscode.Uri.joinPath(folder.uri, relativePath.replace(/\\/g, '/'));
+  const uri = workspaceUriFor(relativePath, { allowRoot: false });
   const doc = await vscode.workspace.openTextDocument(uri);
   return doc.getText();
 }
@@ -91,4 +95,5 @@ module.exports = {
   applyToWorkspaceFile,
   searchWorkspace,
   readWorkspaceFile,
+  workspaceUriFor,
 };

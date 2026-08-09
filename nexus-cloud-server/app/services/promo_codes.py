@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from app.config import NEXUS_BILLING_TEST_MODE, is_testing_mode
 from app.tiers import normalize_tier
 
 PromoAction = Literal["grant_tier", "discount"]

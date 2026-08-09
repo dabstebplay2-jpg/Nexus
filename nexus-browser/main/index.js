@@ -1,4 +1,5 @@
 const path = require('path');
+const { pathToFileURL } = require('url');
 const {
   app,
   BrowserWindow,
@@ -27,6 +28,22 @@ function getAppIcon() {
   } catch {
     return undefined;
   }
+}
+
+function sameFilePath(left, right) {
+  const normalize = (value) => {
+    const resolved = path.normalize(path.resolve(value));
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  };
+  return normalize(left) === normalize(right);
+}
+
+function openTrustedExternal(rawUrl) {
+  const parsed = new URL(String(rawUrl || ''));
+  if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) {
+    throw new Error('Unsupported external URL protocol');
+  }
+  return shell.openExternal(parsed.toString());
 }
 const { TabManager, NEXUS_NEWTAB } = require('./tabs');
 const { getOmniboxSuggestions } = require('./omniboxSuggestions');
@@ -265,9 +282,21 @@ auth.setAuthExchangeHandler((exchange) => {
 
 app.whenReady().then(() => {
   protocol.handle('local-file', (request) => {
-    const url = request.url.replace('local-file://', '');
-    const decoded = decodeURIComponent(url);
-    return net.fetch('file:///' + decoded);
+    const prefix = 'local-file://wallpaper/';
+    const allowedPath = getSettings().wallpaperPath;
+    if (!request.url.startsWith(prefix) || !allowedPath || /^https?:/i.test(allowedPath)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+
+    try {
+      const requestedPath = decodeURIComponent(request.url.slice(prefix.length));
+      if (!sameFilePath(requestedPath, allowedPath)) {
+        return new Response('Forbidden', { status: 403 });
+      }
+      return net.fetch(pathToFileURL(path.resolve(allowedPath)).toString());
+    } catch {
+      return new Response('Invalid local file URL', { status: 400 });
+    }
   });
 
   Menu.setApplicationMenu(null);
@@ -676,6 +705,13 @@ function setupIpc() {
   });
 
   ipcMain.on('password:request-autofill', (event, origin) => {
+    const tab = tabManager?.tabs.find((item) => item.view?.webContents === event.sender);
+    if (!tab) return;
+    try {
+      if (new URL(tab.url).origin !== origin) return;
+    } catch {
+      return;
+    }
     const list = getPasswords();
     const match = list.find((p) => p.origin === origin);
     if (match) {
@@ -859,7 +895,7 @@ function setupIpc() {
     event.sender.send('api:stream:end');
   });
 
-  ipcMain.handle('shell:openExternal', (_e, url) => shell.openExternal(url));
+  ipcMain.handle('shell:openExternal', (_e, url) => openTrustedExternal(url));
 }
 
 module.exports = { NEXUS_NEWTAB };

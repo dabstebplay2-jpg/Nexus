@@ -83,7 +83,7 @@ NEXUS_BILLING_TEST_MODE=false
 NEXUS_TIER_POOL_FRACTION=0.92
 ```
 
-Webhook в личном кабинете ЮKassa: `https://nexus-cloud-bxcc.onrender.com/v1/billing/yookassa/webhook`
+Webhook в личном кабинете ЮKassa: `https://nexus-cloud-ee17.onrender.com/v1/billing/yookassa/webhook`
 
 ---
 

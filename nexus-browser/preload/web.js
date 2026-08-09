@@ -22,27 +22,40 @@ function readMediaSession() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  ipcRenderer.send('password:request-autofill', window.location.origin);
+  const requestAutofill = (target) => {
+    if (!(target instanceof HTMLInputElement) || target.type !== 'password') return;
+    if (!navigator.userActivation?.isActive) return;
+    ipcRenderer.send('password:request-autofill', window.location.origin);
+  };
+
+  document.addEventListener('pointerdown', (event) => requestAutofill(event.target), true);
+  document.addEventListener('focusin', (event) => requestAutofill(event.target), true);
 
   ipcRenderer.on('password:fill', (_event, { username, password }) => {
-    const passwordFields = document.querySelectorAll('input[type="password"]');
-    passwordFields.forEach((passInput) => {
-      passInput.value = password;
-      const form = passInput.form;
-      if (form) {
-        const userInput = form.querySelector('input[type="text"], input[type="email"], input:not([type])');
-        if (userInput) userInput.value = username;
-      } else {
-        let prev = passInput.previousElementSibling;
-        while (prev) {
-          if (prev.tagName === 'INPUT' && (prev.type === 'text' || prev.type === 'email')) {
-            prev.value = username;
-            break;
-          }
-          prev = prev.previousElementSibling;
-        }
+    const passInput = document.activeElement;
+    if (!(passInput instanceof HTMLInputElement) || passInput.type !== 'password') return;
+    if (passInput.disabled || passInput.readOnly || passInput.getClientRects().length === 0) return;
+
+    passInput.value = password;
+    passInput.dispatchEvent(new Event('input', { bubbles: true }));
+    const form = passInput.form;
+    if (form) {
+      const userInput = form.querySelector('input[type="text"], input[type="email"], input:not([type])');
+      if (userInput && !userInput.disabled && !userInput.readOnly) {
+        userInput.value = username;
+        userInput.dispatchEvent(new Event('input', { bubbles: true }));
       }
-    });
+    } else {
+      let prev = passInput.previousElementSibling;
+      while (prev) {
+        if (prev.tagName === 'INPUT' && (prev.type === 'text' || prev.type === 'email')) {
+          prev.value = username;
+          prev.dispatchEvent(new Event('input', { bubbles: true }));
+          break;
+        }
+        prev = prev.previousElementSibling;
+      }
+    }
   });
 
   document.addEventListener('submit', (e) => {

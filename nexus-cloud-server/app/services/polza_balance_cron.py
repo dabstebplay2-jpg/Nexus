@@ -7,7 +7,11 @@ import logging
 from sqlalchemy.orm import Session
 
 from app.services.ops_discord import send_polza_balance_alert
-from app.services.platform_funding import mark_funding_alert_sent, refresh_polza_org_balance, should_send_funding_alert
+from app.services.platform_funding import (
+    mark_funding_alert_sent,
+    refresh_polza_org_balance,
+    should_send_funding_alert,
+)
 
 logger = logging.getLogger(__name__)
 

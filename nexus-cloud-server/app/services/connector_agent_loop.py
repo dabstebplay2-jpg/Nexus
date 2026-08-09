@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any, AsyncIterator
 
 from sqlalchemy.orm import Session
 
-from app.connectors.registry import collect_tools_for_user, connected_connector_ids_for_user, execute_tool_call
+from app.connectors.registry import (
+    collect_tools_for_user,
+    connected_connector_ids_for_user,
+    execute_tool_call,
+)
 from app.database import UserDB
 
 logger = logging.getLogger(__name__)
@@ -51,6 +54,7 @@ async def run_connector_agent_phase(
     else:
         work_messages.insert(0, {"role": "system", "content": _CONNECTOR_SYSTEM})
 
+    used_any_tool = False
     for step in range(MAX_CONNECTOR_STEPS):
         payload = {
             "model": model,
@@ -68,15 +72,20 @@ async def run_connector_agent_phase(
         choice = (data.get("choices") or [{}])[0]
         message = choice.get("message") or {}
         tool_calls = message.get("tool_calls")
-        work_messages.append(message)
 
         if not tool_calls:
+            # Это черновик ответа роутера инструментов. Финальный ответ ниже
+            # стримит выбранная пользователем модель, поэтому не добавляем
+            # подряд второе assistant-сообщение в историю.
             break
+
+        work_messages.append(message)
 
         for tc in tool_calls:
             fn = tc.get("function") or {}
             name = fn.get("name") or ""
             raw_args = fn.get("arguments") or "{}"
+            used_any_tool = True
             yield {"type": "tool_start", "tool": name, "connector": _tool_connector_hint(name)}
 
             result = await execute_tool_call(db, user.id, name, raw_args)
@@ -96,8 +105,9 @@ async def run_connector_agent_phase(
                 }
             )
 
-    messages.clear()
-    messages.extend(work_messages)
+    if used_any_tool:
+        messages.clear()
+        messages.extend(work_messages)
 
 
 def _tool_connector_hint(tool_name: str) -> str:

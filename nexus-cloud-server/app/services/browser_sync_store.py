@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.database import BrowserSyncDB
+from app.time_utils import utc_now
 
 MAX_PAYLOAD_BYTES = 2_000_000
 
@@ -44,7 +44,7 @@ def save_browser_sync(
         raise ValueError("Payload слишком большой")
 
     row = db.query(BrowserSyncDB).filter(BrowserSyncDB.user_id == user_id).first()
-    now = datetime.utcnow()
+    now = utc_now()
     if not row:
         row = BrowserSyncDB(
             user_id=user_id,

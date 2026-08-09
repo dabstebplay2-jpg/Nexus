@@ -3,7 +3,7 @@ import shutil
 
 from fastapi import APIRouter, HTTPException
 
-from app.files_util import get_directory_tree
+from app.files_util import get_directory_tree, resolve_child_path
 from app.schemas import CreateItemRequest, DeleteItemRequest, SaveRequest
 
 router = APIRouter(prefix="/api/files", tags=["files"])
@@ -42,7 +42,7 @@ def write_file_endpoint(req: SaveRequest):
 @router.post("/create_file")
 def create_file(req: CreateItemRequest):
     try:
-        target_path = os.path.join(req.parent_path, req.name)
+        target_path = resolve_child_path(req.parent_path, req.name)
         if os.path.exists(target_path):
             raise HTTPException(status_code=400, detail="File already exists")
         with open(target_path, "w", encoding="utf-8") as f:
@@ -50,6 +50,8 @@ def create_file(req: CreateItemRequest):
         return {"status": "success", "path": target_path}
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -57,13 +59,15 @@ def create_file(req: CreateItemRequest):
 @router.post("/create_folder")
 def create_folder(req: CreateItemRequest):
     try:
-        target_path = os.path.join(req.parent_path, req.name)
+        target_path = resolve_child_path(req.parent_path, req.name)
         if os.path.exists(target_path):
             raise HTTPException(status_code=400, detail="Folder already exists")
         os.makedirs(target_path, exist_ok=True)
         return {"status": "success", "path": target_path}
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

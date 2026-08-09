@@ -1,14 +1,26 @@
 import logging
-from datetime import datetime
 from pathlib import Path
 
 from passlib.context import CryptContext
-from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, text
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    create_engine,
+    text,
+)
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import DATABASE_URL, database_backend
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +86,7 @@ class UserDB(Base):
     refresh_token = Column(String, nullable=True)
     subscription_period_start = Column(DateTime, nullable=True)
     subscription_period_end = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class TransactionDB(Base):
@@ -85,7 +97,7 @@ class TransactionDB(Base):
     tx_type = Column(String, nullable=False)
     description = Column(String, nullable=True)
     usage_json = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class InvoiceDB(Base):
@@ -99,7 +111,7 @@ class InvoiceDB(Base):
     status = Column(String, default="pending")
     yookassa_payment_id = Column(String, nullable=True, index=True)
     subscription_tier = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class FxRateDB(Base):
@@ -107,7 +119,7 @@ class FxRateDB(Base):
     rate_date = Column(String, primary_key=True)
     usd_rub = Column(Float, nullable=False)
     source = Column(String, default="cbr")
-    fetched_at = Column(DateTime, default=datetime.utcnow)
+    fetched_at = Column(DateTime, default=utc_now)
 
 
 class LoginCodeDB(Base):
@@ -116,7 +128,7 @@ class LoginCodeDB(Base):
     email = Column(String, index=True, nullable=False)
     code_hash = Column(String, nullable=False)
     attempts = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     expires_at = Column(DateTime, nullable=False)
 
 
@@ -147,7 +159,7 @@ class UserArtifactDB(Base):
     content_json = Column(Text, default="{}", nullable=False)
     source_chat_id = Column(String, nullable=True, index=True)
     source_message_id = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utc_now, index=True)
 
 
 class SupportTicketDB(Base):
@@ -157,8 +169,8 @@ class SupportTicketDB(Base):
     category = Column(String, nullable=False, index=True)
     subject = Column(String, nullable=False)
     status = Column(String, default="open", nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utc_now, index=True)
+    updated_at = Column(DateTime, default=utc_now, index=True)
     messages = relationship(
         "SupportMessageDB",
         back_populates="ticket",
@@ -173,7 +185,7 @@ class SupportMessageDB(Base):
     author = Column(String, nullable=False)  # user | admin
     body = Column(Text, nullable=False, default="")
     attachments_json = Column(Text, default="[]", nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utc_now, index=True)
     ticket = relationship("SupportTicketDB", back_populates="messages")
 
 
@@ -184,7 +196,7 @@ class BrowserSyncDB(Base):
     user_id = Column(Integer, ForeignKey("users.id"), primary_key=True, index=True)
     payload_json = Column(Text, default="{}", nullable=False)
     client_version = Column(String, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 
 class UserMemoryDB(Base):
@@ -195,7 +207,7 @@ class UserMemoryDB(Base):
     content = Column(Text, default="", nullable=False)
     enabled = Column(Integer, default=1, nullable=False)  # 1=true for SQLite compat
     auto_learn = Column(Integer, default=1, nullable=False)  # 1=запоминать при «запомни…» в чате
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 
 class UserConnectionDB(Base):
@@ -211,8 +223,8 @@ class UserConnectionDB(Base):
     encrypted_credentials = Column(Text, nullable=False, default="{}")
     enabled_for_chat = Column(Integer, default=1, nullable=False)  # 1=true
     expires_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 
 class ConnectorOAuthStateDB(Base):
@@ -236,7 +248,7 @@ class ConnectorAuditLogDB(Base):
     connector_id = Column(String, nullable=False, index=True)
     action = Column(String, nullable=False)
     meta_json = Column(Text, default="{}", nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utc_now, index=True)
 
 
 class PlatformSettingsDB(Base):
@@ -247,7 +259,7 @@ class PlatformSettingsDB(Base):
     routerai_deposit_usd = Column(Float, default=0.0)
     polza_org_balance_rub = Column(Float, default=0.0)
     last_funding_alert_at = Column(DateTime, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 
 class OAuthPkceSessionDB(Base):
@@ -257,7 +269,7 @@ class OAuthPkceSessionDB(Base):
     state = Column(String, primary_key=True, index=True)
     code_verifier = Column(String, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class PlatformFundingObligationDB(Base):
@@ -269,11 +281,11 @@ class PlatformFundingObligationDB(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     amount_rub = Column(Float, nullable=False)
     pool_usd = Column(Float, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class ChatConversationDB(Base):
-    """История чата пользователя (основной чат, без workspace)."""
+    """История основного чата и диалогов внутри пространств."""
 
     __tablename__ = "chat_conversations"
     id = Column(String, primary_key=True, index=True)
@@ -282,8 +294,23 @@ class ChatConversationDB(Base):
     model = Column(String, nullable=True)
     messages_json = Column(Text, default="[]", nullable=False)
     workspace_id = Column(String, nullable=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, index=True)
+
+
+class WorkspaceDB(Base):
+    """Пользовательское пространство, объединяющее тематические диалоги."""
+
+    __tablename__ = "workspaces"
+    __table_args__ = (UniqueConstraint("user_id", "workspace_id", name="uq_workspace_user_id"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    workspace_id = Column(String, nullable=False, index=True)
+    name = Column(String, default="Моё пространство", nullable=False)
+    emoji = Column(String, default="✨", nullable=False)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, index=True)
 
 
 _USER_COLUMNS = {

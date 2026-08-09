@@ -5,6 +5,7 @@ from __future__ import annotations
 import httpx
 
 from app.services.connectors.audit import log_connector_action
+from app.time_utils import utc_now
 
 GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me"
 CALENDAR_API = "https://www.googleapis.com/calendar/v3"
@@ -119,7 +120,7 @@ async def execute_tool(db, user_id: int, creds: dict, name: str, args: dict) -> 
                     "maxResults": max_r,
                     "singleEvents": "true",
                     "orderBy": "startTime",
-                    "timeMin": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+                    "timeMin": utc_now().isoformat() + "Z",
                 },
                 headers=headers,
             )

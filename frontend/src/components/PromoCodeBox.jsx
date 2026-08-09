@@ -3,6 +3,7 @@ import { Tag, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const SESSION_DISCOUNT_KEY = 'nexus_promo_discount';
+const BILLING_TEST_MODE = import.meta.env.VITE_BILLING_TEST_MODE === 'true';
 
 export function getStoredDiscountPromo() {
   try {
@@ -74,7 +75,9 @@ export default function PromoCodeBox({ promoHints = [], enabled = true, onRedeem
       <div className="flex items-center gap-2 text-amber-200/90">
         <Tag size={16} className="shrink-0" />
         <span className="text-sm font-semibold">Промокод</span>
-        <span className="text-[10px] text-amber-200/50 font-normal">тест подписок</span>
+        <span className="text-[10px] text-amber-200/50 font-normal">
+          {BILLING_TEST_MODE ? 'тест подписок' : 'скидка или бонус'}
+        </span>
       </div>
 
       {activeDiscount && (
@@ -115,7 +118,7 @@ export default function PromoCodeBox({ promoHints = [], enabled = true, onRedeem
       {msg && <p className="text-xs text-emerald-400">{msg}</p>}
       {err && <p className="text-xs text-red-400">{err}</p>}
 
-      {promoHints.length > 0 && (
+      {BILLING_TEST_MODE && promoHints.length > 0 && (
         <div>
           <button
             type="button"

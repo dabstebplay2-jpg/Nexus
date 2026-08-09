@@ -26,7 +26,7 @@
 7. **Environment** (секреты вручную):
    - `ROUTER_AI_MASTER_KEY` — мастер-ключ RouterAI
    - `NEXUS_CLOUD_SECRET_KEY` — случайная строка
-   - `NEXUS_CORS_ORIGINS` — `https://frontend-henna-tau-19.vercel.app`
+   - `NEXUS_CORS_ORIGINS` — `https://nexus-zeta-ruby-12.vercel.app`
    - `NEXUS_REMOTE_ADMIN` — `true` (API админки на Render; UI остаётся на ПК)
    - `NEXUS_ADMIN_PASSWORD` — пароль админ-панели
 8. **Прод на Render:** подключите **PostgreSQL** → `NEXUS_CLOUD_DATABASE_URL` = Internal URL ([инструкция](docs/PERSISTENT_DATABASE_RU.md)). SQLite на Render **не сохраняет** пользователей после деплоя.

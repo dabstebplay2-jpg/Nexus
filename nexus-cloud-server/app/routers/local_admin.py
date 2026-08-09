@@ -28,20 +28,13 @@ from app.config import (
 )
 from app.database import InvoiceDB, TransactionDB, UserDB, get_db
 from app.schemas import AdminSupportReply, AdminSupportStatusPatch
-from app.services.admin_audit import get_admin_actions, get_server_logs, log_admin_action
-from app.services.auth_bruteforce import (
-    assert_admin_not_locked_out,
-    record_failed_admin,
-    reset_admin_attempts,
-)
-
-_ADMIN_PROBE_PASSWORD = "__probe__"
 from app.services.admin_analytics import (
     analytics_registrations,
     analytics_revenue,
     analytics_summary,
     analytics_tiers,
 )
+from app.services.admin_audit import get_admin_actions, get_server_logs, log_admin_action
 from app.services.admin_user_ops import (
     admin_delete_user,
     admin_grant_tier,
@@ -53,14 +46,28 @@ from app.services.admin_user_ops import (
     admin_unlink_google,
     admin_unlink_telegram,
 )
+from app.services.auth_bruteforce import (
+    assert_admin_not_locked_out,
+    record_failed_admin,
+    reset_admin_attempts,
+)
 from app.services.openrouter_provision import user_has_openrouter_key
-from app.tiers import tier_uses_openrouter_free
+from app.services.platform_funding import (
+    compute_funding_metrics,
+    refresh_polza_org_balance,
+    set_polza_org_balance_rub,
+)
 from app.services.polza import user_has_polza_key
-from app.services.quota_limits import get_quota_limit_info
-from app.services.platform_funding import compute_funding_metrics, refresh_polza_org_balance, set_polza_org_balance_rub
 from app.services.polza_balance_cron import run_polza_balance_check
+from app.services.quota_limits import get_quota_limit_info
 from app.services.routerai_pool_monitor import get_polza_pool_status
-from app.tiers import normalize_tier, tier_monthly_cap, tier_requires_payment
+from app.tiers import (
+    normalize_tier,
+    tier_requires_payment,
+    tier_uses_openrouter_free,
+)
+
+_ADMIN_PROBE_PASSWORD = "__probe__"
 
 router = APIRouter(prefix="/v1/local-admin", tags=["local-admin"])
 
@@ -244,7 +251,7 @@ def site_overview(db: Session = Depends(get_db), _: None = Depends(require_admin
         "users_with_polza_key": with_polza,
         "users_with_openrouter_key": with_openrouter,
         "users_paid_tier": paid,
-        "frontend_url": "https://frontend-henna-tau-19.vercel.app",
+        "frontend_url": "https://nexus-zeta-ruby-12.vercel.app",
         "cloud_url": NEXUS_ADMIN_DEFAULT_CLOUD_URL,
         "polza_backend_configured": bool(POLZA_BACKEND_API_KEY),
         "openrouter_management_configured": openrouter_management_enabled(),
@@ -755,9 +762,9 @@ def admin_reply_support_ticket(
     _: None = Depends(require_admin_access),
     db: Session = Depends(get_db),
 ):
-    from app.schemas import AdminSupportReply, SupportMessageOut
+    from app.schemas import SupportMessageOut
     from app.services.admin_audit import log_admin_action
-    from app.services.support_service import add_admin_reply, _message_out
+    from app.services.support_service import _message_out, add_admin_reply
 
     msg = add_admin_reply(
         db,
@@ -776,7 +783,7 @@ def admin_patch_support_ticket(
     _: None = Depends(require_admin_access),
     db: Session = Depends(get_db),
 ):
-    from app.schemas import AdminSupportStatusPatch, AdminSupportTicketDetail
+    from app.schemas import AdminSupportTicketDetail
     from app.services.admin_audit import log_admin_action
     from app.services.support_service import get_admin_ticket_detail, set_ticket_status
 
@@ -852,7 +859,7 @@ def patch_polza_deposit(
     if body.deposit_rub is not None:
         balance_rub = body.deposit_rub
     elif body.deposit_usd is not None:
-        from app.services.fx_rates import usd_to_rub, get_usd_rub_rate_sync
+        from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
 
         balance_rub = usd_to_rub(body.deposit_usd, get_usd_rub_rate_sync())
     else:

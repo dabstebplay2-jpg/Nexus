@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.connectors.catalog import get_catalog_entry, is_mvp_connector
 from app.database import UserConnectionDB
 from app.services.credentials_vault import decrypt_credentials, encrypt_credentials
+from app.time_utils import utc_now
 
 
 def get_connection(db: Session, user_id: int, connector_id: str) -> UserConnectionDB | None:
@@ -53,7 +54,7 @@ def upsert_connection(
         row.expires_at = expires_at
         row.status = "connected"
         row.enabled_for_chat = 1
-        row.updated_at = datetime.utcnow()
+        row.updated_at = utc_now()
     else:
         row = UserConnectionDB(
             user_id=user_id,
@@ -86,7 +87,7 @@ def disconnect(db: Session, user_id: int, connector_id: str) -> bool:
     row.status = "disconnected"
     row.encrypted_credentials = encrypt_credentials({})
     row.enabled_for_chat = 0
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utc_now()
     db.commit()
     return True
 
@@ -96,7 +97,7 @@ def set_enabled_for_chat(db: Session, user_id: int, connector_id: str, enabled: 
     if not row:
         return None
     row.enabled_for_chat = 1 if enabled else 0
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utc_now()
     db.commit()
     db.refresh(row)
     return row

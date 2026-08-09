@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -9,8 +10,8 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.config import (
     NEXUS_ADMIN_DEFAULT_CLOUD_URL,
-    NEXUS_CORS_ORIGINS,
     NEXUS_LOCAL_ADMIN,
+    NEXUS_MODELS_REFRESH_INTERVAL_SEC,
     NEXUS_REMOTE_ADMIN,
     POLZA_BACKEND_API_KEY,
     admin_api_enabled,
@@ -20,25 +21,54 @@ from app.config import (
     is_testing_mode,
     redis_persistence_enabled,
 )
+from app.database import migrate_schema  # noqa: F401 — used in middleware
 from app.routers import (
     ai,
     artifacts,
     auth,
     billing,
+    browser_sync,
     chats,
     connectors,
     internal_admin,
     memory,
+    polza_auth,
+    spaces,
     support,
+    system_status,
     telegram,
     testing,
 )
-from app.database import migrate_schema  # noqa: F401 — used in middleware
 from app.services.fx_rates import refresh_usd_rub_rate
 
 logger = logging.getLogger(__name__)
+_background_tasks: set[asyncio.Task] = set()
 
-app = FastAPI(title="Nexus Cloud Authorization & Billing Server v2.0")
+
+def _start_background_task(coro) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
+
+@asynccontextmanager
+async def _lifespan(_: FastAPI):
+    await _startup()
+    try:
+        yield
+    finally:
+        tasks = list(_background_tasks)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+
+app = FastAPI(
+    title="Nexus Cloud Authorization & Billing Server v2.0",
+    lifespan=_lifespan,
+)
 app.state.db_ready = False
 app.state.redis_hydrate_done = True
 
@@ -105,10 +135,10 @@ async def _background_warmup() -> None:
         logger.warning("FX refresh on startup failed (non-fatal): %s", exc)
 
     try:
-        from app.services.models_registry import refresh_models_cache
+        from app.services.models_registry import refresh_all_model_sources
 
-        await refresh_models_cache(force=True)
-        logger.info("Каталог моделей Polza.ai прогрет при старте")
+        await refresh_all_model_sources(force=True)
+        logger.info("Каталоги Polza.ai и OpenRouter прогреты при старте")
     except Exception as exc:
         logger.warning("Прогрев каталога моделей не удался (non-fatal): %s", exc)
 
@@ -152,7 +182,6 @@ async def _background_warmup() -> None:
         )
 
 
-@app.on_event("startup")
 async def _startup():
     from app.production_guard import assert_production_config
 
@@ -196,9 +225,24 @@ async def _startup():
                 except Exception as exc:
                     logger.warning("FX hourly refresh failed: %s", exc)
 
-        asyncio.create_task(_fx_daily_loop())
+        async def _models_daily_loop() -> None:
+            from app.services.models_registry import refresh_all_model_sources
 
-    asyncio.create_task(_background_warmup())
+            while True:
+                await asyncio.sleep(NEXUS_MODELS_REFRESH_INTERVAL_SEC)
+                try:
+                    await refresh_all_model_sources(force=True)
+                    logger.info(
+                        "Model catalogs background refresh completed (every %s sec)",
+                        NEXUS_MODELS_REFRESH_INTERVAL_SEC,
+                    )
+                except Exception as exc:
+                    logger.warning("Model catalogs background refresh failed: %s", exc)
+
+        _start_background_task(_fx_daily_loop())
+        _start_background_task(_models_daily_loop())
+
+    _start_background_task(_background_warmup())
     logger.info("Nexus Cloud ready — background warmup started")
 
 _cors_origins = admin_cors_origins()
@@ -213,20 +257,18 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
-from app.routers import polza_auth
-
 app.include_router(polza_auth.router)
 app.include_router(billing.router)
 app.include_router(chats.router)
+app.include_router(spaces.router)
 app.include_router(memory.router)
-from app.routers import browser_sync
-
 app.include_router(browser_sync.router)
 app.include_router(artifacts.router)
 app.include_router(ai.router)
 app.include_router(telegram.router)
 app.include_router(connectors.router)
 app.include_router(support.router)
+app.include_router(system_status.router)
 app.include_router(testing.router)
 app.include_router(internal_admin.router)
 

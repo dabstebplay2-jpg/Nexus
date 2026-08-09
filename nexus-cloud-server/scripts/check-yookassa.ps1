@@ -1,6 +1,6 @@
 # Проверка ЮKassa на Render (без секретов)
 param(
-    [string]$CloudBase = "https://nexus-cloud-bxcc.onrender.com"
+    [string]$CloudBase = "https://nexus-cloud-ee17.onrender.com"
 )
 
 $uri = "$($CloudBase.TrimEnd('/'))/v1/billing/catalog"

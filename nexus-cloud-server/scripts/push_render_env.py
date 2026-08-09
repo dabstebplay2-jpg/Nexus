@@ -58,11 +58,11 @@ RENDER_KEYS = [
 ]
 
 DEFAULTS = {
-    "POLZA_OAUTH_CALLBACK_URL": "https://nexus-cloud-bxcc.onrender.com/v1/auth/polza/callback",
+    "POLZA_OAUTH_CALLBACK_URL": "https://nexus-cloud-ee17.onrender.com/v1/auth/polza/callback",
     "POLZA_APP_NAME": "Nexus",
     "NEXUS_CORS_ORIGINS": "https://nexus-zeta-ruby-12.vercel.app,https://nexus-ide.vercel.app",
     "NEXUS_FRONTEND_URL": "https://nexus-zeta-ruby-12.vercel.app",
-    "GOOGLE_REDIRECT_URI": "https://nexus-cloud-bxcc.onrender.com/v1/auth/google/callback",
+    "GOOGLE_REDIRECT_URI": "https://nexus-cloud-ee17.onrender.com/v1/auth/google/callback",
     "NEXUS_EMAIL_AUTH_ENABLED": "false",
     "NEXUS_BILLING_TEST_MODE": "false",
     "NEXUS_PROMO_CODES_ENABLED": "false",

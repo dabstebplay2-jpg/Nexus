@@ -15,6 +15,7 @@ def _prod_env(monkeypatch):
     monkeypatch.setenv("RENDER", "true")
     monkeypatch.setenv("NEXUS_TESTING_MODE", "false")
     monkeypatch.setenv("NEXUS_BILLING_TEST_MODE", "false")
+    monkeypatch.setenv("NEXUS_AUTH_DEV_LOG_CODES", "false")
     monkeypatch.setenv("NEXUS_CLOUD_SECRET_KEY", "test-secret-key-32-characters-long!!")
     monkeypatch.setenv("NEXUS_CORS_ORIGINS", "https://app.example.com")
     monkeypatch.setenv("NEXUS_CLOUD_DATABASE_URL", "postgresql://u:p@localhost/db")
@@ -49,6 +50,16 @@ def test_production_blocks_missing_polza_keys(monkeypatch):
     _prod_env(monkeypatch)
     monkeypatch.delenv("POLZA_MCP_TOKEN", raising=False)
     monkeypatch.delenv("POLZA_BACKEND_API_KEY", raising=False)
+
+    pg = _reload_prod_modules(monkeypatch)
+
+    with pytest.raises(SystemExit):
+        pg.assert_production_config()
+
+
+def test_production_blocks_dev_otp_logging(monkeypatch):
+    _prod_env(monkeypatch)
+    monkeypatch.setenv("NEXUS_AUTH_DEV_LOG_CODES", "true")
 
     pg = _reload_prod_modules(monkeypatch)
 

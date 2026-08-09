@@ -17,7 +17,7 @@ const TerminalArea = ({ workspacePath = 'C:\\nexus-ide', demoMode = false }) => 
       return undefined;
     }
     const cwd = encodeURIComponent(workspacePath || '.');
-    const apiOrigin = (import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api').replace(/\/api\/?$/, '');
+    const apiOrigin = (import.meta.env.VITE_IDE_API_BASE || 'http://127.0.0.1:8000/api').replace(/\/api\/?$/, '');
     const wsOrigin = apiOrigin.replace(/^http/, 'ws');
     const url = `${wsOrigin}/api/ws/terminal?cwd=${cwd}`;
     ws.current = new WebSocket(url);

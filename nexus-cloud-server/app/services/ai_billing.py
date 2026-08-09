@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 
 from app.config import DEFAULT_COST, MARGIN_MULTIPLIER, MODEL_COSTS
 from app.database import TransactionDB, UserDB
-from app.services.quota_limits import assert_quota_budget, get_quota_limit_info
 from app.services.models_registry import get_pricing_for_billing
 from app.services.polza import get_user_polza_key
+from app.services.quota_limits import assert_quota_budget, get_quota_limit_info
 from app.tiers import normalize_tier, tier_allows_ai, tier_monthly_cap
 
 
@@ -82,7 +82,7 @@ async def apply_usage_billing(db: Session, user: UserDB, *, model: str, usage: d
                     usage_json=json.dumps(usage_payload, ensure_ascii=False),
                 )
             )
-        
+
         user.balance = max(0.0, round(user.balance - balance_part, 6))
         db.add(
             TransactionDB(

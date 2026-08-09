@@ -2,7 +2,7 @@ const PW_KEY = 'nexus_admin_pw';
 const SERVER_KEY = 'nexus_admin_server';
 const LOCAL_DB_KEY = 'nexus_admin_local_db';
 
-export const DEFAULT_CLOUD = 'https://frontend-henna-tau-19.vercel.app/api';
+export const DEFAULT_CLOUD = 'https://nexus-zeta-ruby-12.vercel.app/api';
 
 /** Админка на Render: UI и API на одном хосте, без localhost-прокси. */
 export function isHostedOnCloudApi() {

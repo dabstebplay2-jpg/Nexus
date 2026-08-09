@@ -2,24 +2,28 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import os
 import re
 import time
+from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 import httpx
 
-from app.config import POLZA_BASE_URL
+from app.config import NEXUS_MODELS_REFRESH_INTERVAL_SEC, POLZA_BASE_URL, is_testing_mode
 from app.curated_models import (
     CATALOG_VERSION,
+    COST_SEGMENT_LABEL_RU,
     COST_SEGMENT_ORDER,
+    SEGMENT_TO_MIN_TIER,
     apply_curated_catalog,
     curated_ids_union,
 )
-from app.config import is_testing_mode
 from app.services import openrouter_models as or_models
+from app.services.fx_rates import get_usd_rub_rate_sync
 from app.tiers import normalize_tier, tier_allows_ai, tier_uses_openrouter_free
 from app.vision_capabilities import apply_vision_metadata, build_vision_guide
 
@@ -27,7 +31,14 @@ logger = logging.getLogger(__name__)
 
 MODELS_CACHE_TTL = int(os.environ.get("NEXUS_MODELS_CACHE_TTL", "1800"))
 MODELS_PER_TIER_DISPLAY = int(os.environ.get("NEXUS_MODELS_PER_TIER", "12"))
-MAX_MODELS_FOR_USER = int(os.environ.get("NEXUS_MODELS_MAX_VISIBLE", "48"))
+MAX_MODELS_FOR_USER = int(os.environ.get("NEXUS_MODELS_MAX_VISIBLE", "80"))
+AUTO_DISCOVERED_MODELS_LIMIT = int(os.environ.get("NEXUS_MODELS_AUTO_DISCOVER_LIMIT", "40"))
+LATEST_MODEL_MAX_AGE_DAYS = int(os.environ.get("NEXUS_MODELS_LATEST_MAX_AGE_DAYS", "90"))
+MODELS_FAILURE_RETRY_SEC = int(os.environ.get("NEXUS_MODELS_FAILURE_RETRY_SEC", "300"))
+_DEFAULT_DISK_CACHE = Path(__file__).resolve().parents[2] / ".cache" / "polza_models.json"
+MODELS_DISK_CACHE_PATH = Path(
+    os.environ.get("NEXUS_MODELS_DISK_CACHE_PATH") or _DEFAULT_DISK_CACHE
+)
 
 TIER_RANK = {"FREE": 0, "HOBBY": 1, "STANDARD": 2, "PRO": 3, "ULTRA": 4}
 TIER_ORDER = ["HOBBY", "STANDARD", "PRO", "ULTRA"]
@@ -63,7 +74,15 @@ _cache: dict[str, Any] = {
     "media_models": [],
     "by_id": {},
     "curated_ids": set(),
+    "source_total_models": 0,
+    "source_text_models": 0,
+    "auto_discovered_count": 0,
+    "last_attempt_at": 0.0,
+    "last_error": None,
+    "source": "empty",
+    "disk_cached_at": 0.0,
 }
+_refresh_lock = asyncio.Lock()
 
 
 def tier_rank(tier: str | None) -> int:
@@ -99,6 +118,9 @@ def _model_list_item(subscription_tier: str, m: dict) -> dict:
     if hint and hint not in desc:
         desc = f"{desc} · {hint}".strip(" ·")
     enriched = apply_vision_metadata(m)
+    created = int(m.get("created") or 0)
+    latest_cutoff = int(time.time()) - (LATEST_MODEL_MAX_AGE_DAYS * 86400)
+    is_latest = bool(m.get("auto_discovered")) or (created > 0 and created >= latest_cutoff)
     item = {
         **enriched,
         "description": desc[:320],
@@ -107,10 +129,10 @@ def _model_list_item(subscription_tier: str, m: dict) -> dict:
         "required_tier_label": _tier_label(min_tier),
         "lock_message": None if allowed else _lock_message(subscription_tier, min_tier),
         "tier_label": m["min_tier"].title(),
-        "is_latest": True,
+        "is_latest": is_latest,
         "cost_band": m.get("cost_segment") or m["min_tier"],
         "usage_hint": None,
-        "badge": seg_label or None,
+        "badge": "Новинка" if m.get("auto_discovered") else (seg_label or None),
     }
     if allowed:
         if user_rank == 2 and model_band == 2:
@@ -127,6 +149,9 @@ def _price_usd_per_1m(prompt: float, completion: float) -> float:
 
 def _is_chat_model(raw: dict) -> bool:
     mid = (raw.get("id") or "").lower()
+    model_type = (raw.get("type") or "").strip().lower()
+    if model_type and model_type != "chat":
+        return False
     if _SKIP_ID_PARTS.search(mid):
         return False
     arch = raw.get("architecture") or {}
@@ -141,12 +166,29 @@ def _is_chat_model(raw: dict) -> bool:
     return bool(mid)
 
 
-def _normalize(raw: dict) -> dict:
-    pricing = raw.get("pricing") or {}
-    prompt = float(pricing.get("prompt") or 0)
-    completion = float(pricing.get("completion") or 0)
+def _as_float(value: Any) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _normalize(raw: dict, usd_rub_rate: float | None = None) -> dict:
+    top_provider = raw.get("top_provider") or {}
+    provider_pricing = top_provider.get("pricing") or {}
+    legacy_pricing = raw.get("pricing") or {}
+    rate = max(1.0, float(usd_rub_rate or get_usd_rub_rate_sync()))
+
+    prompt_rub_1m = _as_float(provider_pricing.get("prompt_per_million"))
+    completion_rub_1m = _as_float(provider_pricing.get("completion_per_million"))
+    if prompt_rub_1m or completion_rub_1m:
+        prompt = (prompt_rub_1m / rate) / 1_000_000
+        completion = (completion_rub_1m / rate) / 1_000_000
+    else:
+        prompt = _as_float(legacy_pricing.get("prompt"))
+        completion = _as_float(legacy_pricing.get("completion"))
     provider = (raw.get("id") or "").split("/")[0] if "/" in (raw.get("id") or "") else "unknown"
-    ctx = int(raw.get("context_length") or 0)
+    ctx = int(raw.get("context_length") or top_provider.get("context_length") or 0)
     arch = raw.get("architecture") or {}
     input_mod = list(arch.get("input_modalities") or [])
     output_mod = list(arch.get("output_modalities") or [])
@@ -156,7 +198,9 @@ def _normalize(raw: dict) -> dict:
         "id": raw["id"],
         "name": raw.get("name") or raw["id"],
         "provider": provider.replace("-", " ").title(),
-        "description": (raw.get("description") or "")[:280],
+        "description": (raw.get("short_description") or raw.get("description") or "")[:280],
+        "model_type": (raw.get("type") or "chat").strip().lower(),
+        "endpoints": list(raw.get("endpoints") or []),
         "context_k": max(1, ctx // 1000) if ctx else 0,
         "created": int(raw.get("created") or 0),
         "multimodal": supports_vision,
@@ -164,10 +208,94 @@ def _normalize(raw: dict) -> dict:
         "output_modalities": output_mod,
         "supports_vision": supports_vision,
         "supports_image_gen": supports_image_gen,
+        "supports_tools": "tools" in (top_provider.get("supported_parameters") or []),
+        "supported_parameters": list(top_provider.get("supported_parameters") or []),
         "price_1m_usd": round(_price_usd_per_1m(prompt, completion), 6),
         "pricing": {"prompt": prompt, "completion": completion},
+        "pricing_rub_1m": {
+            "prompt": prompt_rub_1m,
+            "completion": completion_rub_1m,
+        },
         "tags": [],
     }
+
+
+def _automatic_cost_segment(model: dict) -> str:
+    total = float(model.get("price_1m_usd") or 0)
+    if total <= 0:
+        return "very_expensive"
+    if total <= 2:
+        return "cheap"
+    if total <= 10:
+        return "medium"
+    if total <= 40:
+        return "expensive"
+    return "very_expensive"
+
+
+def _automatic_price_hint(model: dict) -> str:
+    pricing = model.get("pricing_rub_1m") or {}
+    prompt = float(pricing.get("prompt") or 0)
+    completion = float(pricing.get("completion") or 0)
+    if prompt or completion:
+        return f"~{prompt:.0f} / {completion:.0f} ₽ за 1M токенов"
+    return "Цена уточняется у провайдера"
+
+
+def _append_auto_discovered_models(all_models: list[dict], curated: list[dict]) -> list[dict]:
+    """Add the newest chat models that are not yet in the hand-curated families."""
+    out = list(curated)
+    seen: set[str] = set()
+    for item in curated:
+        for field in ("id", "model_id_standard", "model_id_thinking"):
+            value = item.get(field)
+            if value:
+                seen.add(str(value))
+
+    remaining_capacity = max(0, MAX_MODELS_FOR_USER - len(out))
+    limit = min(AUTO_DISCOVERED_MODELS_LIMIT, remaining_capacity)
+    if limit <= 0:
+        return out
+
+    candidates = [
+        m
+        for m in all_models
+        if m.get("model_type") == "chat"
+        and "text" in (m.get("output_modalities") or ["text"])
+        and m.get("id") not in seen
+        and int(m.get("created") or 0) > 0
+    ]
+    candidates.sort(key=lambda m: (int(m.get("created") or 0), m.get("id") or ""), reverse=True)
+
+    for model in candidates[:limit]:
+        segment = _automatic_cost_segment(model)
+        params = set(model.get("supported_parameters") or [])
+        supports_thinking = bool({"reasoning", "reasoning_effort", "include_reasoning"} & params)
+        mid = model["id"]
+        out.append(
+            {
+                **model,
+                "display_name": model.get("name") or mid,
+                "family_id": mid,
+                "model_id_standard": mid,
+                "model_id_thinking": mid if supports_thinking else None,
+                "supports_thinking": supports_thinking,
+                "thinking_via_reasoning_api": supports_thinking,
+                "thinking_hint": "Усиленное рассуждение через API модели" if supports_thinking else "",
+                "min_tier": SEGMENT_TO_MIN_TIER[segment],
+                "cost_segment": segment,
+                "cost_segment_label": COST_SEGMENT_LABEL_RU[segment],
+                "category": "chat",
+                "media_type": None,
+                "research_note": "",
+                "quality_score": 80,
+                "price_hint": _automatic_price_hint(model),
+                "curated": False,
+                "auto_discovered": True,
+                "catalog_version": CATALOG_VERSION,
+            }
+        )
+    return out
 
 
 def _assign_min_tiers(models: list[dict]) -> None:
@@ -208,39 +336,123 @@ async def _fetch_polza_models() -> list[dict]:
     return data if isinstance(data, list) else []
 
 
+def _write_models_disk_cache(raw_list: list[dict]) -> None:
+    try:
+        MODELS_DISK_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = MODELS_DISK_CACHE_PATH.with_suffix(".tmp")
+        temp_path.write_text(
+            json.dumps(
+                {"cached_at": time.time(), "data": raw_list},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
+        temp_path.replace(MODELS_DISK_CACHE_PATH)
+    except OSError as exc:
+        logger.warning("Models disk cache write failed: %s", exc)
+
+
+def _read_models_disk_cache() -> tuple[list[dict], float]:
+    try:
+        payload = json.loads(MODELS_DISK_CACHE_PATH.read_text(encoding="utf-8"))
+        data = payload.get("data") if isinstance(payload, dict) else None
+        cached_at = float(payload.get("cached_at") or 0) if isinstance(payload, dict) else 0.0
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)], cached_at
+    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        logger.warning("Models disk cache read failed: %s", exc)
+    return [], 0.0
+
+
 async def refresh_models_cache(*, force: bool = False) -> None:
     now = time.time()
     if not force and _cache["all_text"] and (now - _cache["fetched_at"]) < MODELS_CACHE_TTL:
         return
-    try:
-        raw_list = await _fetch_polza_models()
-    except Exception as exc:
-        logger.error("Polza models fetch failed: %s", exc)
-        if _cache["all_text"]:
+    if (
+        not force
+        and _cache["all_text"]
+        and _cache.get("last_error")
+        and (now - float(_cache.get("last_attempt_at") or 0)) < MODELS_FAILURE_RETRY_SEC
+    ):
+        return
+    async with _refresh_lock:
+        now = time.time()
+        if not force and _cache["all_text"] and (now - _cache["fetched_at"]) < MODELS_CACHE_TTL:
             return
-        raise
-    all_norm = [_normalize(r) for r in raw_list if (r.get("id") or "").strip()]
-    chat_list, research_list, media_list = apply_curated_catalog(all_norm)
-    _cache["chat_models"] = chat_list
-    _cache["research_models"] = research_list
-    _cache["media_models"] = media_list
-    _cache["all_text"] = chat_list
-    combined = chat_list + research_list + media_list
-    by_id: dict[str, dict] = {}
-    for m in combined:
-        by_id[m["id"]] = m
-        fid = m.get("family_id")
-        if fid and fid != m["id"]:
-            by_id[fid] = m
-        std = m.get("model_id_standard")
-        th = m.get("model_id_thinking")
-        if std:
-            by_id[std] = m
-        if th:
-            by_id[th] = m
-    _cache["by_id"] = by_id
-    _cache["curated_ids"] = curated_ids_union(chat_list, research_list, media_list)
-    _cache["fetched_at"] = now
+        if (
+            not force
+            and _cache["all_text"]
+            and _cache.get("last_error")
+            and (now - float(_cache.get("last_attempt_at") or 0)) < MODELS_FAILURE_RETRY_SEC
+        ):
+            return
+        _cache["last_attempt_at"] = now
+        live_fetch = True
+        try:
+            raw_list = await _fetch_polza_models()
+        except Exception as exc:
+            _cache["last_error"] = str(exc)[:240]
+            logger.error("Polza models fetch failed: %s", exc)
+            if _cache["all_text"]:
+                return
+            raw_list, disk_cached_at = await asyncio.to_thread(_read_models_disk_cache)
+            if not raw_list:
+                raise
+            live_fetch = False
+            _cache["disk_cached_at"] = disk_cached_at
+            logger.warning("Using persisted Polza models cache (%d models)", len(raw_list))
+
+        rate = get_usd_rub_rate_sync()
+        all_norm = [
+            _normalize(r, rate)
+            for r in raw_list
+            if isinstance(r, dict) and (r.get("id") or "").strip()
+        ]
+        curated_chat, research_list, media_list = apply_curated_catalog(all_norm)
+        chat_list = _append_auto_discovered_models(all_norm, curated_chat)
+        _cache["chat_models"] = chat_list
+        _cache["research_models"] = research_list
+        _cache["media_models"] = media_list
+        _cache["all_text"] = chat_list
+        combined = chat_list + research_list + media_list
+        by_id: dict[str, dict] = {}
+        for m in combined:
+            by_id[m["id"]] = m
+            fid = m.get("family_id")
+            if fid and fid != m["id"]:
+                by_id[fid] = m
+            std = m.get("model_id_standard")
+            th = m.get("model_id_thinking")
+            if std:
+                by_id[std] = m
+            if th:
+                by_id[th] = m
+        _cache["by_id"] = by_id
+        _cache["curated_ids"] = curated_ids_union(chat_list, research_list, media_list)
+        _cache["source_total_models"] = len(raw_list)
+        _cache["source_text_models"] = sum(1 for r in raw_list if isinstance(r, dict) and _is_chat_model(r))
+        _cache["auto_discovered_count"] = max(0, len(chat_list) - len(curated_chat))
+        _cache["fetched_at"] = time.time()
+        _cache["source"] = "polza_live" if live_fetch else "disk_cache"
+        if live_fetch:
+            _cache["last_error"] = None
+            _cache["disk_cached_at"] = _cache["fetched_at"]
+            await asyncio.to_thread(_write_models_disk_cache, raw_list)
+        logger.info(
+            "Polza catalog refreshed: source=%d chat_source=%d visible=%d auto=%d research=%d media=%d",
+            _cache["source_total_models"],
+            _cache["source_text_models"],
+            len(chat_list),
+            _cache["auto_discovered_count"],
+            len(research_list),
+            len(media_list),
+        )
+
+
+async def refresh_all_model_sources(*, force: bool = False) -> None:
+    await refresh_models_cache(force=force)
+    await or_models.refresh_free_models_cache(force=force)
 
 
 def get_model(model_id: str) -> dict | None:
@@ -436,6 +648,14 @@ async def catalog_meta() -> dict:
         "media_count": len(_cache.get("media_models") or []),
         "cached_at": _cache["fetched_at"],
         "cache_ttl_sec": MODELS_CACHE_TTL,
+        "background_refresh_interval_sec": NEXUS_MODELS_REFRESH_INTERVAL_SEC,
+        "source_total_models": _cache.get("source_total_models", 0),
+        "source_text_models": _cache.get("source_text_models", 0),
+        "auto_discovered_count": _cache.get("auto_discovered_count", 0),
+        "last_attempt_at": _cache.get("last_attempt_at", 0),
+        "last_error": _cache.get("last_error"),
+        "active_source": _cache.get("source", "empty"),
+        "disk_cached_at": _cache.get("disk_cached_at", 0),
         "tier_ceilings": {
             k: TIER_ORDER[v - 1] if v > 0 else "NONE" for k, v in TIER_MODEL_CEILING.items()
         },

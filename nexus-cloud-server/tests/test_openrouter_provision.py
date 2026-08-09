@@ -116,8 +116,8 @@ async def test_ensure_calls_provision_when_missing(db_session):
 
 @pytest.mark.asyncio
 async def test_call_openrouter_reprovisions_key_on_401(db_session):
+
     from app.routers.ai import _call_openrouter
-    from fastapi import HTTPException
 
     user = db_session.query(UserDB).filter(UserDB.id == 1).one()
     user.subscription_tier = "FREE"

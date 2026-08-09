@@ -1,6 +1,6 @@
 """Тесты аудита биллинга: пул при промо, quota_enabled, истечение периода."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from app.config import TIER_POOL_FRACTION
 from app.database import InvoiceDB, UserDB
@@ -8,6 +8,7 @@ from app.services.fx_rates import rub_to_usd
 from app.services.promo_redeem import resolve_subscribe_discount
 from app.services.quota_limits import get_quota_limit_info, start_subscription_period
 from app.tiers import tier_monthly_cap
+from app.time_utils import utc_now
 
 
 def test_discounted_pool_is_92_percent_of_paid_rub():
@@ -58,8 +59,8 @@ def test_expired_period_blocks_subscription_pool(db_session):
     user.subscription_tier = "STANDARD"
     user.balance = 5.0
     start_subscription_period(user, db_session, days=30)
-    user.subscription_period_start = datetime.utcnow() - timedelta(days=40)
-    user.subscription_period_end = datetime.utcnow() - timedelta(days=10)
+    user.subscription_period_start = utc_now() - timedelta(days=40)
+    user.subscription_period_end = utc_now() - timedelta(days=10)
     db_session.commit()
 
     inv = InvoiceDB(

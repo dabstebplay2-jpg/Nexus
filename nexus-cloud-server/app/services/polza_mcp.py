@@ -92,6 +92,21 @@ def _api_key_row_id(row: dict[str, Any]) -> str | None:
     return None
 
 
+def _created_api_key_id(raw: Any) -> str | None:
+    if not isinstance(raw, dict):
+        return None
+    direct = _api_key_row_id(raw)
+    if direct:
+        return direct
+    for field in ("data", "apiKey", "api_key", "key"):
+        nested = raw.get(field)
+        if isinstance(nested, dict):
+            found = _created_api_key_id(nested)
+            if found:
+                return found
+    return None
+
+
 def _api_key_row_name(row: dict[str, Any]) -> str:
     for field in ("name", "label", "title", "user", "email"):
         val = row.get(field)
@@ -117,13 +132,17 @@ async def find_polza_keys_by_name(name: str) -> list[dict[str, Any]]:
 
 
 async def delete_polza_keys_by_name(name: str) -> int:
-    """Удалить все ключи Polza с указанным именем. Возвращает число удалённых."""
-    deleted = 0
+    """Удалить ключи; без keys.danger — безопасно заблокировать через keys.write."""
+    removed = 0
     for row in await find_polza_keys_by_name(name):
         key_id = _api_key_row_id(row)
-        if key_id and await mcp_delete_api_key(key_id=key_id):
-            deleted += 1
-    return deleted
+        if not key_id:
+            continue
+        if await mcp_delete_api_key(key_id=key_id):
+            removed += 1
+        elif await mcp_quarantine_api_key(key_id=key_id):
+            removed += 1
+    return removed
 
 
 async def mcp_create_api_key(
@@ -132,11 +151,16 @@ async def mcp_create_api_key(
     amount_rub: float = 0.0,
 ) -> dict[str, Any]:
     """Создать API-ключ в org Polza (ключ показывается один раз в ответе)."""
-    arguments: dict[str, Any] = {"name": name[:80]}
+    # Current Polza MCP create_api_key accepts only `name`; limits are applied
+    # immediately afterwards through update_api_key.
+    data = await mcp_call_tool("create_api_key", {"name": name[:64]})
     amount = max(0.0, round(float(amount_rub), 2))
     if amount > 0:
-        arguments["spending_limit"] = {"period": "month", "amount_rub": amount}
-    data = await mcp_call_tool("create_api_key", arguments)
+        key_id = _created_api_key_id(data)
+        if not key_id:
+            raise PolzaMcpError("Polza создала ключ без ID — невозможно установить лимит")
+        if not await mcp_update_api_key_monthly_limit(key_id=key_id, amount_rub=amount):
+            raise PolzaMcpError("Polza создала ключ, но не применила месячный лимит")
     if isinstance(data, dict):
         return data
     if isinstance(data, str):
@@ -148,7 +172,7 @@ async def mcp_delete_api_key(*, key_id: str) -> bool:
     if not key_id:
         return False
     try:
-        await mcp_call_tool("delete_api_key", {"id": key_id})
+        await mcp_call_tool("delete_api_key", {"keyId": key_id})
         return True
     except PolzaMcpError as exc:
         logger.warning("MCP delete_api_key failed: %s", exc)
@@ -165,23 +189,54 @@ async def mcp_update_api_key_monthly_limit(
     amount = max(0.0, round(float(amount_rub), 2))
     if amount <= 0:
         return False
-    arguments: dict[str, Any] = {
-        "spending_limit": {
-            "period": "month",
-            "amount_rub": amount,
-        },
-    }
+    resolved_key_id = str(key_id or "").strip()
     if key_id:
-        arguments["id"] = str(key_id)
+        resolved_key_id = str(key_id)
     elif api_key_prefix:
-        arguments["key_prefix"] = api_key_prefix[:24]
+        target = api_key_prefix.strip().lower()
+        for row in await mcp_list_api_keys():
+            prefix = str(
+                row.get("keyPrefix") or row.get("key_prefix") or row.get("prefix") or ""
+            ).strip().lower()
+            if prefix and (prefix.startswith(target) or target.startswith(prefix)):
+                resolved_key_id = _api_key_row_id(row) or ""
+                break
     else:
         raise PolzaMcpError("key_id or api_key_prefix required")
+    if not resolved_key_id:
+        logger.warning("MCP update_api_key: key not found by prefix")
+        return False
+    arguments: dict[str, Any] = {
+        "keyId": resolved_key_id,
+        "limitAmount": amount,
+        "limitPeriod": "month",
+    }
     try:
         await mcp_call_tool("update_api_key", arguments)
         return True
     except PolzaMcpError as exc:
         logger.warning("MCP update_api_key failed: %s", exc)
+        return False
+
+
+async def mcp_quarantine_api_key(*, key_id: str) -> bool:
+    """Make a key unusable when the MCP token cannot hard-delete it."""
+    if not key_id:
+        return False
+    try:
+        await mcp_call_tool(
+            "update_api_key",
+            {
+                "keyId": str(key_id),
+                "name": f"disabled-{str(key_id)[:24]}",
+                "limitAmount": 0.01,
+                "limitPeriod": "total",
+            },
+        )
+        logger.warning("Polza key %s quarantined because hard delete is unavailable", key_id)
+        return True
+    except PolzaMcpError as exc:
+        logger.error("MCP key quarantine failed: %s", exc)
         return False
 
 

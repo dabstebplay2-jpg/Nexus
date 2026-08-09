@@ -1,6 +1,5 @@
+from datetime import timedelta
 from types import SimpleNamespace
-
-from datetime import datetime, timedelta, timezone
 
 from app.services.invoice_pool import (
     get_user_period_pool_usd,

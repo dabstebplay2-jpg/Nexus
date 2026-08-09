@@ -10,8 +10,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from scripts.push_render_env import ENV_FILE, _parse_env  # noqa: E402
 from upstash_redis import Redis  # noqa: E402
+
+from scripts.push_render_env import ENV_FILE, _parse_env  # noqa: E402
 
 STALE_PREFIXES = ("goog999new",)
 

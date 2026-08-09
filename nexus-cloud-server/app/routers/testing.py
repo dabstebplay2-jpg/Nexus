@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.config import is_testing_mode
 from app.database import UserDB, get_db
 from app.security import get_current_user
-from app.config import is_testing_mode
 from app.services.testing_mode import ensure_testing_subscription
-from app.tiers import TIER_ORDER, normalize_tier
+from app.tiers import TIER_ORDER
 
 router = APIRouter(prefix="/v1/testing", tags=["testing"])
 

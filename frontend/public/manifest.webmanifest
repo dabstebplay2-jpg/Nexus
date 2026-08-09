@@ -1,8 +1,10 @@
 {
-  "name": "Nexus IDE",
+  "id": "/",
+  "name": "Nexus",
   "short_name": "Nexus",
   "description": "ИИ-чат, Research и IDE в одном приложении",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#08080a",
   "theme_color": "#08080a",

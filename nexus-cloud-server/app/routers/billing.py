@@ -4,12 +4,21 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from app.config import NEXUS_BILLING_TEST_MODE, TIER_POOL_FRACTION, is_testing_mode, yookassa_enabled
+from app.config import (
+    NEXUS_BILLING_TEST_MODE,
+    TIER_POOL_FRACTION,
+    is_testing_mode,
+    yookassa_enabled,
+)
 from app.database import InvoiceDB, TransactionDB, UserDB, get_db
 from app.schemas import PromoRedeemRequest, SubscribeRequest, TopupRequest
 from app.security import get_current_user
-from app.services.billing_fulfillment import fulfill_subscription_invoice, fulfill_topup_invoice, invoice_tier_from_id
-from app.services.invoice_pool import invoice_pool_usd
+from app.services.auth_rate_limit import check_rate_limit
+from app.services.billing_fulfillment import (
+    fulfill_subscription_invoice,
+    fulfill_topup_invoice,
+    invoice_tier_from_id,
+)
 from app.services.fx_rates import (
     fx_rate_metadata,
     get_usd_rub_rate_sync,
@@ -17,14 +26,26 @@ from app.services.fx_rates import (
     rub_to_usd,
     usd_to_rub,
 )
+from app.services.invoice_pool import invoice_pool_usd
 from app.services.models_registry import tier_rank
 from app.services.polza import suspend_polza_for_user
 from app.services.promo_codes import promo_codes_enabled, public_promo_hints
 from app.services.promo_redeem import redeem_promo_code, resolve_subscribe_discount
 from app.services.usage_stats import aggregate_usage_stats
-from app.services.auth_rate_limit import check_rate_limit
-from app.services.yookassa import YooKassaError, create_payment, get_payment, payment_is_succeeded, yookassa_configured
-from app.tiers import normalize_tier, public_tiers_list, tier_monthly_cap, tier_price, tier_requires_payment
+from app.services.yookassa import (
+    YooKassaError,
+    create_payment,
+    get_payment,
+    payment_is_succeeded,
+    yookassa_configured,
+)
+from app.tiers import (
+    normalize_tier,
+    public_tiers_list,
+    tier_monthly_cap,
+    tier_price,
+    tier_requires_payment,
+)
 
 router = APIRouter(prefix="/v1/billing", tags=["billing"])
 logger = logging.getLogger("app.subscription")
@@ -166,8 +187,7 @@ async def create_topup_invoice(
         raise HTTPException(
             status_code=503,
             detail=(
-                "Платёжная система не настроена. Задайте YOOKASSA_SHOP_ID и YOOKASSA_SECRET_KEY на сервере "
-                "или включите NEXUS_BILLING_TEST_MODE только для локальной разработки."
+                "Платёжная система временно недоступна. Попробуйте позже или напишите в поддержку."
             ),
         )
 
@@ -300,8 +320,7 @@ async def create_subscription_invoice(
         raise HTTPException(
             status_code=503,
             detail=(
-                "Платёжная система не настроена. Задайте YOOKASSA_SHOP_ID и YOOKASSA_SECRET_KEY на сервере "
-                "или включите NEXUS_BILLING_TEST_MODE только для локальной разработки."
+                "Платёжная система временно недоступна. Попробуйте позже или напишите в поддержку."
             ),
         )
 

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-import logging
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from datetime import datetime
 from typing import Any
 
@@ -25,16 +25,17 @@ from app.database import (
     UserConnectionDB,
     UserDB,
     UserMemoryDB,
+    WorkspaceDB,
 )
-
 from app.services.detailed_log import get_logger, log_detail
+from app.time_utils import utc_now
 
 logger = get_logger("redis")
 
 _SNAPSHOT_KEY_V1 = "nexus:v1:db_snapshot"
 _SNAPSHOT_KEY_V2 = "nexus:v2:db_snapshot"
 _SNAPSHOT_KEY = "nexus:v3:db_snapshot"
-_SNAPSHOT_VERSION = 4
+_SNAPSHOT_VERSION = 5
 _hook_installed = False
 
 
@@ -229,6 +230,30 @@ def _chat_from_dict(d: dict) -> ChatConversationDB:
     )
 
 
+def _workspace_to_dict(workspace: WorkspaceDB) -> dict:
+    return {
+        "id": workspace.id,
+        "user_id": workspace.user_id,
+        "workspace_id": workspace.workspace_id,
+        "name": workspace.name,
+        "emoji": workspace.emoji,
+        "created_at": _serialize_dt(workspace.created_at),
+        "updated_at": _serialize_dt(workspace.updated_at),
+    }
+
+
+def _workspace_from_dict(data: dict) -> WorkspaceDB:
+    return WorkspaceDB(
+        id=data.get("id"),
+        user_id=data["user_id"],
+        workspace_id=data["workspace_id"],
+        name=data.get("name") or "Моё пространство",
+        emoji=data.get("emoji") or "✨",
+        created_at=_deserialize_dt(data.get("created_at")),
+        updated_at=_deserialize_dt(data.get("updated_at")),
+    )
+
+
 def _ticket_to_dict(t: SupportTicketDB) -> dict:
     return {
         "id": t.id,
@@ -378,12 +403,13 @@ def _platform_from_dict(d: dict) -> PlatformSettingsDB:
 def export_snapshot(db: Session) -> dict[str, Any]:
     return {
         "v": _SNAPSHOT_VERSION,
-        "exported_at": datetime.utcnow().isoformat(),
+        "exported_at": utc_now().isoformat(),
         "users": [_user_to_dict(u) for u in db.query(UserDB).order_by(UserDB.id).all()],
         "transactions": [_tx_to_dict(t) for t in db.query(TransactionDB).order_by(TransactionDB.id).all()],
         "invoices": [_inv_to_dict(i) for i in db.query(InvoiceDB).all()],
         "fx_rates": [_fx_to_dict(f) for f in db.query(FxRateDB).all()],
         "chat_conversations": [_chat_to_dict(c) for c in db.query(ChatConversationDB).all()],
+        "workspaces": [_workspace_to_dict(w) for w in db.query(WorkspaceDB).all()],
         "support_tickets": [_ticket_to_dict(t) for t in db.query(SupportTicketDB).all()],
         "support_messages": [_support_msg_to_dict(m) for m in db.query(SupportMessageDB).all()],
         "user_artifacts": [_artifact_to_dict(a) for a in db.query(UserArtifactDB).all()],
@@ -401,6 +427,7 @@ def _clear_tables(db: Session) -> None:
     db.query(TransactionDB).delete()
     db.query(InvoiceDB).delete()
     db.query(ChatConversationDB).delete()
+    db.query(WorkspaceDB).delete()
     db.query(UserArtifactDB).delete()
     db.query(UserMemoryDB).delete()
     db.query(UserConnectionDB).delete()
@@ -424,6 +451,8 @@ def import_snapshot(db: Session, data: dict[str, Any]) -> int:
         db.add(_fx_from_dict(row))
     for row in data.get("chat_conversations") or []:
         db.add(_chat_from_dict(row))
+    for row in data.get("workspaces") or []:
+        db.add(_workspace_from_dict(row))
     for row in data.get("support_tickets") or []:
         db.add(_ticket_from_dict(row))
     for row in data.get("support_messages") or []:
@@ -458,6 +487,7 @@ def persist_snapshot_to_redis(db: Session | None = None) -> None:
             transactions=len(payload.get("transactions") or []),
             invoices=len(payload.get("invoices") or []),
             chats=len(payload.get("chat_conversations") or []),
+            spaces=len(payload.get("workspaces") or []),
             support=len(payload.get("support_tickets") or []),
             key=_SNAPSHOT_KEY,
             bytes=len(raw),

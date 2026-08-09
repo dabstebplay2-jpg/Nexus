@@ -1,4 +1,4 @@
-const CACHE = 'nexus-shell-v1';
+const CACHE = 'nexus-shell-v2';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
@@ -9,7 +9,14 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    Promise.all([
+      caches
+        .keys()
+        .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))),
+      self.clients.claim(),
+    ])
+  );
 });
 
 self.addEventListener('fetch', (event) => {

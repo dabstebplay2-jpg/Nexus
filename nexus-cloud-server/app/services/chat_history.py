@@ -1,11 +1,12 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.database import ChatConversationDB
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -70,17 +71,17 @@ def _sanitize_images(raw: Any) -> list[dict] | None:
 
 def _ms_to_dt(value: int | float | None) -> datetime:
     if value is None:
-        return datetime.utcnow()
+        return utc_now()
     try:
         sec = float(value) / 1000.0 if float(value) > 1e12 else float(value)
-        return datetime.utcfromtimestamp(sec)
+        return datetime.fromtimestamp(sec, timezone.utc).replace(tzinfo=None)
     except (TypeError, ValueError, OSError):
-        return datetime.utcnow()
+        return utc_now()
 
 
 def _dt_to_ms(dt: datetime | None) -> int:
     if not dt:
-        return int(datetime.utcnow().timestamp() * 1000)
+        return int(utc_now().timestamp() * 1000)
     return int(dt.timestamp() * 1000)
 
 
@@ -211,8 +212,15 @@ def list_user_chats(db: Session, user_id: int, *, workspace_id: str | None = Non
 
 
 def trim_old_conversations(db: Session, user_id: int, *, workspace_id: str | None = None) -> None:
-    rows = list_user_chats(db, user_id, workspace_id=workspace_id)
-    if len(rows) <= MAX_CONVERSATIONS_PER_USER:
-        return
-    for row in rows[MAX_CONVERSATIONS_PER_USER:]:
+    query = db.query(ChatConversationDB).filter(ChatConversationDB.user_id == user_id)
+    if workspace_id is None:
+        query = query.filter(ChatConversationDB.workspace_id.is_(None))
+    else:
+        query = query.filter(ChatConversationDB.workspace_id == workspace_id)
+    rows = (
+        query.order_by(ChatConversationDB.updated_at.desc())
+        .offset(MAX_CONVERSATIONS_PER_USER)
+        .all()
+    )
+    for row in rows:
         db.delete(row)

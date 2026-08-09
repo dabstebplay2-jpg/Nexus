@@ -225,6 +225,43 @@
   margin: 1rem 0;
 }
 
+.auth-dev-code {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(45, 212, 191, 0.28);
+  border-radius: 0.75rem;
+  background: rgba(45, 212, 191, 0.08);
+  color: #a7f3d0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.auth-dev-code:hover:not(:disabled) {
+  background: rgba(45, 212, 191, 0.14);
+}
+
+.auth-dev-code span {
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.auth-dev-code strong {
+  color: #fff;
+  font-size: 1.15rem;
+  letter-spacing: 0.16em;
+  font-variant-numeric: tabular-nums;
+}
+
+.auth-dev-code:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 .auth-otp-digit {
   width: 2.75rem;
   height: 3.25rem;
@@ -298,3 +335,16 @@
 .auth-legal-note a:hover {
   text-decoration: underline;
 }
+
+.auth-setup-warning {
+  margin: 14px 0 4px;
+  padding: 12px 13px;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.07);
+  color: #cbd0d8;
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: left;
+}
+.auth-setup-warning strong { color: #f2f4f7; font-weight: 650; }

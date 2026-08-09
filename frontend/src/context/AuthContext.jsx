@@ -8,6 +8,28 @@ import { parseAuthApiError } from '../lib/authErrors';
 
 const AuthContext = createContext(null);
 
+const GUEST_SETTINGS_SECTIONS = new Set(['general', 'memory']);
+
+function integrationIssues(config) {
+  if (!config) return [];
+  const issues = [];
+  if (config.database_persistent === false) issues.push('постоянная БД');
+  const hasAuth = Boolean(
+    config.google_oauth_enabled || config.email_auth_enabled || config.telegram_auth_enabled
+  );
+  if (!hasAuth) issues.push('вход в аккаунт');
+  if (config.billing_enabled === false) issues.push('ЮKassa');
+  if (config.polza_ai_enabled === false) issues.push('Polza AI');
+  if (config.polza_autoprovision_enabled === false) issues.push('автовыдача AI-ключей');
+  return issues;
+}
+
+function normalizeSettingsSection(section) {
+  // `search` was used by older deep links. Search preferences now live in the
+  // general section, so keep those links working instead of opening auth.
+  return section === 'search' ? 'general' : section || 'general';
+}
+
 export function AuthProvider({ children }) {
   const [authStatus, setAuthStatus] = useState({ authorized: false, profile: null });
   const [loading, setLoading] = useState(true);
@@ -25,6 +47,8 @@ export function AuthProvider({ children }) {
   const [authConfigLoaded, setAuthConfigLoaded] = useState(false);
   const [authConfig, setAuthConfig] = useState(null);
   const [emailAuthEnabled, setEmailAuthEnabled] = useState(true);
+  const [serviceStatus, setServiceStatus] = useState('checking');
+  const [serviceIssues, setServiceIssues] = useState([]);
 
   const fetchAuthConfigFrom = async (base) => {
     const url = `${base.replace(/\/$/, '')}/auth/config`;
@@ -39,6 +63,7 @@ export function AuthProvider({ children }) {
   };
 
   const loadAuthConfig = useCallback(async () => {
+    setServiceStatus('checking');
     try {
       let data = null;
       try {
@@ -55,16 +80,23 @@ export function AuthProvider({ children }) {
         }
       }
       if (data) {
+        const issues = integrationIssues(data);
+        setServiceIssues(issues);
+        setServiceStatus(issues.length ? 'degraded' : 'online');
         setAuthConfig(data);
         setGoogleOAuthAvailable(Boolean(data.google_oauth_enabled));
         setEmailAuthEnabled(data.email_auth_enabled !== false);
         setTelegramAuthEnabled(Boolean(data.telegram_auth_enabled));
         setTelegramBotUsername((data.telegram_bot_username || '').replace(/^@/, ''));
         setTelegramLoginDomain((data.telegram_login_domain || '').trim().toLowerCase());
-      } else if (envGoogleEnabled) {
-        setGoogleOAuthAvailable(true);
+      } else {
+        setServiceIssues([]);
+        setServiceStatus('offline');
+        if (envGoogleEnabled) setGoogleOAuthAvailable(true);
       }
     } catch {
+      setServiceIssues([]);
+      setServiceStatus('offline');
       if (envGoogleEnabled) setGoogleOAuthAvailable(true);
     } finally {
       setAuthConfigLoaded(true);
@@ -72,8 +104,14 @@ export function AuthProvider({ children }) {
   }, [envGoogleEnabled]);
 
   const fetchProfile = useCallback(async () => {
+    const { accessToken, refreshToken } = getStoredTokens();
+    if (!accessToken && !refreshToken) {
+      setAuthStatus({ authorized: false, profile: null });
+      return false;
+    }
     try {
-      const res = await apiFetch('/auth/profile');
+      const res = await apiFetch('/auth/profile', { signal: AbortSignal.timeout(9000) });
+      setServiceStatus((current) => (current === 'degraded' ? current : 'online'));
       if (res.status === 401) {
         clearStoredTokens();
         setAuthStatus({ authorized: false, profile: null });
@@ -91,7 +129,8 @@ export function AuthProvider({ children }) {
         return status.authorized;
       }
     } catch (e) {
-      console.error(e);
+      if (/Нет связи|Failed to fetch|fetch/i.test(e?.message || '')) setServiceStatus('offline');
+      console.warn('[Nexus] profile unavailable:', e?.message || e);
     }
     return false;
   }, []);
@@ -125,11 +164,12 @@ export function AuthProvider({ children }) {
 
   const openSettingsModal = useCallback(
     (section = 'general') => {
-      if (!authStatus.authorized && section !== 'memory') {
+      const normalizedSection = normalizeSettingsSection(section);
+      if (!authStatus.authorized && !GUEST_SETTINGS_SECTIONS.has(normalizedSection)) {
         setAuthModalOpen(true);
         return;
       }
-      setSettingsSection(section);
+      setSettingsSection(normalizedSection);
       setSettingsOpen(true);
     },
     [authStatus.authorized]
@@ -361,7 +401,7 @@ export function AuthProvider({ children }) {
         }),
       });
     } catch {
-      throw new Error('Нет связи с API. Проверьте NEXUS_CLOUD_SERVER_URL на Vercel или запустите серверы локально.');
+      throw new Error('Нет связи с Nexus. Проверьте интернет и повторите попытку через минуту.');
     }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -450,6 +490,8 @@ export function AuthProvider({ children }) {
         authConfigLoaded,
         authConfig,
         loadAuthConfig,
+        serviceStatus,
+        serviceIssues,
         settingsOpen,
         settingsSection,
         setSettingsSection,

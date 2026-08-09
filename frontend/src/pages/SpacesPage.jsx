@@ -1,12 +1,29 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Search, Lock, ChevronLeft } from 'lucide-react';
+import {
+  ArrowRight,
+  Boxes,
+  ChevronLeft,
+  Cloud,
+  CloudOff,
+  Clock3,
+  FolderLock,
+  MessageSquare,
+  Loader2,
+  Plus,
+  Search,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
+import { EmptyState, PageHero, ProductPage, SectionHeading, SurfaceCard } from '../components/ui/ProductPage';
 import NexusComposer from '../components/layout/NexusComposer';
 import ChatMessage from '../components/chat/ChatMessage';
 import CodeArtifactPanel from '../components/chat/CodeArtifactPanel';
 import { useChatCodePanel } from '../hooks/useChatCodePanel';
+import { useCloudSpaceSync } from '../hooks/useCloudSpaceSync';
 import DailyLimitBar from '../components/DailyLimitBar';
 import {
   loadSpaceState,
@@ -45,7 +62,17 @@ export default function SpacesPage() {
   const [search, setSearch] = useState('');
   const [webSearch, setWebSearch] = useState(readWebSearchEnabled);
   const [webSearchHighlight, setWebSearchHighlight] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [workspaceEmoji, setWorkspaceEmoji] = useState('✨');
+  const [pendingWorkspaceDelete, setPendingWorkspaceDelete] = useState(null);
   const messagesEndRef = useRef(null);
+  const { cloudReady, cloudError, cloudEnabled } = useCloudSpaceSync({
+    authorized: authStatus.authorized,
+    userEmail: authStatus.profile?.email,
+    state,
+    setState,
+  });
 
   const allModels = useMemo(
     () => [...models, ...researchModels, ...mediaModels],
@@ -188,6 +215,66 @@ export default function SpacesPage() {
     w.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  const createConversation = useCallback(
+    (workspaceId) => {
+      const id = uid();
+      setState((s) => ({
+        ...s,
+        activeWorkspaceId: workspaceId || s.activeWorkspaceId,
+        conversations: [
+          {
+            id,
+            workspaceId: workspaceId || s.activeWorkspaceId,
+            title: 'Новый диалог',
+            messages: [],
+            model: selectedModel,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+          ...s.conversations,
+        ],
+        activeConversationId: id,
+      }));
+    },
+    [selectedModel]
+  );
+
+  const handleCreateWorkspace = (event) => {
+    event.preventDefault();
+    const name = workspaceName.trim();
+    if (!name) return;
+    const id = uid();
+    setState((s) => ({
+      ...s,
+      workspaces: [
+        ...s.workspaces,
+        { id, name, emoji: workspaceEmoji || '✨', createdAt: Date.now() },
+      ],
+      activeWorkspaceId: id,
+      activeConversationId: null,
+    }));
+    setWorkspaceName('');
+    setWorkspaceEmoji('✨');
+    setCreateOpen(false);
+  };
+
+  const confirmWorkspaceDelete = () => {
+    if (!pendingWorkspaceDelete || state.workspaces.length <= 1) return;
+    const workspaceId = pendingWorkspaceDelete.id;
+    setState((s) => {
+      const workspaces = s.workspaces.filter((workspace) => workspace.id !== workspaceId);
+      const wasActive = s.activeWorkspaceId === workspaceId;
+      return {
+        ...s,
+        workspaces,
+        conversations: s.conversations.filter((conversation) => conversation.workspaceId !== workspaceId),
+        activeWorkspaceId: wasActive ? workspaces[0].id : s.activeWorkspaceId,
+        activeConversationId: wasActive ? null : s.activeConversationId,
+      };
+    });
+    setPendingWorkspaceDelete(null);
+  };
+
   const openPricing = () => navigate('/pricing');
 
   return (
@@ -208,126 +295,131 @@ export default function SpacesPage() {
         }
       >
         {!inChat ? (
-          <div className="nx-scroll-region custom-scrollbar">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-                <h1 className="text-2xl sm:text-3xl font-semibold">Пространства</h1>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-2 px-3 py-2 min-h-[44px] rounded-xl border border-[var(--nx-border)] bg-[var(--nx-surface)] flex-1 sm:flex-none min-w-0">
-                    <Search size={16} className="text-[var(--nx-muted)]" />
-                    <input
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Поиск…"
-                      className="bg-transparent text-sm outline-none w-full min-w-0 sm:w-32"
-                    />
+          <ProductPage>
+            <PageHero
+              eyebrow="Контекст для больших задач"
+              icon={Boxes}
+              title="Пространства Nexus"
+              description="Собирайте связанные диалоги в одном месте. У каждого пространства своя история, рабочий контекст и быстрый переход к продолжению задачи."
+              aside={
+                <SurfaceCard className="grid grid-cols-2 divide-x divide-[var(--nx-border)]">
+                  <div className="min-w-28 px-5 py-4 text-center"><strong className="block text-xl text-[var(--nx-text)]">{state.workspaces.length}</strong><span className="text-[10px] uppercase tracking-wide text-[var(--nx-muted)]">пространств</span></div>
+                  <div className="min-w-28 px-5 py-4 text-center"><strong className="block text-xl text-[var(--nx-text)]">{state.conversations.length}</strong><span className="text-[10px] uppercase tracking-wide text-[var(--nx-muted)]">диалогов</span></div>
+                  <div className="col-span-2 flex items-center justify-center gap-1.5 border-t border-[var(--nx-border)] px-4 py-2.5 text-[10px] text-[var(--nx-muted)]">
+                    {!cloudReady ? <Loader2 size={12} className="animate-spin text-teal-300" /> : cloudEnabled ? <Cloud size={12} className="text-emerald-400" /> : <CloudOff size={12} />}
+                    {!cloudReady ? 'Синхронизация…' : cloudEnabled ? 'Сохранено в аккаунте' : 'Сохранено на этом устройстве'}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const name = prompt('Название пространства');
-                      if (!name?.trim()) return;
-                      const id = uid();
-                      setState((s) => ({
-                        ...s,
-                        workspaces: [
-                          ...s.workspaces,
-                          { id, name: name.trim(), emoji: '📁', createdAt: Date.now() },
-                        ],
-                        activeWorkspaceId: id,
-                      }));
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--nx-text)] text-[var(--nx-bg)] text-sm font-medium"
-                  >
-                    <Plus size={18} />
-                    Новое пространство
-                  </button>
-                </div>
-              </div>
+                </SurfaceCard>
+              }
+            />
 
-              <p className="text-xs font-semibold uppercase text-[var(--nx-muted)] mb-3 flex items-center gap-1">
-                ▾ Ваши пространства
-              </p>
-              <ul className="space-y-1">
-                {filteredWorkspaces.map((w, i) => {
-                  const convCount = state.conversations.filter((c) => c.workspaceId === w.id).length;
+            {cloudError ? <div className="mb-5 flex items-start gap-2 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2.5 text-xs leading-relaxed text-amber-100"><CloudOff size={16} className="mt-0.5 shrink-0" />{cloudError}</div> : null}
+
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--nx-border)] bg-[var(--nx-surface-soft)] px-3 sm:w-72">
+                <Search size={16} className="shrink-0 text-[var(--nx-muted)]" aria-hidden />
+                <span className="sr-only">Поиск пространств</span>
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Найти пространство…"
+                  className="min-w-0 flex-1 bg-transparent text-sm text-[var(--nx-text)] outline-none placeholder:text-[var(--nx-muted)]"
+                />
+                {search ? (
+                  <button type="button" onClick={() => setSearch('')} aria-label="Очистить поиск" className="text-[var(--nx-muted)] hover:text-[var(--nx-text)]">
+                    <X size={15} />
+                  </button>
+                ) : null}
+              </label>
+              <button type="button" className="nx-btn nx-btn--primary" onClick={() => setCreateOpen(true)}>
+                <Plus size={17} aria-hidden />
+                Новое пространство
+              </button>
+            </div>
+
+            {filteredWorkspaces.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {filteredWorkspaces.map((workspace, index) => {
+                  const conversations = conversationsForWorkspace(state.conversations, workspace.id);
+                  const latestConversation = conversations[0];
+                  const active = workspace.id === state.activeWorkspaceId;
                   return (
-                    <motion.li
-                      key={w.id}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.03 }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setState((s) => ({
-                            ...s,
-                            activeWorkspaceId: w.id,
-                            activeConversationId: null,
-                          }))
-                        }
-                        className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl hover:bg-[var(--nx-surface-hover)] text-left group"
-                      >
-                        <span className="text-2xl">{w.emoji}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{w.name}</p>
-                          <p className="text-xs text-[var(--nx-muted)] flex items-center gap-1 mt-0.5">
-                            <Lock size={12} /> Приватный · {convCount} диалогов
+                    <motion.div key={workspace.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.035 }}>
+                      <SurfaceCard className={`group h-full p-5 ${active ? 'border-teal-400/40 ring-1 ring-teal-400/20' : ''}`} interactive>
+                        <button
+                          type="button"
+                          onClick={() => setState((s) => ({ ...s, activeWorkspaceId: workspace.id, activeConversationId: null }))}
+                          className="w-full text-left"
+                          aria-pressed={active}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--nx-border)] bg-white/[0.04] text-2xl" aria-hidden>{workspace.emoji}</span>
+                            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--nx-border)] px-2 py-1 text-[10px] text-[var(--nx-muted)]">
+                              <FolderLock size={11} /> Приватное
+                            </span>
+                          </div>
+                          <h2 className="mt-5 truncate text-base font-semibold text-[var(--nx-text)]">{workspace.name}</h2>
+                          <div className="mt-2 flex items-center gap-3 text-xs text-[var(--nx-muted)]">
+                            <span className="inline-flex items-center gap-1"><MessageSquare size={13} /> {conversations.length}</span>
+                            {latestConversation ? (
+                              <span className="inline-flex min-w-0 items-center gap-1 truncate"><Clock3 size={13} className="shrink-0" /> {new Date(latestConversation.updatedAt || latestConversation.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</span>
+                            ) : (
+                              <span>Новая область</span>
+                            )}
+                          </div>
+                          <p className="mt-4 line-clamp-1 min-h-5 text-xs text-[var(--nx-muted)]">
+                            {latestConversation?.title || 'Начните первый диалог в этом пространстве'}
                           </p>
+                        </button>
+                        <div className="mt-5 flex items-center gap-2 border-t border-[var(--nx-border)] pt-3">
+                          <button type="button" onClick={() => createConversation(workspace.id)} className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-teal-400/10 px-3 text-xs font-semibold text-teal-200 hover:bg-teal-400/15">
+                            <Plus size={14} /> Новый диалог
+                          </button>
+                          {state.workspaces.length > 1 ? (
+                            <button type="button" onClick={() => setPendingWorkspaceDelete(workspace)} className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--nx-muted)] hover:bg-red-400/10 hover:text-red-300" aria-label={`Удалить ${workspace.name}`}>
+                              <Trash2 size={15} />
+                            </button>
+                          ) : null}
                         </div>
-                      </button>
-                    </motion.li>
+                      </SurfaceCard>
+                    </motion.div>
                   );
                 })}
-              </ul>
+              </div>
+            ) : (
+              <SurfaceCard>
+                <EmptyState icon={Search} title="Пространство не найдено" description="Проверьте название или очистите строку поиска." action={<button type="button" className="nx-btn nx-btn--secondary" onClick={() => setSearch('')}>Очистить поиск</button>} />
+              </SurfaceCard>
+            )}
 
-              {activeWs && (
-                <div className="mt-10">
-                  <p className="text-sm text-[var(--nx-muted)] mb-4">
-                    Открыто: <strong className="text-[var(--nx-text)]">{activeWs.name}</strong>
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const id = uid();
-                      setState((s) => ({
-                        ...s,
-                        conversations: [
-                          {
-                            id,
-                            workspaceId: s.activeWorkspaceId,
-                            title: 'Новый диалог',
-                            messages: [],
-                            model: selectedModel,
-                            createdAt: Date.now(),
-                            updatedAt: Date.now(),
-                          },
-                          ...s.conversations,
-                        ],
-                        activeConversationId: id,
-                      }));
-                    }}
-                    className="text-teal-500 text-sm hover:underline"
-                  >
-                    + Новый диалог в пространстве
-                  </button>
-                  <ul className="mt-4 space-y-1">
-                    {wsConvs.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => setState((s) => ({ ...s, activeConversationId: c.id }))}
-                        className="w-full text-left px-4 py-3 rounded-xl hover:bg-[var(--nx-surface-hover)] text-sm"
-                      >
-                        {c.title}
-                      </button>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
+            {activeWs ? (
+              <section className="mt-12">
+                <SectionHeading
+                  title={`${activeWs.emoji} ${activeWs.name}`}
+                  description="Последние диалоги выбранного пространства"
+                  action={
+                    <button type="button" className="nx-btn nx-btn--secondary" onClick={() => createConversation(activeWs.id)}>
+                      <Plus size={16} /> Новый диалог
+                    </button>
+                  }
+                />
+                <SurfaceCard className="divide-y divide-[var(--nx-border)]">
+                  {wsConvs.length > 0 ? wsConvs.slice(0, 8).map((conversation) => (
+                    <button key={conversation.id} type="button" onClick={() => setState((s) => ({ ...s, activeConversationId: conversation.id }))} className="group flex w-full items-center gap-3 p-4 text-left hover:bg-white/[0.035]">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-[var(--nx-muted)]"><MessageSquare size={16} /></span>
+                      <span className="min-w-0 flex-1">
+                        <strong className="block truncate text-sm font-medium text-[var(--nx-text)]">{conversation.title}</strong>
+                        <span className="mt-0.5 block text-[10px] text-[var(--nx-muted)]">{new Date(conversation.updatedAt || conversation.createdAt).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                      </span>
+                      <ArrowRight size={16} className="text-[var(--nx-muted)] transition-transform group-hover:translate-x-0.5 group-hover:text-teal-300" />
+                    </button>
+                  )) : (
+                    <EmptyState icon={Sparkles} title="Здесь пока тихо" description="Начните диалог — Nexus будет хранить историю отдельно от остальных задач." action={<button type="button" className="nx-btn nx-btn--primary" onClick={() => createConversation(activeWs.id)}>Начать диалог <ArrowRight size={16} /></button>} />
+                  )}
+                </SurfaceCard>
+              </section>
+            ) : null}
+          </ProductPage>
         ) : (
           <main className="flex-1 flex flex-col min-w-0 min-h-0">
             <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--nx-border)] shrink-0">
@@ -419,6 +511,62 @@ export default function SpacesPage() {
           </main>
         )}
       </AppShell>
+
+      {createOpen ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setCreateOpen(false);
+          }}
+        >
+          <form className="nx-panel w-full max-w-md p-5 sm:p-6" onSubmit={handleCreateWorkspace}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-[var(--nx-text)]">Новое пространство</h2>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--nx-muted)]">Дайте задаче короткое понятное название.</p>
+              </div>
+              <button type="button" onClick={() => setCreateOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--nx-muted)] hover:bg-white/[0.06] hover:text-[var(--nx-text)]" aria-label="Закрыть">
+                <X size={18} />
+              </button>
+            </div>
+            <label className="mt-6 block text-xs font-medium text-[var(--nx-muted)]">
+              Название
+              <input autoFocus value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={64} placeholder="Например, Новый сайт" className="mt-2 min-h-12 w-full rounded-xl border border-[var(--nx-border)] bg-black/20 px-3 text-sm text-[var(--nx-text)] outline-none placeholder:text-[var(--nx-muted)] focus:border-teal-400/50" />
+            </label>
+            <fieldset className="mt-5">
+              <legend className="text-xs font-medium text-[var(--nx-muted)]">Иконка</legend>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {['✨', '💻', '🚀', '🎨', '📚', '🧠', '📁', '🔬'].map((emoji) => (
+                  <button key={emoji} type="button" onClick={() => setWorkspaceEmoji(emoji)} aria-pressed={workspaceEmoji === emoji} className={`flex h-11 w-11 items-center justify-center rounded-xl border text-lg transition-colors ${workspaceEmoji === emoji ? 'border-teal-400/50 bg-teal-400/10' : 'border-[var(--nx-border)] bg-white/[0.025] hover:bg-white/[0.05]'}`}>
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <div className="mt-7 flex justify-end gap-2">
+              <button type="button" className="nx-btn nx-btn--secondary" onClick={() => setCreateOpen(false)}>Отмена</button>
+              <button type="submit" className="nx-btn nx-btn--primary" disabled={!workspaceName.trim()}>
+                Создать <ArrowRight size={16} />
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {pendingWorkspaceDelete ? (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPendingWorkspaceDelete(null); }}>
+          <div className="nx-panel w-full max-w-md p-5 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="delete-space-title">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-400/10 text-red-300"><Trash2 size={20} /></span>
+            <h2 id="delete-space-title" className="mt-4 text-lg font-semibold text-[var(--nx-text)]">Удалить пространство?</h2>
+            <p className="mt-2 text-sm leading-relaxed text-[var(--nx-muted)]">«{pendingWorkspaceDelete.name}» и все его локальные диалоги будут удалены без возможности восстановления.</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" className="nx-btn nx-btn--secondary" onClick={() => setPendingWorkspaceDelete(null)}>Отмена</button>
+              <button type="button" className="nx-btn border-red-400/30 bg-red-500/15 text-red-200 hover:bg-red-500/25" onClick={confirmWorkspaceDelete}>Удалить</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

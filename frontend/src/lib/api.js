@@ -9,7 +9,7 @@ function cloudPublicUrlFromEnv() {
   if (!raw) return '';
   if (import.meta.env.PROD && typeof window !== 'undefined') {
     const host = window.location.hostname;
-    if (/\.vercel\.app$/i.test(host) || host === 'frontend-henna-tau-19.vercel.app') {
+    if (/\.vercel\.app$/i.test(host) || host === 'nexus-zeta-ruby-12.vercel.app') {
       return '';
     }
   }
@@ -22,7 +22,7 @@ export const CLOUD_PUBLIC_URL = cloudPublicUrlFromEnv();
 export const CLOUD_FALLBACK_URL = (
   import.meta.env.VITE_CLOUD_FALLBACK_URL ||
   import.meta.env.VITE_CLOUD_URL ||
-  'https://nexus-cloud-bxcc.onrender.com'
+  'https://nexus-cloud-ee17.onrender.com'
 ).replace(/\/$/, '');
 
 export const DIRECT_CLOUD_API_BASE = `${CLOUD_FALLBACK_URL}/v1`;

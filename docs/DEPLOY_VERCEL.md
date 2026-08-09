@@ -13,7 +13,7 @@
 
 **Прод:**
 
-- Фронт: https://frontend-henna-tau-19.vercel.app  
+- Фронт: https://nexus-zeta-ruby-12.vercel.app  
 - Cloud: https://nexus-cloud-ee17.onrender.com  
 
 ---
@@ -62,7 +62,7 @@ vercel deploy --prod
 
 ## Проверка
 
-1. https://frontend-henna-tau-19.vercel.app — регистрация  
+1. https://nexus-zeta-ruby-12.vercel.app — регистрация  
 2. DevTools → Network → `https://nexus-cloud-ee17.onrender.com/v1/...`  
 3. https://nexus-cloud-ee17.onrender.com/v1/health → `"status":"ok"`  
 

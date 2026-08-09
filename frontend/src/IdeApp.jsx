@@ -27,6 +27,7 @@ import IdeMobileDock from './components/ide/IdeMobileDock';
 import IdeMobileTitlebar from './components/ide/mobile/IdeMobileTitlebar';
 import IdeMobileMoreSheet from './components/ide/mobile/IdeMobileMoreSheet';
 import IdeMobileBottomSheet from './components/ide/mobile/IdeMobileBottomSheet';
+import IdeDialog from './components/ide/IdeDialog';
 import { useBreakpoint } from './hooks/useBreakpoint';
 import { fetchModels, pickDefaultModel } from './lib/chatApi';
 import { normalizeBalance, formatBalanceUsd } from './lib/formatBalance';
@@ -170,6 +171,11 @@ function IdeApp({ embedded = false }) {
   const [activeMenu, setActiveMenu] = useState(null); // 'file' | 'edit' | 'selection' | 'view' | 'terminal' | 'help' | null
   const [menuOpen, setMenuOpen] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
+  const [ideDialog, setIdeDialog] = useState(null);
+  const closeIdeDialog = useCallback(() => setIdeDialog(null), []);
+  const showIdeNotice = useCallback((title, message, tone = 'info') => {
+    setIdeDialog({ type: 'notice', title, message, tone });
+  }, []);
 
   // Интеграция с ИИ
   const [ideModels, setIdeModels] = useState([]);
@@ -222,7 +228,7 @@ function IdeApp({ embedded = false }) {
         loadWorkspaceWithPath(data.path);
       }
     } catch (err) {
-      alert("Error opening native folder picker: " + err.message);
+      showIdeNotice('Не удалось открыть папку', err.message, 'error');
     }
   };
 
@@ -314,7 +320,7 @@ function IdeApp({ embedded = false }) {
     })();
   }, []);
 
-  const handleFileSelect = async (path) => {
+  const handleFileSelect = async (path, { throwOnError = false } = {}) => {
     if (openFiles[path]) {
       setActiveFilePath(path);
       return;
@@ -342,7 +348,8 @@ function IdeApp({ embedded = false }) {
       }));
       setActiveFilePath(path);
     } catch (err) {
-      alert(err.message);
+      if (throwOnError) throw err;
+      showIdeNotice('Не удалось открыть файл', err.message, 'error');
     }
   };
 
@@ -406,7 +413,7 @@ function IdeApp({ embedded = false }) {
       }));
       updateGitStatusWithPath(workspacePath);
     } catch (err) {
-      alert(err.message);
+      showIdeNotice('Не удалось сохранить файл', err.message, 'error');
     }
   };
 
@@ -438,11 +445,7 @@ function IdeApp({ embedded = false }) {
     setOpenFiles(updated);
   };
 
-  // Создание файла через UI
-  const handleCreateFileUI = async () => {
-    const fileName = prompt("Enter name for the new file:");
-    if (!fileName) return;
-
+  const createFile = async (fileName) => {
     let parentPath = workspacePath;
     if (activeFilePath) {
       const sep = activeFilePath.includes('/') ? '/' : '\\';
@@ -466,17 +469,26 @@ function IdeApp({ embedded = false }) {
         data = await res.json();
       }
       loadWorkspace();
-      handleFileSelect(data.path);
-    } catch (err) {
-      alert(err.message);
+      await handleFileSelect(data.path, { throwOnError: true });
+    } catch (error) {
+      throw new Error(error.message || 'Не удалось создать файл');
     }
   };
 
-  // Создание папки через UI
-  const handleCreateFolderUI = async () => {
-    const folderName = prompt("Enter name for the new folder:");
-    if (!folderName) return;
+  // Создание файла через интерфейс Nexus без системного prompt.
+  const handleCreateFileUI = () => {
+    setIdeDialog({
+      type: 'prompt',
+      title: 'Новый файл',
+      message: 'Файл будет создан в текущей папке проекта.',
+      inputLabel: 'Имя файла',
+      placeholder: 'например, app.js',
+      confirmLabel: 'Создать файл',
+      onConfirm: createFile,
+    });
+  };
 
+  const createFolder = async (folderName) => {
     let parentPath = workspacePath;
     if (activeFilePath) {
       const sep = activeFilePath.includes('/') ? '/' : '\\';
@@ -499,45 +511,61 @@ function IdeApp({ embedded = false }) {
         throw new Error(errData.detail || "Failed to create folder");
       }
       loadWorkspace();
-    } catch (err) {
-      alert(err.message);
+    } catch (error) {
+      throw new Error(error.message || 'Не удалось создать папку');
     }
+  };
+
+  // Создание папки через интерфейс Nexus без системного prompt.
+  const handleCreateFolderUI = () => {
+    setIdeDialog({
+      type: 'prompt',
+      title: 'Новая папка',
+      message: 'Папка будет создана рядом с выбранным файлом.',
+      inputLabel: 'Имя папки',
+      placeholder: 'например, components',
+      confirmLabel: 'Создать папку',
+      onConfirm: createFolder,
+    });
   };
 
   // Удаление выделенного элемента через UI
   const handleDeleteItemUI = async () => {
     if (!activeFilePath) {
-      alert("Please select a file in the explorer tree or editor first to delete it.");
+      showIdeNotice('Нечего удалять', 'Сначала выберите файл в проводнике или откройте его в редакторе.');
       return;
     }
     const fileName = activeFilePath.split(/[/\\]/).pop();
-    const confirmed = confirm(`Are you sure you want to delete "${fileName}"? This action cannot be undone.`);
-    if (!confirmed) return;
-
-    try {
-      if (demoMode) {
-        await demoDelete(activeFilePath);
-      } else {
-        const res = await fetch(`${API_BASE}/files/delete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: activeFilePath }),
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.detail || 'Failed to delete item');
+    const pathToDelete = activeFilePath;
+    setIdeDialog({
+      type: 'confirm',
+      tone: 'danger',
+      title: 'Удалить файл?',
+      message: `«${fileName}» будет удалён без возможности восстановления.`,
+      confirmLabel: 'Удалить',
+      onConfirm: async () => {
+        if (demoMode) {
+          await demoDelete(pathToDelete);
+        } else {
+          const res = await fetch(`${API_BASE}/files/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: pathToDelete }),
+          });
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.detail || 'Не удалось удалить файл');
+          }
         }
-      }
-
-      const updated = { ...openFiles };
-      delete updated[activeFilePath];
-      setOpenFiles(updated);
-      setActiveFilePath(null);
-      
-      loadWorkspace();
-    } catch (err) {
-      alert(err.message);
-    }
+        setOpenFiles((current) => {
+          const updated = { ...current };
+          delete updated[pathToDelete];
+          return updated;
+        });
+        setActiveFilePath(null);
+        loadWorkspace();
+      },
+    });
   };
 
   // Выполнение HTTP-запроса через встроенный API-клиент
@@ -601,14 +629,14 @@ function IdeApp({ embedded = false }) {
       });
       const data = await res.json();
       if (data.status === 'success') {
-        alert("Committed successfully!\n" + data.output);
         setGitCommitMessage('');
         updateGitStatusWithPath(workspacePath);
+        showIdeNotice('Коммит создан', data.output || 'Изменения успешно сохранены в Git.', 'success');
       } else {
-        alert("Commit Error: " + data.message);
+        showIdeNotice('Не удалось создать коммит', data.message || 'Git вернул ошибку.', 'error');
       }
     } catch (err) {
-      alert("Error executing git commit: " + err.message);
+      showIdeNotice('Ошибка Git', err.message, 'error');
     } finally {
       setGitLoading(false);
     }
@@ -626,12 +654,12 @@ function IdeApp({ embedded = false }) {
       });
       const data = await res.json();
       if (data.status === 'success') {
-        alert("Pushed successfully!\n" + data.output);
+        showIdeNotice('Изменения отправлены', data.output || 'Удалённый репозиторий обновлён.', 'success');
       } else {
-        alert("Push Error: " + data.message);
+        showIdeNotice('Не удалось отправить изменения', data.message || 'Git вернул ошибку.', 'error');
       }
     } catch (err) {
-      alert("Error executing git push: " + err.message);
+      showIdeNotice('Ошибка Git', err.message, 'error');
     } finally {
       setGitLoading(false);
     }
@@ -650,7 +678,7 @@ function IdeApp({ embedded = false }) {
         setDbResponse({ status: 'success', message: "Successfully connected. Loaded " + data.tables.length + " tables." });
       }
     } catch (err) {
-      alert(err.message);
+      showIdeNotice('Не удалось открыть базу', err.message, 'error');
       setDbTables([]);
     } finally {
       setDbLoading(false);
@@ -661,7 +689,7 @@ function IdeApp({ embedded = false }) {
   const handleRunSQLQuery = async (e) => {
     e.preventDefault();
     if (!dbQuery.trim() || dbLoading) return;
-    setDbLoading(false);
+    setDbLoading(true);
     try {
       const res = await fetch(`${API_BASE}/db/query`, {
         method: 'POST',
@@ -952,6 +980,7 @@ function IdeApp({ embedded = false }) {
         onClose={() => setCommandPaletteOpen(false)}
         commands={commandList}
       />
+      <IdeDialog dialog={ideDialog} onClose={closeIdeDialog} />
       
       {/* Backdrop клика для плавного закрытия меню */}
       {menuOpen && (

@@ -88,7 +88,7 @@ export default function IdeDownloadPage() {
   return (
     <AppShell hideHistory>
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar relative z-10 w-full overscroll-y-contain">
-        <div className="max-w-3xl mx-auto px-4 py-10 sm:py-12 pb-16">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14 pb-16">
           <div className="text-center mb-8">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-[11px] font-semibold text-teal-300 mb-4">
               <Package size={14} />

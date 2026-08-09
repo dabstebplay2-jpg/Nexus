@@ -43,6 +43,9 @@ export default function SiteNav() {
           <a href="/#features" className="text-sm text-zinc-400 hover:text-white">
             Возможности
           </a>
+          <Link to="/no-code" className={linkClass('/no-code')}>
+            No-Code Studio
+          </Link>
           <DiscordInviteLink className="text-sm text-indigo-300/90 hover:text-indigo-200" />
           <a
             href={BROWSER_SETUP_URL}
@@ -115,6 +118,9 @@ export default function SiteNav() {
               <a href="/#features" className={linkClass('/')} onClick={() => setMobileOpen(false)}>
                 Возможности
               </a>
+              <Link to="/no-code" className={linkClass('/no-code')} onClick={() => setMobileOpen(false)}>
+                No-Code Studio
+              </Link>
               <DiscordInviteLink
                 className={linkClass('/')}
                 onClick={() => setMobileOpen(false)}

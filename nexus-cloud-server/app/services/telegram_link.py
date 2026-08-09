@@ -6,7 +6,6 @@ import json
 import logging
 import secrets
 import time
-from datetime import datetime
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -18,6 +17,7 @@ from app.config import (
 )
 from app.database import UserDB
 from app.services.auth_session import _add_auth_method
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def create_link_token(user_id: int) -> tuple[str, int]:
     """Возвращает (token, expires_in_sec)."""
     token = secrets.token_urlsafe(24)[:32]
     ttl = max(60, TELEGRAM_LINK_TTL_SEC)
-    payload = json.dumps({"user_id": user_id, "created_at": datetime.utcnow().isoformat()})
+    payload = json.dumps({"user_id": user_id, "created_at": utc_now().isoformat()})
 
     if redis_persistence_enabled():
         try:

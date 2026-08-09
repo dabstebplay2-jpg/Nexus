@@ -8,8 +8,6 @@ import re
 import time
 from typing import Any
 
-import httpx
-
 from app.config import OPENROUTER_BASE_URL, openrouter_free_tier_enabled
 from app.services.openrouter import OpenRouterService
 from app.tiers import normalize_tier
@@ -31,6 +29,28 @@ _cache: dict[str, Any] = {
     "media_models": [],
     "by_id": {},
 }
+
+
+def _default_free_router() -> dict:
+    """Надёжный резерв: OpenRouter сам выбирает доступную бесплатную модель."""
+    return {
+        "id": DEFAULT_FREE_MODEL,
+        "name": "OpenRouter Free Router",
+        "provider": "Openrouter",
+        "description": "Автовыбор доступной бесплатной модели OpenRouter.",
+        "context_k": 32,
+        "created": 0,
+        "multimodal": False,
+        "supports_vision": False,
+        "supports_image_gen": False,
+        "supports_tools": True,
+        "price_1m_usd": 0.0,
+        "pricing": {"prompt": 0, "completion": 0},
+        "min_tier": "FREE",
+        "cost_segment": "cheap",
+        "cost_segment_label": "Бесплатно",
+        "source": "openrouter",
+    }
 
 
 def _parse_price(value: Any) -> float:
@@ -153,30 +173,13 @@ async def refresh_free_models_cache(*, force: bool = False) -> None:
         logger.error("OpenRouter models fetch failed: %s", exc)
         if _cache["chat_models"]:
             return
-        raise
+        models = []
     chat = sorted(models, key=lambda m: (-m["context_k"], -m["created"], m["id"]))
     research = [m for m in chat if _is_research_model(m)]
     media = [m for m in chat if m.get("supports_image_gen")]
     by_id = {m["id"]: m for m in chat}
     if DEFAULT_FREE_MODEL not in by_id:
-        by_id[DEFAULT_FREE_MODEL] = {
-            "id": DEFAULT_FREE_MODEL,
-            "name": "OpenRouter Free Router",
-            "provider": "Openrouter",
-            "description": "Автовыбор бесплатной модели OpenRouter.",
-            "context_k": 32,
-            "created": 0,
-            "multimodal": False,
-            "supports_vision": False,
-            "supports_image_gen": False,
-            "supports_tools": True,
-            "price_1m_usd": 0.0,
-            "pricing": {"prompt": 0, "completion": 0},
-            "min_tier": "FREE",
-            "cost_segment": "cheap",
-            "cost_segment_label": "Бесплатно",
-            "source": "openrouter",
-        }
+        by_id[DEFAULT_FREE_MODEL] = _default_free_router()
         chat.insert(0, by_id[DEFAULT_FREE_MODEL])
     _cache["chat_models"] = chat
     _cache["research_models"] = research or chat[:8]

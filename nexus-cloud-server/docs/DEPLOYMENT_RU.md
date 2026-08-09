@@ -16,7 +16,7 @@
 
 | Сервис | URL |
 |--------|-----|
-| **Фронт (Vercel)** | https://frontend-henna-tau-19.vercel.app |
+| **Фронт (Vercel)** | https://nexus-zeta-ruby-12.vercel.app |
 | **Cloud (Render)** | https://nexus-cloud-ee17.onrender.com |
 | **Health** | https://nexus-cloud-ee17.onrender.com/v1/health |
 | **Админ-API** | `NEXUS_REMOTE_ADMIN=true` на Render |
@@ -28,7 +28,7 @@
 ```env
 ROUTER_AI_MASTER_KEY=sk-...
 NEXUS_CLOUD_SECRET_KEY=длинная-случайная-строка
-NEXUS_CORS_ORIGINS=https://frontend-henna-tau-19.vercel.app
+NEXUS_CORS_ORIGINS=https://nexus-zeta-ruby-12.vercel.app
 ROUTER_AI_ALLOW_PLATFORM_INFERENCE=false
 NEXUS_BILLING_TEST_MODE=false
 NEXUS_TESTING_MODE=false

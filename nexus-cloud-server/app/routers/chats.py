@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import ChatConversationDB, UserDB, get_db
-from app.schemas import ChatConversationPayload, ChatImportRequest, ChatListResponse, ChatSyncRequest
+from app.schemas import (
+    ChatConversationPayload,
+    ChatImportRequest,
+    ChatListResponse,
+    ChatSyncRequest,
+)
 from app.security import get_current_user
 from app.services.auth_rate_limit import check_rate_limit
 from app.services.chat_history import (

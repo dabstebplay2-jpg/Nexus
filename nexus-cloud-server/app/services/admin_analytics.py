@@ -9,10 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.database import InvoiceDB, TransactionDB, UserDB
 from app.tiers import TIER_ORDER, normalize_tier, tier_price
+from app.time_utils import utc_now
 
 
 def _day_start(days_ago: int) -> datetime:
-    now = datetime.utcnow()
+    now = utc_now()
     return (now - timedelta(days=days_ago)).replace(hour=0, minute=0, second=0, microsecond=0)
 
 

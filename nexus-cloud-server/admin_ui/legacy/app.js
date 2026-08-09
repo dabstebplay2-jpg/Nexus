@@ -292,7 +292,7 @@ async function loadBootstrap() {
   const saved = sessionStorage.getItem(SERVER_KEY);
   if (saved) document.getElementById('login-server').value = saved;
   else if (!document.getElementById('login-server').value) {
-    document.getElementById('login-server').value = 'https://frontend-henna-tau-19.vercel.app/api';
+    document.getElementById('login-server').value = 'https://nexus-zeta-ruby-12.vercel.app/api';
   }
 }
 
@@ -400,7 +400,7 @@ async function loadSiteOverview(silent) {
     `;
     const links = document.createElement('p');
     links.className = 'muted';
-    const front = s.frontend_url || 'https://frontend-henna-tau-19.vercel.app';
+    const front = s.frontend_url || 'https://nexus-zeta-ruby-12.vercel.app';
     const cloud = s.cloud_url || serverUrl();
     links.innerHTML = `Сайт: <a href="${front}" target="_blank" rel="noopener">Vercel</a> · API: <a href="${cloud}" target="_blank" rel="noopener">Render</a>`;
     const box = document.getElementById('site-overview');

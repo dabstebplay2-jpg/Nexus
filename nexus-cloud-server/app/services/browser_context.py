@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.schemas import BrowserPageContext, ChatMessage
+from app.schemas import BrowserPageContext
 
 MAX_EXCERPT = 32_000
 MAX_SELECTION = 8_000

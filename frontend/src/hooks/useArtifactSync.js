@@ -29,9 +29,9 @@ export function useArtifactSync({ authorized, userEmail }) {
   useEffect(() => {
     if (!authorized || !userEmail) {
       hydrated.current = false;
-      setReady(false);
       setError('');
-      setArtifacts([]);
+      setArtifacts(listArtifacts());
+      setReady(true);
       return;
     }
 

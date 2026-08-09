@@ -11,7 +11,13 @@ export default defineConfig({
   projects: [
     {
       name: 'mobile-chrome',
+      testMatch: /mobile-smoke\.spec\.js/,
       use: { ...devices['Pixel 7'] },
+    },
+    {
+      name: 'desktop-chrome',
+      testMatch: /desktop-smoke\.spec\.js/,
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
   webServer: {

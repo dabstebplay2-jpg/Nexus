@@ -6,8 +6,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.config import openrouter_management_enabled
 from app.database import (
     AuthExchangeCodeDB,
+    BrowserSyncDB,
     ChatConversationDB,
     ConnectorAuditLogDB,
     ConnectorOAuthStateDB,
@@ -21,27 +23,30 @@ from app.database import (
     UserConnectionDB,
     UserDB,
     UserMemoryDB,
-    BrowserSyncDB,
+    WorkspaceDB,
     hash_password,
 )
-from app.services.telegram_link import release_telegram_binding
 from app.services.admin_audit import log_admin_action
-from app.services.detailed_log import get_logger, log_detail, mask_hash, mask_sk
-
-_ops_log = get_logger("admin")
-from app.config import openrouter_management_enabled
+from app.services.detailed_log import get_logger, log_detail, mask_hash
 from app.services.openrouter_provision import (
     delete_openrouter_key_for_user,
     provision_openrouter_for_user,
     user_has_openrouter_key,
 )
-from app.services.polza import suspend_polza_for_user
-from app.services.polza_mcp import PolzaMcpError, mcp_delete_api_key
-from app.services.polza import user_has_polza_key
+from app.services.polza import suspend_polza_for_user, user_has_polza_key
+from app.services.polza_mcp import PolzaMcpError, mcp_delete_api_key, mcp_quarantine_api_key
 from app.services.subscription_activate import activate_paid_tier
 from app.services.subscription_audit_log import log_tier_revoked_by_admin
 from app.services.subscription_guard import revoke_admin_subscription_invoices
-from app.tiers import normalize_tier, tier_monthly_cap, tier_requires_payment, tier_uses_openrouter_free
+from app.services.telegram_link import release_telegram_binding
+from app.tiers import (
+    normalize_tier,
+    tier_monthly_cap,
+    tier_requires_payment,
+    tier_uses_openrouter_free,
+)
+
+_ops_log = get_logger("admin")
 
 
 async def admin_grant_tier(db: Session, user: UserDB, tier: str) -> dict:
@@ -116,6 +121,7 @@ def purge_user_data(db: Session, user_id: int) -> None:
     db.query(ChatConversationDB).filter(ChatConversationDB.user_id == user_id).delete(
         synchronize_session=False
     )
+    db.query(WorkspaceDB).filter(WorkspaceDB.user_id == user_id).delete(synchronize_session=False)
     db.query(UserArtifactDB).filter(UserArtifactDB.user_id == user_id).delete(synchronize_session=False)
     db.query(UserMemoryDB).filter(UserMemoryDB.user_id == user_id).delete(synchronize_session=False)
     db.query(BrowserSyncDB).filter(BrowserSyncDB.user_id == user_id).delete(synchronize_session=False)
@@ -150,7 +156,9 @@ async def admin_delete_user(db: Session, user: UserDB) -> None:
     polza_key_id = getattr(user, "polza_key_id", None)
     if polza_key_id:
         try:
-            await mcp_delete_api_key(key_id=str(polza_key_id))
+            deleted = await mcp_delete_api_key(key_id=str(polza_key_id))
+            if not deleted:
+                await mcp_quarantine_api_key(key_id=str(polza_key_id))
         except PolzaMcpError as exc:
             _ops_log.warning(
                 "Polza key delete failed for user_id=%s key=%s: %s", uid, polza_key_id, exc
@@ -177,8 +185,12 @@ def admin_reset_password(db: Session, user: UserDB, new_password: str) -> None:
 
 async def admin_refresh_polza(db: Session, user: UserDB) -> bool:
     """Автовыдача / пересоздание ключа Polza для пользователя."""
-    from app.services.polza import PolzaService, provision_polza_for_user, sync_polza_key_limit_after_payment
     from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
+    from app.services.polza import (
+        PolzaService,
+        provision_polza_for_user,
+        sync_polza_key_limit_after_payment,
+    )
 
     tier = normalize_tier(user.subscription_tier)
     mcp_check = await PolzaService().verify_backend_key()

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -411,8 +411,20 @@ function SectionAccount({ onClose }) {
     navigate('/');
   };
 
+  const initial = name.trim().slice(0, 1).toUpperCase() || 'N';
+
   return (
     <>
+      <div className="settings-account-summary">
+        <span className="settings-account-summary__avatar" aria-hidden>{initial}</span>
+        <div className="min-w-0 flex-1">
+          <strong className="block truncate text-sm text-[var(--nx-text)]">{name}</strong>
+          <span className="mt-0.5 block truncate text-xs text-[var(--nx-muted)]">{email}</span>
+        </div>
+        <span className={`settings-account-summary__status ${p?.email_verified === false ? 'settings-account-summary__status--warn' : ''}`}>
+          {p?.email_verified === false ? 'Нужно подтвердить' : 'Подтверждён'}
+        </span>
+      </div>
       <SettingsRow label="Имя в интерфейсе" desc="Отображается в боковой панели">
         <span className="text-sm text-[var(--nx-muted)]">{name}</span>
       </SettingsRow>
@@ -504,6 +516,29 @@ function formatTok(n) {
   return Number(n).toLocaleString('ru-RU');
 }
 
+function formatPeriodEnd(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatTransactionAmount(transaction) {
+  const rub = Number(transaction?.amount_rub);
+  if (Number.isFinite(rub)) {
+    return formatBalanceRub(rub, { digits: Math.abs(rub) < 1 && rub !== 0 ? 2 : 0 });
+  }
+  const amount = Number(transaction?.amount);
+  if (!Number.isFinite(amount)) return '—';
+  return `$${amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+}
+
 function SectionUsage() {
   const navigate = useNavigate();
   const { authStatus, repairPolzaKey, fetchProfile } = useAuth();
@@ -586,7 +621,7 @@ function SectionUsage() {
               <span
                 className={`text-sm ${p.period_expired ? 'text-amber-400' : 'text-[var(--nx-muted)]'}`}
               >
-                {p.period_end}
+                {formatPeriodEnd(p.period_end)}
               </span>
             </SettingsRow>
           )}
@@ -714,8 +749,16 @@ function SectionBilling() {
           Обновить
         </button>
       </div>
-      {transactions.length === 0 ? (
-        <p className="text-sm text-[var(--nx-muted)] py-4">Пока нет платежей</p>
+      {txLoading && transactions.length === 0 ? (
+        <div className="settings-tx-list" aria-label="Загрузка операций">
+          {[0, 1, 2].map((item) => <div key={item} className="settings-tx-skeleton" />)}
+        </div>
+      ) : transactions.length === 0 ? (
+        <div className="settings-empty">
+          <Receipt size={22} />
+          <strong>Операций пока нет</strong>
+          <span>Здесь появятся оплаты тарифов, пополнения и расходы ИИ.</span>
+        </div>
       ) : (
         <div className="settings-tx-list">
           {transactions.slice(0, 12).map((tx, i) => (
@@ -730,10 +773,10 @@ function SectionBilling() {
               </div>
               <span
                 className={`font-mono shrink-0 ${
-                  Number(tx.amount) < 0 ? 'text-red-400' : 'text-emerald-400'
+                  Number(tx.amount_rub ?? tx.amount) < 0 ? 'text-red-400' : 'text-emerald-400'
                 }`}
               >
-                {tx.amount}
+                {formatTransactionAmount(tx)}
               </span>
             </div>
           ))}
@@ -814,7 +857,7 @@ function SectionContent({ section, onClose }) {
       return <SectionMemory />;
     case 'connectors':
       return (
-        <div className="settings-connectors -mx-1 max-h-[min(70vh,640px)] overflow-y-auto pr-1">
+        <div className="settings-connectors -mx-1 pr-1">
           <ConnectorsPageContent compact />
         </div>
       );
@@ -836,6 +879,55 @@ function SectionContent({ section, onClose }) {
 export default function SettingsModal() {
   const { settingsOpen, settingsSection, setSettingsSection, closeSettingsModal } = useAuth();
   const sectionMeta = SECTIONS.find((s) => s.id === settingsSection) || SECTIONS[0];
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    if (!settingsOpen) return undefined;
+
+    const previouslyFocused = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    const dialog = dialogRef.current;
+    document.body.style.overflow = 'hidden';
+
+    const focusFrame = window.requestAnimationFrame(() => dialog?.focus());
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeSettingsModal();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialog) return;
+
+      const focusable = Array.from(
+        dialog.querySelectorAll(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((node) => node.getClientRects().length > 0);
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
+    };
+  }, [settingsOpen, closeSettingsModal]);
 
   return (
     <AnimatePresence>
@@ -848,8 +940,11 @@ export default function SettingsModal() {
           onClick={closeSettingsModal}
         >
           <motion.div
+            ref={dialogRef}
             role="dialog"
+            aria-modal="true"
             aria-labelledby="settings-title"
+            tabIndex={-1}
             className="settings-dialog"
             initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}

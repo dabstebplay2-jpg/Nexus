@@ -26,7 +26,7 @@ sequenceDiagram
   Browser->>Vercel: POST /api/auth/google/exchange
 ```
 
-Прокси в проде: **external rewrite** в [`frontend/vercel.json`](../../frontend/vercel.json) — `/api/*` → `https://nexus-cloud-bxcc.onrender.com/v1/*`. Запасной путь: serverless [`frontend/api/index.js`](../../frontend/api/index.js).
+Прокси в проде: **external rewrite** в [`frontend/vercel.json`](../../frontend/vercel.json) — `/api/*` → `https://nexus-cloud-ee17.onrender.com/v1/*`. Запасной путь: serverless [`frontend/api/index.js`](../../frontend/api/index.js).
 
 Локально: Vite proxy `/api` → `http://127.0.0.1:8080/v1` (`frontend/vite.config.js`).
 
@@ -36,7 +36,7 @@ sequenceDiagram
 |------------|-----------------|
 | `GOOGLE_CLIENT_ID` | OAuth 2.0 Client ID из Google Cloud |
 | `GOOGLE_CLIENT_SECRET` | секрет клиента |
-| `GOOGLE_REDIRECT_URI` | `https://nexus-zeta-ruby-12.vercel.app/api/auth/google/callback` *(если Vercel `/api` отвечает 404 — используйте Render: `https://nexus-cloud-bxcc.onrender.com/v1/auth/google/callback`)* |
+| `GOOGLE_REDIRECT_URI` | `https://nexus-zeta-ruby-12.vercel.app/api/auth/google/callback` *(если Vercel `/api` отвечает 404 — используйте Render: `https://nexus-cloud-ee17.onrender.com/v1/auth/google/callback`)* |
 | `NEXUS_FRONTEND_URL` | `https://nexus-zeta-ruby-12.vercel.app` |
 | `NEXUS_CLOUD_SECRET_KEY` | стабильный ключ (JWT state + exchange codes) |
 
@@ -53,7 +53,7 @@ python scripts/sync_google_render_env.py
 Проверка:
 
 ```bash
-curl -s https://nexus-cloud-bxcc.onrender.com/v1/auth/config
+curl -s https://nexus-cloud-ee17.onrender.com/v1/auth/config
 ```
 
 Ожидается JSON с `google_oauth_enabled: true` и `google_redirect_uri_configured` с URL Vercel `/api/auth/google/callback`.

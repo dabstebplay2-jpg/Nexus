@@ -1,4 +1,4 @@
-from app.services.chat_history import messages_to_json, messages_from_json
+from app.services.chat_history import messages_from_json, messages_to_json
 
 
 def test_messages_roundtrip_preserves_images():

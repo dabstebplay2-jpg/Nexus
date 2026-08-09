@@ -5,17 +5,32 @@ from __future__ import annotations
 import logging
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.connectors.catalog import MVP_CONNECTOR_IDS, get_catalog_entry, is_mvp_connector, list_catalog_entries, list_categories
+from app.connectors.catalog import (
+    MVP_CONNECTOR_IDS,
+    get_catalog_entry,
+    is_mvp_connector,
+    list_catalog_entries,
+    list_categories,
+)
 from app.database import UserDB, get_db
 from app.security import get_current_user
-from app.services.connectors.oauth_providers import connector_oauth_ready, create_connect_url, handle_oauth_callback
+from app.services.connectors.oauth_providers import (
+    connector_oauth_ready,
+    create_connect_url,
+    handle_oauth_callback,
+)
 from app.services.connectors.oauth_state import pop_connector_oauth_state
-from app.services.connectors.store import disconnect, get_connection, list_user_connections, set_enabled_for_chat, upsert_connection
+from app.services.connectors.store import (
+    disconnect,
+    list_user_connections,
+    set_enabled_for_chat,
+    upsert_connection,
+)
 from app.services.models_registry import tier_rank
 from app.services.oauth_redirect import safe_oauth_redirect_base
 from app.tiers import normalize_tier
@@ -170,7 +185,7 @@ async def oauth_callback(
         return RedirectResponse(f"{target_base}?error=missing_code&connector={quote(connector_id)}")
     try:
         user_id, cid, verifier, return_to = pop_connector_oauth_state(db, state)
-    except ValueError as e:
+    except ValueError:
         return RedirectResponse(f"{target_base}?error=oauth_state&connector={quote(connector_id)}")
     if cid != connector_id:
         return RedirectResponse(f"{target_base}?error=connector_mismatch&connector={quote(connector_id)}")

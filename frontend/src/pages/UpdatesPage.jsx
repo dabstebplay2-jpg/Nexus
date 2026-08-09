@@ -120,8 +120,9 @@ export default function UpdatesPage() {
   );
 
   const filteredEntries = useMemo(() => {
-    if (activeFilter === 'all') return entries;
-    return entries
+    const historyEntries = entries.slice(1);
+    if (activeFilter === 'all') return historyEntries;
+    return historyEntries
       .map((entry) => ({
         ...entry,
         changes: (entry.changes || []).filter((change) => change.label === activeFilter),

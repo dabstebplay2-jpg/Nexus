@@ -1,14 +1,17 @@
 const vscode = require('vscode');
 const path = require('path');
+const { randomBytes } = require('crypto');
 const auth = require('./authCore');
 const { brandUrisForWebview } = require('./brandAssets');
 
-function getAccountHtml() {
+function getAccountHtml(webview) {
+  const nonce = randomBytes(18).toString('base64');
+  const cspSource = webview.cspSource;
   return `<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${cspSource};" />
   <style>
     * { box-sizing: border-box; }
     body {
@@ -136,13 +139,22 @@ function getAccountHtml() {
     <button type="button" class="btn btn-secondary" id="btnSignOut">Выйти</button>
   </div>
 
-  <script>
+  <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const statusEl = document.getElementById('status');
     const emailPanel = document.getElementById('email-panel');
     const mainButtons = document.getElementById('main-buttons');
     const codeBlock = document.getElementById('code-block');
     let pendingEmail = '';
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
 
     function setStatus(text, kind) {
       statusEl.textContent = text || '';
@@ -217,7 +229,8 @@ function getAccountHtml() {
         document.getElementById('profileEmail').textContent = m.email || '';
         const stats = document.getElementById('profileStats');
         stats.innerHTML = (m.rows || []).map(r =>
-          '<div class="stat"><strong>' + r.label + '</strong>' + (r.value ? ' — ' + r.value : '') + '</div>'
+          '<div class="stat"><strong>' + escapeHtml(r.label) + '</strong>' +
+          (r.value ? ' — ' + escapeHtml(r.value) : '') + '</div>'
         ).join('');
       }
     });
@@ -229,12 +242,6 @@ function getAccountHtml() {
         const icon = document.getElementById('brandIcon');
         if (lockup) lockup.src = m.logoFull || m.logo || '';
         if (icon) icon.src = m.logo || '';
-      }
-      if (m.type === 'webAppUrl' && m.url) {
-        document.getElementById('openSite')?.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          vscode.postMessage({ type: 'openWeb' });
-        });
       }
     });
 
@@ -268,7 +275,7 @@ class AccountWebviewProvider {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.file(mediaRoot)],
     };
-    webviewView.webview.html = getAccountHtml();
+    webviewView.webview.html = getAccountHtml(webviewView.webview);
     webviewView.webview.onDidReceiveMessage((msg) => this.onMessage(msg, webviewView.webview));
     this.pushBrand(webviewView.webview);
     this.pushState(webviewView.webview);

@@ -7,9 +7,10 @@ from sqlalchemy.orm import Session
 from app import models_catalog
 from app.database import UserDB, get_db
 from app.security import get_current_user
+from app.services.ai_billing import apply_usage_billing
 from app.services.auth_rate_limit import check_rate_limit
-from app.services.quota_limits import QuotaLimitExceeded, assert_quota_budget
 from app.services.polza import PolzaError, PolzaService, require_inference_api_key
+from app.services.quota_limits import QuotaLimitExceeded, assert_quota_budget
 from app.services.subscription_guard import enforce_paid_subscription
 from app.services.user_memory import (
     MAX_MEMORY_CHARS,
@@ -18,7 +19,6 @@ from app.services.user_memory import (
     get_memory_payload,
     save_memory,
 )
-from app.services.ai_billing import apply_usage_billing
 from app.tiers import tier_allows_ai, tier_requires_payment
 
 logger = logging.getLogger(__name__)

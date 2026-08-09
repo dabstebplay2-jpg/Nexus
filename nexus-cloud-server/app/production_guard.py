@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 
 from app.config import (
     NEXUS_ADMIN_PASSWORD,
+    NEXUS_AUTH_DEV_LOG_CODES,
     NEXUS_BILLING_TEST_MODE,
     NEXUS_CORS_ORIGINS,
     NEXUS_REMOTE_ADMIN,
@@ -55,6 +55,8 @@ def assert_production_config() -> None:
         errors.append("NEXUS_TESTING_MODE must be false in production")
     if NEXUS_BILLING_TEST_MODE:
         errors.append("NEXUS_BILLING_TEST_MODE must be false in production")
+    if NEXUS_AUTH_DEV_LOG_CODES:
+        errors.append("NEXUS_AUTH_DEV_LOG_CODES must be false in production")
     if _secret_is_weak(SECRET_KEY):
         errors.append(
             "NEXUS_CLOUD_SECRET_KEY is missing, too short (<32), or uses a default placeholder"

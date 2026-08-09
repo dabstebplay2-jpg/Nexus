@@ -13,12 +13,14 @@ from sqlalchemy.orm import Session
 
 from app.database import SupportMessageDB, SupportTicketDB, UserDB
 from app.schemas import ChatAttachment
+from app.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
 MAX_ATTACHMENTS = 4
 VALID_CATEGORIES = frozenset({"complaint", "question", "bug", "other"})
 VALID_STATUSES = frozenset({"open", "answered", "closed"})
+VALID_IMAGE_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
 
 
 def _dt_iso(dt: datetime | None) -> str:
@@ -35,6 +37,8 @@ def _validate_attachments(attachments: list[ChatAttachment]) -> list[dict[str, A
         if att.kind == "image":
             if not att.data_base64:
                 raise HTTPException(status_code=400, detail=f"Изображение «{att.name}» без данных")
+            if (att.mime or "").lower() not in VALID_IMAGE_MIME_TYPES:
+                raise HTTPException(status_code=400, detail=f"Неподдерживаемый формат «{att.name}»")
             if len(att.data_base64) > 6_000_000:
                 raise HTTPException(status_code=400, detail=f"«{att.name}» слишком большое")
             out.append(
@@ -154,7 +158,7 @@ def create_ticket(
     if cat not in VALID_CATEGORIES:
         raise HTTPException(status_code=400, detail="Некорректная категория")
     att_data = _validate_attachments(attachments)
-    now = datetime.utcnow()
+    now = utc_now()
     ticket_id = str(uuid.uuid4())
     msg_id = str(uuid.uuid4())
     ticket = SupportTicketDB(
@@ -193,7 +197,7 @@ def add_user_message(
     if ticket.status == "closed":
         raise HTTPException(status_code=400, detail="Обращение закрыто")
     att_data = _validate_attachments(attachments)
-    now = datetime.utcnow()
+    now = utc_now()
     msg = SupportMessageDB(
         id=str(uuid.uuid4()),
         ticket_id=ticket_id,
@@ -221,7 +225,7 @@ def add_admin_reply(
     if not ticket:
         raise HTTPException(status_code=404, detail="Обращение не найдено")
     att_data = _validate_attachments(attachments)
-    now = datetime.utcnow()
+    now = utc_now()
     msg = SupportMessageDB(
         id=str(uuid.uuid4()),
         ticket_id=ticket_id,
@@ -246,7 +250,7 @@ def set_ticket_status(db: Session, ticket_id: str, status: str) -> SupportTicket
     if not ticket:
         raise HTTPException(status_code=404, detail="Обращение не найдено")
     ticket.status = st
-    ticket.updated_at = datetime.utcnow()
+    ticket.updated_at = utc_now()
     db.commit()
     db.refresh(ticket)
     return ticket

@@ -7,7 +7,6 @@ import logging
 import re
 
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
-from aiogram.types import TelegramObject
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
     BufferedInputFile,
@@ -15,6 +14,7 @@ from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
+    TelegramObject,
 )
 from sqlalchemy.orm import Session
 
@@ -31,23 +31,22 @@ from app.config import (
 from app.database import UserDB
 from app.services.auth_rate_limit import check_rate_limit_async
 from app.services.fx_rates import get_usd_rub_rate_sync, usd_to_rub
-from app.services.quota_limits import get_quota_limit_info
 from app.services.polza import user_has_polza_key
-from app.services.telegram_chat import TelegramChatError, run_telegram_chat
+from app.services.quota_limits import get_quota_limit_info
+from app.services.subscription_guard import user_has_active_paid_subscription
 from app.services.telegram_auth import (
     build_site_login_url,
     display_user_label,
     find_or_create_telegram_user,
     issue_telegram_site_exchange,
 )
+from app.services.telegram_chat import TelegramChatError, run_telegram_chat
 from app.services.telegram_link import (
     get_user_by_telegram_id,
     link_telegram_account,
-    mask_email,
 )
 from app.services.telegram_model_store import get_selected_model, set_selected_model
 from app.tiers import normalize_tier, tier_requires_payment
-from app.services.subscription_guard import user_has_active_paid_subscription
 
 logger = logging.getLogger(__name__)
 

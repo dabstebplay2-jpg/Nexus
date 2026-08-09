@@ -1,12 +1,12 @@
 import asyncio
 import secrets
-from datetime import datetime, timedelta
 from unittest.mock import patch
 
 import pytest
 
 from app.database import SessionLocal, UserDB, migrate_schema
 from app.services import google_oauth as go
+
 
 @pytest.fixture(scope="module", autouse=True)
 def _migrate_schema():

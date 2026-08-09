@@ -8,7 +8,6 @@ from app.services import openrouter_models as or_models
 from app.services.models_registry import model_access_detail, model_allowed
 from app.tiers import tier_allows_ai, tier_uses_openrouter_free
 
-
 SAMPLE_MODELS = {
     "data": [
         {
@@ -94,6 +93,24 @@ async def test_refresh_free_models_filters_zero_price_chat(monkeypatch):
     assert "openai/gpt-4o" not in ids
     assert "openai/text-embedding-3-small" not in ids
     assert "openrouter/free" in ids
+
+
+@pytest.mark.asyncio
+async def test_refresh_free_models_keeps_router_when_catalog_is_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.openrouter_models.openrouter_free_tier_enabled",
+        lambda: True,
+    )
+
+    async def failed_fetch():
+        raise RuntimeError("temporary catalog outage")
+
+    monkeypatch.setattr(or_models, "_fetch_openrouter_models", failed_fetch)
+
+    await or_models.refresh_free_models_cache(force=True)
+
+    assert [m["id"] for m in or_models._cache["chat_models"]] == ["openrouter/free"]
+    assert or_models.free_model_allowed("openrouter/free") is True
 
 
 @pytest.mark.asyncio

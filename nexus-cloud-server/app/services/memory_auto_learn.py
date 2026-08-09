@@ -12,8 +12,8 @@ from app import models_catalog
 from app.database import SessionLocal, UserDB, UserMemoryDB
 from app.services.ai_billing import apply_usage_billing
 from app.services.auth_rate_limit import check_rate_limit
-from app.services.quota_limits import QuotaLimitExceeded, assert_quota_budget
 from app.services.polza import PolzaError, PolzaService, require_inference_api_key
+from app.services.quota_limits import QuotaLimitExceeded, assert_quota_budget
 from app.services.user_memory import MAX_MEMORY_CHARS, get_memory_row, save_memory
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ EXTRACT_SYSTEM = (
     "Формулируй в третьем лице: «Пользователя зовут…», «Пользователь предпочитает…». "
     "Не включай вопросы, болтовню и то, о чём пользователь не просил запомнить. "
     "Если сохранять нечего — ответь ровно одним словом: EMPTY. "
-    f"Не больше 1500 символов."
+    "Не больше 1500 символов."
 )
 
 FORGET_EXTRACT_SYSTEM = (
@@ -55,7 +55,7 @@ FORGET_EXTRACT_SYSTEM = (
     "(копируй формулировки из памяти максимально близко, по одной строке с «- »). "
     "Если пользователь просит забыть всё — ответь ровно: CLEAR_ALL. "
     "Если в памяти нет подходящего или удалять нечего — ответь: EMPTY. "
-    f"Не больше 1500 символов."
+    "Не больше 1500 символов."
 )
 
 

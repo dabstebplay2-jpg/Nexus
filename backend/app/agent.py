@@ -110,10 +110,38 @@ def log_agent_action(model: str, action: str, cost: float = None):
         pass
 
 
+def resolve_workspace_path(workspace: str, requested_path: str) -> str:
+    """Resolve an agent path and reject escapes through ``..`` or symlinks."""
+    if not isinstance(workspace, str) or not workspace.strip():
+        raise ValueError("Workspace path is required")
+    if not isinstance(requested_path, str) or not requested_path.strip():
+        raise ValueError("A relative file path is required")
+
+    root = os.path.realpath(os.path.abspath(workspace))
+    if not os.path.isdir(root):
+        raise ValueError("Workspace directory does not exist")
+
+    candidate = os.path.realpath(os.path.abspath(os.path.join(root, requested_path)))
+    try:
+        inside_workspace = os.path.commonpath([root, candidate]) == root
+    except ValueError:
+        inside_workspace = False
+    if not inside_workspace:
+        raise ValueError("Path must stay inside the workspace")
+    return candidate
+
+
 async def execute_tool(name: str, args: dict, workspace: str):
+    req_path = None
+    target_path = None
+    if name in {"list_directory", "read_file", "write_file", "patch_file", "open_file_in_editor"}:
+        req_path = args.get("path", ".") if name == "list_directory" else args.get("path")
+        try:
+            target_path = resolve_workspace_path(workspace, req_path)
+        except ValueError as exc:
+            return f"Error: {exc}"
+
     if name == "list_directory":
-        req_path = args.get("path", ".")
-        target_path = os.path.abspath(os.path.join(workspace, req_path))
         try:
             entries = os.listdir(target_path)
             return "\n".join(
@@ -126,8 +154,6 @@ async def execute_tool(name: str, args: dict, workspace: str):
             return f"Error listing directory: {e}"
 
     elif name == "read_file":
-        req_path = args.get("path")
-        target_path = os.path.abspath(os.path.join(workspace, req_path))
         try:
             with open(target_path, "r", encoding="utf-8", errors="ignore") as f:
                 return f.read()
@@ -135,9 +161,7 @@ async def execute_tool(name: str, args: dict, workspace: str):
             return f"Error reading file: {e}"
 
     elif name == "write_file":
-        req_path = args.get("path")
         content = args.get("content", "")
-        target_path = os.path.abspath(os.path.join(workspace, req_path))
         try:
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
             with open(target_path, "w", encoding="utf-8") as f:
@@ -147,10 +171,8 @@ async def execute_tool(name: str, args: dict, workspace: str):
             return f"Error writing file: {e}"
 
     elif name == "patch_file":
-        req_path = args.get("path")
         search_block = args.get("search_block")
         replace_block = args.get("replace_block")
-        target_path = os.path.abspath(os.path.join(workspace, req_path))
         try:
             if not os.path.exists(target_path):
                 return f"Error: File '{req_path}' does not exist. Use write_file to create new files."
@@ -177,9 +199,10 @@ async def execute_tool(name: str, args: dict, workspace: str):
     elif name == "execute_command":
         cmd = args.get("command")
         try:
+            workspace_root = resolve_workspace_path(workspace, ".")
             proc = await asyncio.create_subprocess_shell(
                 cmd,
-                cwd=os.path.abspath(workspace),
+                cwd=workspace_root,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -198,7 +221,6 @@ async def execute_tool(name: str, args: dict, workspace: str):
             return f"Error executing command: {e}"
 
     elif name == "open_file_in_editor":
-        req_path = args.get("path")
         return f"Success: Triggered request to open {req_path} in the editor tab."
 
     return f"Unknown tool: {name}"

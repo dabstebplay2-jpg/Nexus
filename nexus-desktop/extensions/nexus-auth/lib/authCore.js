@@ -6,7 +6,7 @@ const SECRET_REFRESH = 'nexus.refreshToken';
 /** Vercel /api proxy — доступен, когда Render.com блокируется провайдером. */
 const CLOUD_FALLBACK_BASES = [
   'https://nexus-zeta-ruby-12.vercel.app/api',
-  'https://nexus-cloud-bxcc.onrender.com/v1',
+  'https://nexus-cloud-ee17.onrender.com/v1',
 ];
 
 /** @type {vscode.ExtensionContext | null} */

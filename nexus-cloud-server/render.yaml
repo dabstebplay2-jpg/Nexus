@@ -10,9 +10,10 @@ services:
       - key: PYTHON_VERSION
         value: "3.12.11"
       - key: NODE_VERSION
-        value: "20.18.0"
+        value: "22.16.0"
+      # IMPORTANT: reuse the existing Render value. Rotating it breaks encrypted provider keys.
       - key: NEXUS_CLOUD_SECRET_KEY
-        generateValue: true
+        sync: false
       - key: POLZA_BACKEND_API_KEY
         sync: false
       - key: POLZA_MCP_TOKEN
@@ -21,6 +22,14 @@ services:
         value: https://nexus-cloud-ee17.onrender.com/v1/auth/polza/callback
       - key: POLZA_APP_NAME
         value: Nexus
+      - key: ENV
+        value: production
+      - key: NEXUS_EMAIL_AUTH_ENABLED
+        value: "true"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
       - key: NEXUS_BILLING_TEST_MODE
         value: "false"
       - key: NEXUS_TIER_POOL_FRACTION
@@ -30,7 +39,19 @@ services:
       - key: NEXUS_TESTING_MODE
         value: "false"
       - key: NEXUS_CORS_ORIGINS
-        value: https://frontend-henna-tau-19.vercel.app
+        sync: false
+      - key: NEXUS_FRONTEND_URL
+        sync: false
+      - key: NEXUS_OAUTH_REDIRECT_ORIGINS
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MANAGEMENT_API_KEY
+        sync: false
+      - key: OPENROUTER_HTTP_REFERER
+        sync: false
+      - key: OPENROUTER_APP_TITLE
+        value: Nexus
       - key: NEXUS_REMOTE_ADMIN
         sync: false
       - key: NEXUS_ADMIN_PASSWORD
@@ -47,6 +68,18 @@ services:
         sync: false
       - key: NEXUS_CRON_SECRET
         generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: YOOKASSA_SHOP_ID
+        sync: false
+      - key: YOOKASSA_SECRET_KEY
+        sync: false
+      - key: YOOKASSA_RETURN_PATH
+        value: "/pricing"
 
   - type: cron
     name: nexus-polza-balance

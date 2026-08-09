@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
-import { Bot, Cloud, GitBranch, Globe, Shield, Terminal, Zap } from 'lucide-react';
+import { Bot, Cloud, GitBranch, Globe, Shield, Sparkles, Terminal, Zap } from 'lucide-react';
 
 const ITEMS = [
   { icon: Cloud, title: 'Nexus Cloud', desc: 'Аккаунт, баланс и модели Polza.ai.' },
   { icon: Bot, title: 'ИИ в чате', desc: 'Research с источниками и вложениями.' },
+  { icon: Sparkles, title: 'No-Code Studio', desc: 'Сайты, лендинги, UX, тексты и MVP без отдельного приложения.', to: '/no-code' },
   { icon: Globe, title: 'Nexus Browser', desc: 'Десктоп-браузер с ИИ и Shields — скачать для Windows.', to: '/browser' },
   { icon: Terminal, title: 'IDE Web', desc: 'Редактор и Agent в браузере — без установки.', to: '/ide/lite' },
   { icon: GitBranch, title: 'Git', desc: 'Статус и коммиты из IDE.' },

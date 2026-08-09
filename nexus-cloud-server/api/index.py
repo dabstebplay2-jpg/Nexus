@@ -13,4 +13,4 @@ os.environ.setdefault(
     os.environ.get("NEXUS_CLOUD_DATABASE_URL", "sqlite:////tmp/nexus_cloud_v2.db"),
 )
 
-from app.main import app  # noqa: F401
+from app.main import app  # noqa: E402, F401

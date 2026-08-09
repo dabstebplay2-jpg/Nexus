@@ -49,7 +49,7 @@
         "nexus.cloudUrl": {
           "type": "string",
           "default": "https://nexus-zeta-ruby-12.vercel.app/api",
-          "description": "Nexus Cloud API base. Production: https://nexus-zeta-ruby-12.vercel.app/api (Vercel→Render). Direct: https://nexus-cloud-bxcc.onrender.com/v1"
+          "description": "Nexus Cloud API base. Production: https://nexus-zeta-ruby-12.vercel.app/api (Vercel→Render). Direct: https://nexus-cloud-ee17.onrender.com/v1"
         },
         "nexus.webAppUrl": {
           "type": "string",

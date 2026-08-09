@@ -11,10 +11,10 @@ from sqlalchemy.orm import Session
 from app import models_catalog
 from app.database import UserDB
 from app.schemas import ChatMessage, SimpleChatRequest
-from app.services.message_builder import build_router_payload, extract_message_images
 from app.services.image_materialize import materialize_image_list
-from app.services.user_memory import get_enabled_memory_text
+from app.services.message_builder import build_router_payload, extract_message_images
 from app.services.telegram_model_store import get_selected_model
+from app.services.user_memory import get_enabled_memory_text
 
 logger = logging.getLogger(__name__)
 

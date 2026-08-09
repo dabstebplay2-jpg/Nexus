@@ -10,8 +10,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import UserDB, ensure_support_tables, get_db
-
-logger = logging.getLogger(__name__)
 from app.schemas import (
     SupportMessageCreate,
     SupportMessageOut,
@@ -30,6 +28,8 @@ from app.services.support_service import (
     notify_admin_new_ticket,
     ticket_detail_payload,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/support", tags=["support"])
 

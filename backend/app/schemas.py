@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LocalLoginRequest(BaseModel):
@@ -38,7 +38,7 @@ class DeleteItemRequest(BaseModel):
 class HTTPRequestPayload(BaseModel):
     method: str
     url: str
-    headers: dict = {}
+    headers: dict = Field(default_factory=dict)
     body: str = ""
 
 
@@ -57,5 +57,5 @@ class AIChatRequest(BaseModel):
     workspace_path: str
     file_context: str = ""
     directory_context: str = ""
-    chat_history: list = []
+    chat_history: list = Field(default_factory=list)
     model: str = "deepseek/deepseek-v4-flash"
