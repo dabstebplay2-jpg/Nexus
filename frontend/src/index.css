@@ -2122,4 +2122,49 @@ body,
     opacity: 0.5;
   }
 }
-\n\n/* ========================================================================== */\n/* Nexus 0.4 — production workspace polish                                    */\n/* ========================================================================== */\n.nx-shell {\n  --nx-sidebar-w: 218px;\n  --nx-sidebar-collapsed-w: 48px;\n  --nx-header-h: 46px;\n  --nx-content-max: 50rem;\n  font-size: 13px;\n}\n.nx-sidebar-brand { min-height: 48px; padding: 7px 9px 6px 10px; }\n.nx-sidebar-nav { padding-inline: 8px; }\n.nx-nav-group-label { margin-bottom: 3px; padding-inline: 7px; font-size: 9px; }\n.nx-nav-item { min-height: 34px; gap: 9px; padding-inline: 8px; border-radius: 9px; font-size: 12px; }\n.nx-new-chat { min-height: 36px; border-radius: 10px; font-size: 12px; }\n.nx-sidebar-footer { padding: 7px 8px max(8px, var(--nx-safe-bottom)); }\n.nx-topbar { padding-inline: 12px; }\n.nx-chat-home { padding-top: clamp(2.4rem, 8vh, 5rem); }\n.nx-chat-home__intro { margin-bottom: 14px; }\n.nx-chat-home__eyebrow { margin-bottom: 6px; font-size: 10px; }\n.nx-chat-home__title { font-size: clamp(1.8rem, 3.4vw, 2.55rem); letter-spacing: -.038em; }\n.nx-chat-home__subtitle { max-width: 38rem; margin-top: 7px; font-size: 12.5px; line-height: 1.5; }\n.nx-chat-home__composer { margin-top: 14px; }\n.nx-prompt-grid { gap: 6px; margin-top: 10px; }\n.nx-prompt-card { min-height: 44px; padding: 8px 10px; border-radius: 11px; font-size: 11.5px; }\n.nx-composer { border-radius: 15px !important; backdrop-filter: blur(12px); }\n.nx-composer-inner { border-radius: 15px !important; }\n.nx-composer textarea { min-height: 50px !important; padding: 12px 13px 7px !important; font-size: 13px !important; }\n.nx-composer > div:last-child { padding: 1px 8px 8px !important; }\n.nx-send-btn { width: 34px !important; height: 34px !important; min-width: 34px !important; min-height: 34px !important; border-radius: 10px !important; }\n.nx-page-container { width: min(100%, 68rem); padding-top: clamp(1.35rem, 3vw, 2.35rem); }\n.nx-page-title { font-size: clamp(1.7rem, 3.2vw, 2.65rem); }\n.nx-page-lead { font-size: 13px; }\n.nx-panel { border-radius: 13px; }\n.nx-service-banner--degraded {\n  border-bottom-color: rgba(96, 165, 250, .18);\n  background: rgba(59, 130, 246, .065);\n  color: color-mix(in srgb, #93c5fd 82%, var(--nx-text));\n}\n@media (max-width: 767px) {\n  .nx-chat-home { padding-top: 28px; }\n  .nx-chat-home__title { font-size: clamp(1.7rem, 9vw, 2.25rem); }\n  .nx-composer textarea { min-height: 48px !important; }\n}\n
+
+
+/* ========================================================================== */
+/* Nexus 0.4 — production workspace polish                                    */
+/* ========================================================================== */
+.nx-shell {
+  --nx-sidebar-w: 218px;
+  --nx-sidebar-collapsed-w: 48px;
+  --nx-header-h: 46px;
+  --nx-content-max: 50rem;
+  font-size: 13px;
+}
+.nx-sidebar-brand { min-height: 48px; padding: 7px 9px 6px 10px; }
+.nx-sidebar-nav { padding-inline: 8px; }
+.nx-nav-group-label { margin-bottom: 3px; padding-inline: 7px; font-size: 9px; }
+.nx-nav-item { min-height: 34px; gap: 9px; padding-inline: 8px; border-radius: 9px; font-size: 12px; }
+.nx-new-chat { min-height: 36px; border-radius: 10px; font-size: 12px; }
+.nx-sidebar-footer { padding: 7px 8px max(8px, var(--nx-safe-bottom)); }
+.nx-topbar { padding-inline: 12px; }
+.nx-chat-home { padding-top: clamp(2.4rem, 8vh, 5rem); }
+.nx-chat-home__intro { margin-bottom: 14px; }
+.nx-chat-home__eyebrow { margin-bottom: 6px; font-size: 10px; }
+.nx-chat-home__title { font-size: clamp(1.8rem, 3.4vw, 2.55rem); letter-spacing: -.038em; }
+.nx-chat-home__subtitle { max-width: 38rem; margin-top: 7px; font-size: 12.5px; line-height: 1.5; }
+.nx-chat-home__composer { margin-top: 14px; }
+.nx-prompt-grid { gap: 6px; margin-top: 10px; }
+.nx-prompt-card { min-height: 44px; padding: 8px 10px; border-radius: 11px; font-size: 11.5px; }
+.nx-composer { border-radius: 15px !important; backdrop-filter: blur(12px); }
+.nx-composer-inner { border-radius: 15px !important; }
+.nx-composer textarea { min-height: 50px !important; padding: 12px 13px 7px !important; font-size: 13px !important; }
+.nx-composer > div:last-child { padding: 1px 8px 8px !important; }
+.nx-send-btn { width: 34px !important; height: 34px !important; min-width: 34px !important; min-height: 34px !important; border-radius: 10px !important; }
+.nx-page-container { width: min(100%, 68rem); padding-top: clamp(1.35rem, 3vw, 2.35rem); }
+.nx-page-title { font-size: clamp(1.7rem, 3.2vw, 2.65rem); }
+.nx-page-lead { font-size: 13px; }
+.nx-panel { border-radius: 13px; }
+.nx-service-banner--degraded {
+  border-bottom-color: rgba(96, 165, 250, .18);
+  background: rgba(59, 130, 246, .065);
+  color: color-mix(in srgb, #93c5fd 82%, var(--nx-text));
+}
+@media (max-width: 767px) {
+  .nx-chat-home { padding-top: 28px; }
+  .nx-chat-home__title { font-size: clamp(1.7rem, 9vw, 2.25rem); }
+  .nx-composer textarea { min-height: 48px !important; }
+}
